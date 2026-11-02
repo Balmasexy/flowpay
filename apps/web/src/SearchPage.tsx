@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, ArrowDownLeft, ArrowUpRight, CreditCard, Wallet, UserRound, ArrowRight, X } from "lucide-react";
+import { Search, ArrowDownLeft, CreditCard, Wallet, UserRound, ArrowRight, X } from "lucide-react";
 
 type SearchPageProps = {
   transactions: Array<{ id: string; transaction_type: string; status: string; description: string | null; created_at: string; currency: string; amount_minor: string }>;
