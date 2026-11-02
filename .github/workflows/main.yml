@@ -56,6 +56,51 @@ jobs:
         run: npx cap sync android
         working-directory: apps/web
 
+      - name: Configure persistent FlowPay Android signing
+        working-directory: apps/web/android
+        env:
+          FLOWPAY_KEYSTORE_BASE64: \${{ secrets.FLOWPAY_KEYSTORE_BASE64 }}
+          FLOWPAY_KEYSTORE_PASSWORD: \${{ secrets.FLOWPAY_KEYSTORE_PASSWORD }}
+          FLOWPAY_KEY_ALIAS: \${{ secrets.FLOWPAY_KEY_ALIAS }}
+          FLOWPAY_KEY_PASSWORD: \${{ secrets.FLOWPAY_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FLOWPAY_KEYSTORE_BASE64" || { echo "Missing FLOWPAY_KEYSTORE_BASE64 GitHub secret" >&2; exit 1; }
+          test -n "$FLOWPAY_KEYSTORE_PASSWORD" || { echo "Missing FLOWPAY_KEYSTORE_PASSWORD GitHub secret" >&2; exit 1; }
+          test -n "$FLOWPAY_KEY_ALIAS" || { echo "Missing FLOWPAY_KEY_ALIAS GitHub secret" >&2; exit 1; }
+          test -n "$FLOWPAY_KEY_PASSWORD" || { echo "Missing FLOWPAY_KEY_PASSWORD GitHub secret" >&2; exit 1; }
+          KEYSTORE_PATH="$RUNNER_TEMP/flowpay-upload.jks"
+          printf '%s' "$FLOWPAY_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          export FLOWPAY_KEYSTORE_PATH="$KEYSTORE_PATH"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("app/build.gradle")
+          s = p.read_text()
+          if "signingConfigs {" not in s:
+              s = s.replace("android {", """android {
+              signingConfigs {
+                  flowpayStable {
+                      storeFile file(System.getenv("FLOWPAY_KEYSTORE_PATH"))
+                      storePassword System.getenv("FLOWPAY_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("FLOWPAY_KEY_ALIAS")
+                      keyPassword System.getenv("FLOWPAY_KEY_PASSWORD")
+                  }
+              }
+          """, 1)
+          if "signingConfig signingConfigs.flowpayStable" not in s:
+              s = re.sub(r"buildTypes\s*\{", "buildTypes {\n        debug { signingConfig signingConfigs.flowpayStable }", s, count=1)
+          if "signingConfig signingConfigs.flowpayStable" not in s:
+              raise SystemExit("Could not attach stable signing config to debug build")
+          s, count = re.subn(r"versionCode\s+\d+", 'versionCode 10000 + Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")', s, count=1)
+          if count != 1:
+              raise SystemExit("Could not set monotonically increasing Android versionCode")
+          p.write_text(s)
+          PY
+          grep -nE 'flowpayStable|versionCode' app/build.gradle
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
         working-directory: apps/web/android
