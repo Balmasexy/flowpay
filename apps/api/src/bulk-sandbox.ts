@@ -26,7 +26,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown> |
 }
 
 function amountMinor(value: unknown): string | null {
-  if (typeof value !== "string" || !/^\\d{1,9}(?:\\.\\d{1,2})?$/.test(value)) return null;
+  if (typeof value !== "string" || !/^\d{1,9}(?:\.\d{1,2})?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
   const minor = BigInt(whole) * 100n + BigInt((fraction + "00").slice(0, 2));
   return minor > 0n && minor <= 100_000_000_000n ? minor.toString() : null;
@@ -98,10 +98,10 @@ export async function handleBulkSandboxRoute(
     const bank = typeof row.bankCode === "string" ? row.bankCode.trim() : "";
     const issues: string[] = [];
     if (!name) issues.push("MISSING_BENEFICIARY_NAME");
-    if (!/^\\d{10}$/.test(account)) issues.push("INVALID_ACCOUNT_NUMBER");
-    if (!/^\\d{3,10}$/.test(bank)) issues.push("INVALID_BANK_CODE");
+    if (!/^\d{10}$/.test(account)) issues.push("INVALID_ACCOUNT_NUMBER");
+    if (!/^\d{3,10}$/.test(bank)) issues.push("INVALID_BANK_CODE");
     const duplicateKey = bank + ":" + account;
-    if (/^\\d{10}$/.test(account) && /^\\d{3,10}$/.test(bank)) {
+    if (/^\d{10}$/.test(account) && /^\d{3,10}$/.test(bank)) {
       if (seen.has(duplicateKey)) issues.push("DUPLICATE_BENEFICIARY");
       seen.add(duplicateKey);
     }
@@ -157,7 +157,7 @@ export async function handleBulkSandboxRoute(
         `INSERT INTO fp_sandbox_batch_rows
          (batch_id, row_number, beneficiary_name, account_number_masked, bank_code, amount_minor, currency, status, result_code, result_message)
          VALUES ($1,$2,$3,$4,$5,$6,'NGN',$7,$8,$9)`,
-        [batchId, row.rowNumber, row.name, row.account.replace(/\\d(?=\\d{4})/g, "•"),
+        [batchId, row.rowNumber, row.name, row.account.replace(/\d(?=\d{4})/g, "•"),
          row.bankCode, row.amountMinor, status, code, message]
       );
     }
