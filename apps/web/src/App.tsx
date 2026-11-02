@@ -6,7 +6,7 @@ import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, Clock3, CreditCard, Home,
   Menu, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, EyeOff, Building2, Mail, Banknote, LogOut, Search
+  Eye, EyeOff, Building2, Mail, Banknote, LogOut, Search, Smartphone, Wifi, Tv, Trophy, PiggyBank, Target, Gift, Grid3X3
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -14,7 +14,7 @@ const AUTH_URL = (import.meta.env.VITE_NEON_AUTH_URL || "").replace(/\/$/, "");
 
 type ApiStatus = "checking" | "connected" | "unavailable";
 type DatabaseStatus = "checking" | "connected" | "unavailable" | "not_configured" | "schema_incomplete";
-type Page = "Overview" | "Search" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security" | "Bulk Payments" | "Bulk Verification";
+type Page = "Overview" | "Search" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security" | "Bulk Payments" | "Bulk Verification" | "Airtime" | "Data" | "Betting" | "TV" | "Fixed Savings" | "Spend & Save" | "Invitations" | "More";
 type ActivityFilter = "all" | "received" | "sent" | "transfers" | "cards";
 type CustomerProfile = { id: string; email: string | null; status: string; created_at: string };
 type Account = { id: string; currency: string; status: string; ledger_balance_minor: string };
@@ -275,7 +275,7 @@ export default function App() {
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
     return savedPage === "Search" || savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
       savedPage === "Money Received" || savedPage === "Money Sent" || savedPage === "Customer Profile" ||
-      savedPage === "View Account Number" || savedPage === "Security" || savedPage === "Bulk Payments" || savedPage === "Bulk Verification"
+      savedPage === "View Account Number" || savedPage === "Security" || savedPage === "Bulk Payments" || savedPage === "Bulk Verification" || savedPage === "Airtime" || savedPage === "Data" || savedPage === "Betting" || savedPage === "TV" || savedPage === "Fixed Savings" || savedPage === "Spend & Save" || savedPage === "Invitations" || savedPage === "More"
       ? savedPage
       : "Overview";
   });
@@ -472,6 +472,14 @@ export default function App() {
     { name: "Transfers" as const, icon: ArrowLeftRight },
     { name: "Bulk Payments" as const, icon: Banknote },
     { name: "Bulk Verification" as const, icon: ShieldCheck },
+    { name: "Airtime" as const, icon: Smartphone },
+    { name: "Data" as const, icon: Wifi },
+    { name: "Betting" as const, icon: Trophy },
+    { name: "TV" as const, icon: Tv },
+    { name: "Fixed Savings" as const, icon: PiggyBank },
+    { name: "Spend & Save" as const, icon: Target },
+    { name: "Invitations" as const, icon: Gift },
+    { name: "More" as const, icon: Grid3X3 },
     { name: "Cards" as const, icon: CreditCard },
     { name: "Activity" as const, icon: Clock3 },
     { name: "Security" as const, icon: ShieldCheck },
@@ -572,7 +580,25 @@ export default function App() {
             </div>
           </div>
 
-          {page === "Search" ? (
+          {["Airtime", "Data", "Betting", "TV", "Fixed Savings", "Spend & Save", "Invitations", "More"].includes(page) ? (
+            <section className="page-grid">
+              <section className="notice">
+                <div className="notice-icon"><ShieldCheck size={21} /></div>
+                <div><strong>{page} is listed in your FlowPay workspace</strong><p>This service is not connected to a verified provider yet. No airtime, data, betting, TV, savings, or money movement request will be submitted from this preview.</p></div>
+              </section>
+              <section className="panel feature-card">
+                <div className="feature-icon"><Grid3X3 size={24} /></div>
+                <h2>{page}</h2>
+                <p>{page === "Airtime" ? "Airtime purchases will be enabled after a VTU provider, customer authorization, price validation, and transaction reconciliation are connected." : page === "Data" ? "Data bundle purchases require a verified VTU catalogue, network and plan validation, and provider-confirmed delivery." : page === "Betting" ? "Wallet funding for betting platforms requires approved provider coverage, recipient validation, and explicit transaction controls." : page === "TV" ? "TV subscriptions require a verified biller catalogue, smart-card validation, and provider-confirmed payment status." : page === "Fixed Savings" ? "Fixed savings requires customer consent, clear terms, maturity rules, and a ledger-backed savings product before deposits can be accepted." : page === "Spend & Save" ? "Automatic savings requires explicit opt-in, transparent rules, balance checks, and auditable ledger entries." : page === "Invitations" ? "Referral invitations will be enabled after referral attribution, abuse prevention, and reward rules are implemented." : "Additional FlowPay services will appear here as secure provider integrations become available."}</p>
+                <div className="feature-status"><span className="status-dot" /> Provider integration not connected</div>
+                <button className="feature-button" disabled aria-disabled="true">Not available yet</button>
+              </section>
+              <section className="section-heading"><div><h2>FlowPay services</h2><p>Choose a service to review its readiness.</p></div></section>
+              <section className="card-feature-grid">
+                {([{name:"Airtime",icon:Smartphone},{name:"Data",icon:Wifi},{name:"Betting",icon:Trophy},{name:"TV",icon:Tv},{name:"Fixed Savings",icon:PiggyBank},{name:"Spend & Save",icon:Target},{name:"Invitations",icon:Gift},{name:"More",icon:Grid3X3}] as const).map(({name,icon:Icon}) => <article className="panel feature-card" key={name}><div className="feature-icon"><Icon size={22} /></div><h2>{name}</h2><p>{name === "More" ? "Explore additional services." : "Provider integration pending."}</p><button className="feature-button" onClick={() => { setPage(name); window.sessionStorage.setItem("flowpay.currentPage", name); }}>{name === page ? "Currently viewing" : "View service"}</button></article>)}
+              </section>
+            </section>
+          ) : page === "Search" ? (
             <SearchPage transactions={transactions} accounts={accounts} cards={cards} profile={profile} onNavigate={(destination) => { setPage(destination as Page); window.sessionStorage.setItem("flowpay.currentPage", destination); }} />
           ) : page === "Bulk Payments" ? (
             <BulkOperations mode="payments" />
