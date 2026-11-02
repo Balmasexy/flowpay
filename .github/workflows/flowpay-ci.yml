@@ -121,6 +121,7 @@ jobs:
         run: npm run build --prefix apps/web
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
+          VITE_NEON_AUTH_URL: https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth
 
       - name: Install pinned Capacitor tooling without changing the lockfile
         run: npm install --prefix apps/web --no-save --package-lock=false @capacitor/core@8.5.3 @capacitor/android@8.5.3 @capacitor/cli@8.5.3
