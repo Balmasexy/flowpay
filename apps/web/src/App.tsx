@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import PasskeySecurity from "./PasskeySecurity";
 import BulkOperations from "./BulkOperations";
+import SearchPage from "./SearchPage";
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, Clock3, CreditCard, Home,
   Menu, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, EyeOff, Building2, Mail, Banknote, LogOut
+  Eye, EyeOff, Building2, Mail, Banknote, LogOut, Search
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -13,7 +14,7 @@ const AUTH_URL = (import.meta.env.VITE_NEON_AUTH_URL || "").replace(/\/$/, "");
 
 type ApiStatus = "checking" | "connected" | "unavailable";
 type DatabaseStatus = "checking" | "connected" | "unavailable" | "not_configured" | "schema_incomplete";
-type Page = "Overview" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security" | "Bulk Payments" | "Bulk Verification";
+type Page = "Overview" | "Search" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security" | "Bulk Payments" | "Bulk Verification";
 type ActivityFilter = "all" | "received" | "sent" | "transfers" | "cards";
 type CustomerProfile = { id: string; email: string | null; status: string; created_at: string };
 type Account = { id: string; currency: string; status: string; ledger_balance_minor: string };
@@ -272,7 +273,7 @@ export default function App() {
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
   const [page, setPage] = useState<Page>(() => {
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
-    return savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
+    return savedPage === "Search" || savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
       savedPage === "Money Received" || savedPage === "Money Sent" || savedPage === "Customer Profile" ||
       savedPage === "View Account Number" || savedPage === "Security" || savedPage === "Bulk Payments" || savedPage === "Bulk Verification"
       ? savedPage
@@ -465,6 +466,7 @@ export default function App() {
 
   const nav = [
     { name: "Overview" as const, icon: Home },
+    { name: "Search" as const, icon: Search },
     { name: "Money Received" as const, icon: ArrowDownLeft },
     { name: "Money Sent" as const, icon: ArrowUpRight },
     { name: "Transfers" as const, icon: ArrowLeftRight },
@@ -530,6 +532,7 @@ export default function App() {
           </button>
           <div className="breadcrumb">Workspace <span>/</span> <strong>{page}</strong></div>
           <div className="topbar-right">
+            <button className="icon-button workspace-search-button" type="button" aria-label="Open search" title="Search workspace" onClick={() => { setPage("Search"); window.sessionStorage.setItem("flowpay.currentPage", "Search"); }}><Search size={19} /></button>
             <span className={`api-indicator api-${apiStatus}`}>
               <span className="status-dot" />
               {apiMessage}
@@ -569,7 +572,9 @@ export default function App() {
             </div>
           </div>
 
-          {page === "Bulk Payments" ? (
+          {page === "Search" ? (
+            <SearchPage transactions={transactions} accounts={accounts} cards={cards} profile={profile} onNavigate={(destination) => { setPage(destination as Page); window.sessionStorage.setItem("flowpay.currentPage", destination); }} />
+          ) : page === "Bulk Payments" ? (
             <BulkOperations mode="payments" />
           ) : page === "Bulk Verification" ? (
             <BulkOperations mode="verification" />
