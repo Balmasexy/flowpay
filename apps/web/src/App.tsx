@@ -471,6 +471,7 @@ export default function App() {
     { name: "Bulk Verification" as const, icon: ShieldCheck },
     { name: "Cards" as const, icon: CreditCard },
     { name: "Activity" as const, icon: Clock3 },
+    { name: "Security" as const, icon: ShieldCheck },
     { name: "Customer Profile" as const, icon: UserRound },
     { name: "View Account Number" as const, icon: Eye }
   ];
