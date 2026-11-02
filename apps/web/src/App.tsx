@@ -231,10 +231,17 @@ function LogoutPage() {
       const response = await fetch(`${AUTH_URL}/sign-out`, {
         method: "POST",
         credentials: "include",
-        headers: { Accept: "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({}),
         signal: AbortSignal.timeout(10000)
       });
-      if (!response.ok) throw new Error(`Sign-out failed (HTTP ${response.status})`);
+      if (!response.ok) {
+        const detail: unknown = await response.json().catch(() => ({}));
+        const record = typeof detail === "object" && detail !== null ? detail as Record<string, unknown> : {};
+        const message = typeof record.message === "string" ? record.message
+          : typeof record.error === "string" ? record.error : `Sign-out failed (HTTP ${response.status})`;
+        throw new Error(message);
+      }
       window.sessionStorage.removeItem("flowpay.currentPage");
       window.location.replace("/login");
     } catch (error) {
