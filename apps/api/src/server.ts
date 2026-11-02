@@ -32,9 +32,15 @@ function authConfig() {
   const issuer = process.env.NEON_AUTH_ISSUER?.trim();
   const audience = process.env.NEON_AUTH_AUDIENCE?.trim();
   if (!jwksUrl || !issuer || !audience) return null;
-  try { if (new URL(jwksUrl).protocol !== "https:") return null; }
-  catch { return null; }
-  return { jwksUrl, issuer, audience };
+  try {
+    if (new URL(jwksUrl).protocol !== "https:") return null;
+    // Managed Neon Auth JWT iss/aud are the auth service ORIGIN, not
+    // the nested /<database>/auth URL used by the browser endpoints.
+    const issuerOrigin = new URL(issuer).origin;
+    const audienceOrigin = new URL(audience).origin;
+    if (new URL(issuer).protocol !== "https:" || new URL(audience).protocol !== "https:") return null;
+    return { jwksUrl, issuer: issuerOrigin, audience: audienceOrigin };
+  } catch { return null; }
 }
 
 async function getJwks(jwksUrl: string): Promise<Jwk[]> {
