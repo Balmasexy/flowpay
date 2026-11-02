@@ -1096,3 +1096,41 @@ footer { border-top-color: #ded6ca; color: #716b62; }
   html, body, .app-shell, .main { color-scheme: light; }
 }
 
+
+
+/* FlowPay requested light-lemon workspace theme (retain dark navigation). */
+:root {
+  --surface: #fffde8;
+  --surface-soft: #fffbe0;
+  --border: #eee8c7;
+  --text-strong: #26251f;
+}
+html, body, #root, .app-shell, .main {
+  background: #fffde8;
+  color: var(--text-strong);
+}
+.topbar {
+  background: rgba(255, 253, 232, 0.94);
+  border-bottom-color: #eee8c7;
+}
+.content { background: #fffde8; }
+.panel, .stat-card:not(.balance-card), .quick-action,
+.feature-card, .profile-summary-panel, .profile-virtual-card-panel,
+.profile-security-note, .registration-unavailable {
+  background-color: #fffef2;
+  border-color: #eee8c7;
+}
+.profile-detail-grid > div, .history-readiness-item,
+.connection-card, .account-card {
+  background-color: #fffbe0;
+  border-color: #eee8c7;
+}
+.refresh-button, .feature-button, .history-filter {
+  background-color: #fffef2;
+  border-color: #e9e2bd;
+}
+.notice, .feature-feedback {
+  background: #fff6d7;
+  border-color: #f0e2a8;
+}
+.empty-state { color: #343126; }
