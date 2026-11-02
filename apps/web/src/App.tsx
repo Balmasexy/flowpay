@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PasskeySecurity from "./PasskeySecurity";
+import PasskeyAutoPrompt from "./PasskeyAutoPrompt";
 import BulkOperations from "./BulkOperations";
 import SearchPage from "./SearchPage";
 import {
@@ -553,6 +554,7 @@ export default function App() {
         </header>
 
         <div className="content">
+          <PasskeyAutoPrompt apiUrl={API_URL} getAccessToken={getAccessToken} />
           {page !== "Overview" && <div className="welcome-row">
             <div>
               <div className="eyebrow">YOUR MONEY, IN VIEW</div>
