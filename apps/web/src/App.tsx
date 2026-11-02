@@ -5,7 +5,7 @@ import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, CircleHelp, Clock3, CreditCard, Home,
   Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, Building2, Mail, Banknote, ShieldCheck as ShieldCheckIcon
+  Eye, Building2, Mail, Banknote
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -404,7 +404,7 @@ export default function App() {
     { name: "Money Sent" as const, icon: ArrowUpRight },
     { name: "Transfers" as const, icon: ArrowLeftRight },
     { name: "Bulk Payments" as const, icon: Banknote },
-    { name: "Bulk Verification" as const, icon: ShieldCheckIcon },
+    { name: "Bulk Verification" as const, icon: ShieldCheck },
     { name: "Cards" as const, icon: CreditCard },
     { name: "Activity" as const, icon: Clock3 },
     { name: "Customer Profile" as const, icon: UserRound },
