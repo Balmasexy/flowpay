@@ -59,10 +59,10 @@ jobs:
       - name: Configure persistent FlowPay Android signing
         working-directory: apps/web/android
         env:
-          FLOWPAY_KEYSTORE_BASE64: \${{ secrets.FLOWPAY_KEYSTORE_BASE64 }}
-          FLOWPAY_KEYSTORE_PASSWORD: \${{ secrets.FLOWPAY_KEYSTORE_PASSWORD }}
-          FLOWPAY_KEY_ALIAS: \${{ secrets.FLOWPAY_KEY_ALIAS }}
-          FLOWPAY_KEY_PASSWORD: \${{ secrets.FLOWPAY_KEY_PASSWORD }}
+          FLOWPAY_KEYSTORE_BASE64: ${{ secrets.FLOWPAY_KEYSTORE_BASE64 }}
+          FLOWPAY_KEYSTORE_PASSWORD: ${{ secrets.FLOWPAY_KEYSTORE_PASSWORD }}
+          FLOWPAY_KEY_ALIAS: ${{ secrets.FLOWPAY_KEY_ALIAS }}
+          FLOWPAY_KEY_PASSWORD: ${{ secrets.FLOWPAY_KEY_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
