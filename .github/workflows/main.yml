@@ -1,4 +1,3 @@
-
 name: FlowPay Android APK
 
 on:
@@ -45,6 +44,9 @@ jobs:
 
       - name: Build web app
         run: npm run build --prefix apps/web
+        env:
+          VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
+          VITE_NEON_AUTH_URL: https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth
 
       - name: Generate Android project
         run: npx cap add android
