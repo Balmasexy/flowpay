@@ -406,7 +406,7 @@ export default function App() {
         const filter = target === "Money Received" ? "received"
           : target === "Money Sent" ? "sent" : activityFilter;
         if (target !== "Activity") {
-          const summary = await apiGet<{ totals: SummaryTotal[] }>("/v1/me/summary");
+          const summary = await apiGet<{ totals: SummaryTotal[] }>("/v1/me/summary", token);
           setSummaryTotals(summary.totals);
         }
         if (filter === "cards") {
@@ -431,11 +431,11 @@ export default function App() {
         // A customer may open Profile or Account Number before visiting Overview.
         // Ensure the authenticated identity has its own FlowPay profile/account first.
         // This is idempotent and does not create a bank account number or move funds.
-        await apiPost<{ status: string }>("/v1/me/bootstrap");
+        await apiPost<{ status: string }>("/v1/me/bootstrap", token);
         const [profileResult, accountResult, cardResult] = await Promise.all([
           apiGet<{ profile: CustomerProfile }>("/v1/me/profile", token),
           apiGet<{ accounts: Account[] }>("/v1/me/accounts", token),
-          apiGet<{ cards: CustomerCard[] }>("/v1/me/cards")
+          apiGet<{ cards: CustomerCard[] }>("/v1/me/cards", token)
         ]);
         setProfile(profileResult.profile);
         setAccounts(accountResult.accounts);
