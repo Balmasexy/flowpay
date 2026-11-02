@@ -214,7 +214,7 @@ export async function handleSandboxRoute(
     );
     const transactionId = inserted.rows[0].id;
     const debitAccount = type === "deposit" ? clearing.id : source.id;
-    const creditAccount = type === "transfer" ? destination!.id : clearing.id;
+    const creditAccount = type === "deposit" ? source.id : type === "transfer" ? destination!.id : clearing.id;
     if (type === "transfer") {
       await client.query(
         "INSERT INTO fp_sandbox_entries(transaction_id, account_id, amount_minor, currency) VALUES ($1, $2, $3, 'NGN'), ($1, $4, $5, 'NGN')",
