@@ -5,8 +5,8 @@ import BulkOperations from "./BulkOperations";
 import SearchPage from "./SearchPage";
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
-  CheckCircle2, Clock3, CreditCard, Home,
-  Menu, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
+  CheckCircle2, ChevronDown, Clock3, CreditCard, Home,
+  Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
   Eye, EyeOff, Building2, Mail, Banknote, LogOut, Search, Smartphone, Wifi, Tv, Trophy, PiggyBank, Target, Gift, Grid3X3
 } from "lucide-react";
 
@@ -274,6 +274,9 @@ export default function App() {
   const [apiMessage, setApiMessage] = useState("Checking API connection…");
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
   const [page, setPage] = useState<Page>(() => {
+    const routeSlug = new URLSearchParams(window.location.search).get("page") ?? window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
+    const routePages: Record<string, Page> = { overview: "Overview", activity: "Activity", cards: "Cards", transfers: "Transfers", more: "More", search: "Search" };
+    if (routeSlug && routePages[routeSlug]) return routePages[routeSlug];
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
     return savedPage === "Search" || savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
       savedPage === "Money Received" || savedPage === "Money Sent" || savedPage === "Customer Profile" ||
@@ -282,6 +285,8 @@ export default function App() {
       : "Overview";
   });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [refreshMenuOpen, setRefreshMenuOpen] = useState(false);
+  const isNativeApp = Boolean((window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [customerMessage, setCustomerMessage] = useState("Sign-in session has not been checked yet.");
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
@@ -490,14 +495,34 @@ export default function App() {
   ];
 
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-  if (pathname === "/") return <LandingPage />;
+  const routePages: Record<string, Page> = { overview: "Overview", activity: "Activity", cards: "Cards", transfers: "Transfers", more: "More", search: "Search" };
+  const navigateToPage = (target: Page) => {
+    setPage(target);
+    window.sessionStorage.setItem("flowpay.currentPage", target);
+    const slug = target.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    window.history.pushState({ flowpayPage: target }, "", `/?page=${encodeURIComponent(slug)}`);
+    setMenuOpen(false);
+    setRefreshMenuOpen(false);
+  };
+  useEffect(() => {
+    const syncRoute = () => {
+      const slug = new URLSearchParams(window.location.search).get("page") ?? window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
+      if (slug && routePages[slug]) {
+        setPage(routePages[slug]);
+        window.sessionStorage.setItem("flowpay.currentPage", routePages[slug]);
+      }
+    };
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+  if (pathname === "/" && !new URLSearchParams(window.location.search).has("page")) return <LandingPage />;
   if (pathname === "/login" || pathname === "/signin") return <AuthPage mode="login" />;
   if (pathname === "/signup" || pathname === "/register" || pathname === "/registration") return <AuthPage mode="signup" />;
   if (pathname === "/logout" || pathname === "/signout") return <LogoutPage />;
 
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
+    <div className={`app-shell ${isNativeApp ? "native-app" : ""}`}>
+      {!isNativeApp && <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <span className="brand-mark">F</span>
           <span>flow<span className="brand-accent">pay</span></span>
@@ -531,9 +556,9 @@ export default function App() {
             <span>Log out</span>
           </button>
         </div>
-      </aside>
+      </aside>}
 
-      {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
+      {!isNativeApp && menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
 
       <main className="main">
         <header className="topbar">
@@ -547,6 +572,19 @@ export default function App() {
               <span className="status-dot" />
               {apiMessage}
             </span>
+            <div className="refresh-menu-wrap">
+              <button className="icon-button refresh-menu-trigger" type="button" aria-label="Refresh options" aria-expanded={refreshMenuOpen} onClick={() => setRefreshMenuOpen((open) => !open)}>
+                <RefreshCw size={17} /><ChevronDown size={13} />
+              </button>
+              {refreshMenuOpen && <div className="refresh-dropdown" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setRefreshMenuOpen(false); void checkApi(); void loadCustomerData(page); }}>
+                  <RefreshCw size={15} /><span><strong>Refresh this page</strong><small>Reload verified page data</small></span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setRefreshMenuOpen(false); void checkApi(); void loadCustomerData("Overview"); }}>
+                  <Wallet size={15} /><span><strong>Refresh account overview</strong><small>Update account, balances and activity</small></span>
+                </button>
+              </div>}
+            </div>
             <button className="icon-button notification-button" aria-label="Notifications">
               <Bell size={19} />
             </button>
@@ -592,7 +630,7 @@ export default function App() {
                 <h2>{page}</h2>
                 <p>{page === "Airtime" ? "Airtime purchases will be enabled after a VTU provider, customer authorization, price validation, and transaction reconciliation are connected." : page === "Data" ? "Data bundle purchases require a verified VTU catalogue, network and plan validation, and provider-confirmed delivery." : page === "Betting" ? "Wallet funding for betting platforms requires approved provider coverage, recipient validation, and explicit transaction controls." : page === "TV" ? "TV subscriptions require a verified biller catalogue, smart-card validation, and provider-confirmed payment status." : page === "Fixed Savings" ? "Fixed savings requires customer consent, clear terms, maturity rules, and a ledger-backed savings product before deposits can be accepted." : page === "Spend & Save" ? "Automatic savings requires explicit opt-in, transparent rules, balance checks, and auditable ledger entries." : page === "Invitations" ? "Referral invitations will be enabled after referral attribution, abuse prevention, and reward rules are implemented." : "Additional FlowPay services will appear here as secure provider integrations become available."}</p>
                 <div className="feature-status"><span className="status-dot" /> Provider integration not connected</div>
-                <button className="feature-button" disabled aria-disabled="true">Not available yet</button>
+                {page === "More" ? <button className="feature-button" onClick={() => window.location.assign("/logout")}><LogOut size={16} /> Log out securely</button> : <button className="feature-button" disabled aria-disabled="true">Not available yet</button>}
               </section>
               <section className="section-heading"><div><h2>FlowPay services</h2><p>Choose a service to review its readiness.</p></div></section>
               <section className="card-feature-grid">
@@ -992,6 +1030,9 @@ export default function App() {
           </footer>
         </div>
       </main>
+      {isNativeApp && <nav className="mobile-bottom-nav" aria-label="Main shortcuts">
+        {[{ name: "Overview" as const, icon: Home }, { name: "Activity" as const, icon: Clock3 }, { name: "Cards" as const, icon: CreditCard }, { name: "Transfers" as const, icon: ArrowLeftRight }, { name: "More" as const, icon: Grid3X3 }].map(({ name, icon: Icon }) => <button key={name} type="button" className={page === name ? "mobile-shortcut active" : "mobile-shortcut"} aria-current={page === name ? "page" : undefined} onClick={() => navigateToPage(name)}><Icon size={19} /><span>{name}</span></button>)}
+      </nav>}
     </div>
   );
 }
