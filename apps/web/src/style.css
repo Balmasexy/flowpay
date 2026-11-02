@@ -1280,3 +1280,55 @@ html, body, #root, .app-shell, .main {
   outline: 2px solid #ff7a1855;
   outline-offset: 2px;
 }
+
+
+/* Dashboard additions: additive layout, preserving existing overview cards and sidebar. */
+.dashboard-transaction-banner,.dashboard-business-strip,.dashboard-action-tiles,.dashboard-services-panel,.dashboard-savings-banner {
+  margin: 0 0 18px;
+}
+.dashboard-transaction-banner {
+  display:flex;align-items:center;gap:14px;width:100%;padding:15px 18px;border:1px solid #244a3c;border-radius:18px;
+  background:linear-gradient(110deg,#102d25,#173b30);color:#f7fff9;text-align:left;cursor:pointer;
+}
+.dashboard-banner-check {display:grid;place-items:center;color:#28c99a}
+.dashboard-banner-copy {display:grid;gap:4px;min-width:0;flex:1}
+.dashboard-banner-copy strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dashboard-banner-copy small {color:#b9cfc5}
+.dashboard-banner-amount {white-space:nowrap}
+.dashboard-banner-link {display:flex;align-items:center;gap:7px;color:#c8ddd4;white-space:nowrap}
+.dashboard-business-strip {display:flex;align-items:center;gap:13px;padding:16px 18px;border:1px solid var(--border);border-radius:18px;background:var(--surface-soft)}
+.dashboard-business-strip>span:nth-child(2){display:grid;gap:4px;flex:1}
+.dashboard-business-strip small {color:var(--muted,#777)}
+.dashboard-service-icon {display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#ff7a181c;color:#ff7a18}
+.dashboard-business-value {font-size:13px}
+.dashboard-business-strip button {border:0;background:transparent;color:inherit;cursor:pointer}
+.dashboard-action-tiles {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:20px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
+.dashboard-action-tiles button,.dashboard-services-grid button {display:grid;justify-items:center;gap:10px;border:0;background:transparent;color:inherit;cursor:pointer}
+.dashboard-action-tiles button>span {display:grid;place-items:center;width:76px;height:76px;border-radius:20px;background:#111;color:#20c99b}
+.dashboard-action-tiles strong,.dashboard-services-grid strong {font-size:13px}
+.dashboard-services-panel {padding:20px;border:1px solid var(--border);border-radius:20px;background:var(--surface)}
+.dashboard-services-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 12px;padding:22px 4px 10px}
+.dashboard-services-grid button>span {display:grid;place-items:center;width:58px;height:58px;border-radius:50%;background:#171717;color:#fff}
+.dashboard-services-note {margin:10px 0 0;color:var(--muted,#777);font-size:11px}
+.dashboard-savings-banner {display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px;border-radius:20px;background:linear-gradient(115deg,#123c31,#174538 72%,#343d22);color:#f7fff9}
+.dashboard-savings-kicker {font-size:10px;letter-spacing:1.5px;color:#76d9b5;font-weight:800}
+.dashboard-savings-banner h2 {margin:9px 0 6px;font-size:20px}
+.dashboard-savings-banner p {margin:0;color:#c2d8ce;font-size:12px}
+.dashboard-savings-banner button {display:flex;align-items:center;gap:8px;padding:12px 18px;border:0;border-radius:24px;background:#20c99b;color:#07271e;font-weight:800;white-space:nowrap;cursor:pointer}
+.dashboard-mobile-nav {display:none}
+@media(max-width:700px){
+ .dashboard-transaction-banner {flex-wrap:wrap;padding:13px}
+ .dashboard-banner-link {margin-left:auto}
+ .dashboard-business-strip {flex-wrap:wrap}
+ .dashboard-business-value {width:100%;padding-left:53px}
+ .dashboard-action-tiles {padding:16px 8px}
+ .dashboard-action-tiles button>span {width:62px;height:62px}
+ .dashboard-services-panel {padding:16px}
+ .dashboard-services-grid {gap:18px 5px}
+ .dashboard-services-grid button>span {width:52px;height:52px}
+ .dashboard-services-grid strong {font-size:11px}
+ .dashboard-savings-banner {align-items:flex-start;flex-direction:column}
+ .dashboard-mobile-nav {position:sticky;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;margin:22px -16px -24px;padding:10px 5px calc(10px + env(safe-area-inset-bottom));border-top:1px solid #333;background:#111}
+ .dashboard-mobile-nav button {display:grid;justify-items:center;gap:5px;padding:5px 0;border:0;background:transparent;color:#aaa;font-size:10px;cursor:pointer}
+ .dashboard-mobile-nav button.active {color:#20c99b;font-weight:800}
+}
