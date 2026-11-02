@@ -1134,3 +1134,57 @@ html, body, #root, .app-shell, .main {
   border-color: #f0e2a8;
 }
 .empty-state { color: #343126; }
+
+
+/* Keep the navigation independently scrollable without moving the sidebar shell. */
+.sidebar {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar > .workspace-label {
+  flex: 0 0 auto;
+}
+.sidebar > nav {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  grid-auto-rows: min-content;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #555 #202020;
+  padding: 0 2px 10px 0;
+}
+.sidebar > nav::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar > nav::-webkit-scrollbar-track {
+  background: #202020;
+  border-radius: 8px;
+}
+.sidebar > nav::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 8px;
+}
+.sidebar > nav .nav-item {
+  flex: 0 0 auto;
+}
+.sidebar > .sidebar-bottom {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding-top: 4px;
+}
+@media (max-width: 700px) {
+  .sidebar {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .sidebar > nav {
+    min-height: 0;
+  }
+}
