@@ -5,7 +5,7 @@ import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, Clock3, CreditCard, Home,
   Menu, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, Building2, Mail, Banknote, LogOut
+  Eye, EyeOff, Building2, Mail, Banknote, LogOut
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -117,6 +117,7 @@ function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -201,7 +202,7 @@ function AuthPage({ mode }: { mode: "login" | "signup" }) {
           <form className="auth-form" onSubmit={submit}>
             {isSignup && <label>Full name<input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Your full name" required minLength={2} maxLength={100} /></label>}
             <label>Email address<span className="auth-input-wrap"><Mail size={17} /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required maxLength={254} /></span></label>
-            <label>Password<span className="auth-input-wrap"><LockKeyhole size={17} /><input type="password" autoComplete={isSignup ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? "At least 8 characters" : "Your password"} required minLength={isSignup ? 8 : 1} maxLength={128} /></span></label>
+            <label>Password<span className="auth-input-wrap"><LockKeyhole size={17} /><input type={showPassword ? "text" : "password"} autoComplete={isSignup ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? "At least 8 characters" : "Your password"} required minLength={isSignup ? 8 : 1} maxLength={128} /><button className="password-visibility-toggle" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span></label>
             {error && <p className="auth-feedback auth-error" role="alert">{error}</p>}
             {message && <p className="auth-feedback auth-message" role="status">{message}</p>}
             <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Please wait…" : isSignup ? "Create account" : "Sign in"} <ArrowRight size={17} /></button>
