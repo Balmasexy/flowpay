@@ -344,14 +344,7 @@ export default function App() {
     }
   }
 
-  async function apiGet<T>(path: string): Promise<T> {
-    const token = await getAccessToken();
-    if (!token) {
-      setCustomerMessage(AUTH_URL
-        ? "No valid signed-in session was found. Sign in through the configured Neon Auth service."
-        : "Neon Auth is not configured. Set VITE_NEON_AUTH_URL to connect customer data.");
-      throw new Error("AUTHENTICATION_REQUIRED");
-    }
+  async function apiGet<T>(path: string, token: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       cache: "no-store",
@@ -366,14 +359,7 @@ export default function App() {
     return body as T;
   }
 
-  async function apiPost<T>(path: string): Promise<T> {
-    const token = await getAccessToken();
-    if (!token) {
-      setCustomerMessage(AUTH_URL
-        ? "No valid signed-in session was found. Sign in through the configured Neon Auth service."
-        : "Neon Auth is not configured. Set VITE_NEON_AUTH_URL to connect customer data.");
-      throw new Error("AUTHENTICATION_REQUIRED");
-    }
+  async function apiPost<T>(path: string, token: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
@@ -393,16 +379,25 @@ export default function App() {
     if (target === "Transfers") return;
     setCustomerLoading(true);
     try {
+      // Fetch one session token for this load; all parallel customer API calls
+      // reuse it instead of serially requesting /get-session for every endpoint.
+      const token = await getAccessToken();
+      if (!token) {
+        setCustomerMessage(AUTH_URL
+          ? "No valid signed-in session was found. Sign in through the configured Neon Auth service."
+          : "Neon Auth is not configured. Set VITE_NEON_AUTH_URL to connect customer data.");
+        throw new Error("AUTHENTICATION_REQUIRED");
+      }
       // Customer pages are read-only. Profile/account provisioning belongs to the explicit
       // sign-up/bootstrap flow, never as a side effect of opening or refreshing a page.
       if (target === "Overview") {
         // Idempotently provision the signed-in customer's FlowPay profile and internal NGN
         // account before loading read-only account data. This never creates a bank account
         // number, posts a ledger entry, or initiates a payment.
-        await apiPost<{ status: string }>("/v1/me/bootstrap");
+        await apiPost<{ status: string }>("/v1/me/bootstrap", token);
         const [summary, history] = await Promise.all([
-          apiGet<{ totals: SummaryTotal[] }>("/v1/me/summary"),
-          apiGet<{ transactions: Transaction[] }>("/v1/me/transactions?limit=5")
+          apiGet<{ totals: SummaryTotal[] }>("/v1/me/summary", token),
+          apiGet<{ transactions: Transaction[] }>("/v1/me/transactions?limit=5", token)
         ]);
         setSummaryTotals(summary.totals);
         setTransactions(history.transactions);
@@ -415,19 +410,19 @@ export default function App() {
           setSummaryTotals(summary.totals);
         }
         if (filter === "cards") {
-          const result = await apiGet<{ events: CardEvent[] }>("/v1/me/card-events?limit=100");
+          const result = await apiGet<{ events: CardEvent[] }>("/v1/me/card-events?limit=100", token);
           setCardEvents(result.events);
           setTransactions([]);
           setCustomerMessage("Card audit history loaded from the authenticated customer API.");
         } else {
-          const result = await apiGet<{ transactions: Transaction[] }>(`/v1/me/transactions?type=${filter}&limit=100`);
+          const result = await apiGet<{ transactions: Transaction[] }>(`/v1/me/transactions?type=${filter}&limit=100`, token);
           setTransactions(result.transactions);
           setCustomerMessage("Transaction history loaded from the authenticated ledger API.");
         }
       } else if (target === "Cards") {
         const [cardResult, eventResult] = await Promise.all([
-          apiGet<{ cards: CustomerCard[] }>("/v1/me/cards"),
-          apiGet<{ events: CardEvent[] }>("/v1/me/card-events?limit=50")
+          apiGet<{ cards: CustomerCard[] }>("/v1/me/cards", token),
+          apiGet<{ events: CardEvent[] }>("/v1/me/card-events?limit=50", token)
         ]);
         setCards(cardResult.cards);
         setCardEvents(eventResult.events);
@@ -438,8 +433,8 @@ export default function App() {
         // This is idempotent and does not create a bank account number or move funds.
         await apiPost<{ status: string }>("/v1/me/bootstrap");
         const [profileResult, accountResult, cardResult] = await Promise.all([
-          apiGet<{ profile: CustomerProfile }>("/v1/me/profile"),
-          apiGet<{ accounts: Account[] }>("/v1/me/accounts"),
+          apiGet<{ profile: CustomerProfile }>("/v1/me/profile", token),
+          apiGet<{ accounts: Account[] }>("/v1/me/accounts", token),
           apiGet<{ cards: CustomerCard[] }>("/v1/me/cards")
         ]);
         setProfile(profileResult.profile);
