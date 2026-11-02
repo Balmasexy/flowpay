@@ -74,7 +74,8 @@ function LandingPage() {
         <section className="landing-hero">
           <div className="landing-hero-copy">
             <div className="landing-kicker"><span /> A clearer way to manage your money</div>
-            <h1>Your money.<br /><em>More freedom.</em></h1>
+            <h1>Welcome to FlowPay</h1>
+            <p className="landing-lede">A clearer view of your financial life starts here.</p>
             <p className="landing-lede">A simpler place to see your financial picture. FlowPay brings account information and activity into one clear, easy-to-use workspace.</p>
             <div className="landing-hero-actions"><a className="landing-cta landing-cta-large" href="/login">Explore FlowPay <ArrowRight size={18} /></a><a className="landing-secondary-link" href="#features">Discover the platform <ArrowDownLeft size={17} /></a></div>
             <div className="landing-trust-line"><ShieldCheck size={17} /><span>Built around clarity, privacy, and responsible access</span></div>
@@ -552,7 +553,7 @@ export default function App() {
         </header>
 
         <div className="content">
-          <div className="welcome-row">
+          {page !== "Overview" && <div className="welcome-row">
             <div>
               <div className="eyebrow">YOUR MONEY, IN VIEW</div>
               <h1>{page === "Overview" ? "Welcome to FlowPay" : page}</h1>
@@ -578,7 +579,7 @@ export default function App() {
                                   : "Review verified account activity when ledger-backed history is available."}
               </p>
             </div>
-          </div>
+          </div>}
 
           {["Airtime", "Data", "Betting", "TV", "Fixed Savings", "Spend & Save", "Invitations", "More"].includes(page) ? (
             <section className="page-grid">
