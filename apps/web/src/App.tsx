@@ -4,7 +4,7 @@ import BulkOperations from "./BulkOperations";
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, Clock3, CreditCard, Home,
-  Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
+  Menu, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
   Eye, Building2, Mail, Banknote, LogOut
 } from "lucide-react";
 
@@ -573,15 +573,6 @@ export default function App() {
                                   : "Review verified account activity when ledger-backed history is available."}
               </p>
             </div>
-            <button
-              className="refresh-button"
-              onClick={() => { void Promise.all([checkApi(), loadCustomerData(page)]); }}
-              aria-label={`Refresh ${page} and connection status`}
-              title={`Refresh ${page} data and API/database connection status`}
-              disabled={customerLoading}
-            >
-              <RefreshCw size={16} /> Refresh
-            </button>
           </div>
 
           {page === "Bulk Payments" ? (
@@ -653,32 +644,6 @@ export default function App() {
               </div>}
             </article>
 
-            <article className="panel connection-panel">
-              <div className="panel-heading">
-                <div><h2>System status</h2><p>Frontend to backend connectivity</p></div>
-                <CheckCircle2 size={20} />
-              </div>
-              <div className="connection-row">
-                <span>Customer interface</span><span className="status-ok"><CheckCircle2 size={15} /> Running</span>
-              </div>
-              <div className="connection-row">
-                <span>API health endpoint</span>
-                <span className={apiStatus === "connected" ? "status-ok" : apiStatus === "checking" ? "status-wait" : "status-error"}>
-                  <span className="status-dot" />{apiStatus === "connected" ? "Connected" : apiStatus === "checking" ? "Checking" : "Unavailable"}
-                </span>
-              </div>
-              <div className="connection-row">
-                <span>Database readiness{databaseName ? ` (${databaseName})` : ""}</span>
-                <span className={databaseStatus === "connected" ? "status-ok" : databaseStatus === "checking" ? "status-wait" : "status-error"}>
-                  <span className="status-dot" />
-                  {databaseStatus === "connected" ? "Connected" : databaseStatus === "checking" ? "Checking" : databaseStatus === "not_configured" ? "Not configured" : databaseStatus === "schema_incomplete" ? "Schema incomplete" : "Unavailable"}
-                </span>
-              </div>
-              <div className="connection-row">
-                <span>Payments</span><span className="status-wait">Disabled</span>
-              </div>
-              <p className="connection-help">API status comes from <code>/health</code>; database and required schema migrations are checked by <code>/ready</code>. “Schema incomplete” means a required migration is missing; migrations are never applied automatically. A connected database does not mean payment features are enabled.</p>
-            </article>
           </section>
 
             </>
