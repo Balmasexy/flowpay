@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { Pool } from "pg";
 import { handlePasskeyRoute } from "./passkeys.js";
 import { handleSandboxRoute } from "./sandbox.js";
+import { handleBulkSandboxRoute } from "./bulk-sandbox.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -281,6 +282,7 @@ const server = createServer(async (req, res) => {
     const auth = await authenticate(req);
     if ("error" in auth) { authError(res, auth.error); return; }
     if (!pool) { sendJson(res, 503, { error: "DATABASE_NOT_CONFIGURED" }); return; }
+    if (await handleBulkSandboxRoute(req, res, pool, (await getCustomer(auth.subject))?.id ?? "", pathname)) return;
     await handleSandboxRoute(req, res, pool, auth.subject, pathname);
     return;
   }
