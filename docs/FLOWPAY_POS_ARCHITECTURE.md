@@ -29,7 +29,7 @@ Implement each provider behind a common contract with operations equivalent to:
 - `verifyWebhook()`: provider-specific signature, timestamp and event authenticity verification.
 - `normalizeEvent()`: map provider payloads to a small internal event vocabulary without retaining cardholder secrets.
 
-An adapter must fail closed when credentials, provider approval, terminal capability, signature verification or environment configuration is absent. Provider secrets belong in Render environment secrets or another secret manager, never in app bundles, database metadata, logs or Git.
+The TypeScript contract lives in `apps/api/src/pos/provider.ts`; `PosProviderRegistry` is an explicit allow-list and starts empty, so an unconfigured provider cannot be called. An adapter must fail closed when credentials, provider approval, terminal capability, signature verification or environment configuration is absent. Provider secrets belong in Render environment secrets or another secret manager, never in app bundles, database metadata, logs or Git.
 
 ## Provider onboarding matrix
 
