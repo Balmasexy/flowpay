@@ -320,6 +320,29 @@ export default function App() {
     return body as T;
   }
 
+  async function apiPost<T>(path: string): Promise<T> {
+    const token = await getAccessToken();
+    if (!token) {
+      setCustomerMessage(AUTH_URL
+        ? "No valid signed-in session was found. Sign in through the configured Neon Auth service."
+        : "Neon Auth is not configured. Set VITE_NEON_AUTH_URL to connect customer data.");
+      throw new Error("AUTHENTICATION_REQUIRED");
+    }
+    const response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000)
+    });
+    const body: unknown = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof body === "object" && body !== null && "error" in body
+        ? String((body as { error: unknown }).error) : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+    return body as T;
+  }
+
   async function loadCustomerData(target: Page) {
     if (target === "Transfers") return;
     setCustomerLoading(true);
@@ -327,6 +350,10 @@ export default function App() {
       // Customer pages are read-only. Profile/account provisioning belongs to the explicit
       // sign-up/bootstrap flow, never as a side effect of opening or refreshing a page.
       if (target === "Overview") {
+        // Idempotently provision the signed-in customer's FlowPay profile and internal NGN
+        // account before loading read-only account data. This never creates a bank account
+        // number, posts a ledger entry, or initiates a payment.
+        await apiPost<{ status: string }>("/v1/me/bootstrap");
         const [summary, history] = await Promise.all([
           apiGet<{ totals: SummaryTotal[] }>("/v1/me/summary"),
           apiGet<{ transactions: Transaction[] }>("/v1/me/transactions?limit=5")
