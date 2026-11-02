@@ -790,44 +790,65 @@ body { background: var(--dashboard-canvas); }
   background: #ffead8;
   border: 1px solid #ffddc0;
 }
+/* Desktop dashboard activity card: give the single remaining panel the full row
+   and keep transaction details aligned without changing the mobile rules. */
 .dashboard-lower-grid {
+  display: block;
+  width: 100%;
   margin-top: 20px;
-  gap: 16px;
-  align-items: stretch;
 }
-.dashboard-lower-grid > .panel {
+.dashboard-lower-grid > .activity-panel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border-color: #e3ddd3;
   border-radius: 16px;
   background: #faf8f4;
-  padding: 21px;
+  padding: 22px 24px;
   box-shadow: 0 5px 18px #392a1b07;
 }
 .dashboard-lower-grid .panel-heading {
-  padding-bottom: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #eae4dc;
 }
-.dashboard-lower-grid .panel-heading h2 { font-size: 14px; }
+.dashboard-lower-grid .panel-heading h2 { font-size: 16px; }
 .dashboard-lower-grid .panel-heading p { line-height: 1.6; }
-.dashboard-lower-grid .connection-row {
-  padding: 14px 0;
-  border-bottom-color: #ece6de;
-  font-size: 11px;
+.dashboard-lower-grid .transaction-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
 }
 .dashboard-lower-grid .transaction-row {
-  padding: 13px 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 15px 2px;
   border-bottom: 1px solid #ece6de;
+}
+.dashboard-lower-grid .transaction-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 5px;
+}
+.dashboard-lower-grid .transaction-copy strong,
+.dashboard-lower-grid .transaction-copy span {
+  overflow-wrap: anywhere;
+}
+.dashboard-lower-grid .transaction-amount {
+  white-space: nowrap;
+  text-align: right;
 }
 .dashboard-lower-grid .transaction-symbol {
   background: #ffead8;
   color: #d9630a;
   border-radius: 11px;
-}
-.dashboard-lower-grid .connection-help {
-  padding: 12px;
-  border-radius: 10px;
-  background: #f0ece5;
-  color: #77716a;
-  line-height: 1.7;
 }
 .dashboard-lower-grid .empty-state {
   border-radius: 12px;
@@ -835,9 +856,6 @@ body { background: var(--dashboard-canvas); }
   margin-top: 15px;
 }
 .dashboard-lower-grid .empty-icon { background: #ffead8; }
-.dashboard-lower-grid .status-ok,
-.dashboard-lower-grid .status-wait,
-.dashboard-lower-grid .status-error { font-weight: 700; }
 @media (min-width: 1400px) {
   .dashboard-stat-grid .stat-card { min-height: 184px; padding: 24px; }
   .dashboard-quick-actions .quick-action { min-height: 88px; }
