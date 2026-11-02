@@ -1363,3 +1363,48 @@ html, body, #root, .app-shell, .main {
   .search-result { gap: 8px; }
   .search-result-category { display: none; }
 }
+
+
+/* Native FlowPay app: no desktop sidebar, compact refresh menu and bottom shortcuts. */
+.refresh-menu-wrap { position: relative; flex: 0 0 auto; }
+.refresh-menu-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 42px; }
+.refresh-dropdown {
+  position: absolute; z-index: 120; top: calc(100% + 9px); right: 0;
+  width: min(290px, calc(100vw - 28px)); padding: 7px;
+  border: 1px solid #e8dfd3; border-radius: 13px; background: #fffef8;
+  box-shadow: 0 14px 38px #21170e24;
+}
+.refresh-dropdown button {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 11px 10px;
+  border: 0; border-radius: 9px; background: transparent; color: #39332c; text-align: left; cursor: pointer;
+}
+.refresh-dropdown button:hover, .refresh-dropdown button:focus-visible { background: #fff0e2; outline: none; }
+.refresh-dropdown button > svg { flex: 0 0 auto; color: #d96612; }
+.refresh-dropdown button span { display: grid; gap: 3px; }
+.refresh-dropdown button strong { font-size: 11px; }
+.refresh-dropdown button small { color: #81786e; font-size: 10px; }
+.mobile-bottom-nav { display: none; }
+@media (max-width: 700px) {
+  .native-app .sidebar, .native-app .scrim, .native-app .mobile-menu { display: none !important; }
+  .native-app .app-shell { min-height: 100dvh; }
+  .native-app .main { width: 100%; min-width: 0; margin-left: 0; padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .native-app .topbar { padding-left: 14px; padding-right: 12px; }
+  .native-app .breadcrumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .native-app .topbar-right { gap: 8px; }
+  .native-app .api-indicator { display: none; }
+  .native-app .mobile-bottom-nav {
+    position: fixed; z-index: 110; right: 0; bottom: 0; left: 0;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-height: 64px; padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid #e5dccf; background: rgba(255,254,247,.97);
+    box-shadow: 0 -8px 24px #24180d12; backdrop-filter: blur(14px);
+  }
+  .native-app .mobile-shortcut {
+    display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; border: 0; border-radius: 10px; background: transparent; color: #777067;
+    font: 600 9px Manrope, sans-serif; cursor: pointer;
+  }
+  .native-app .mobile-shortcut.active { background: #fff0e2; color: #c65b0b; }
+  .native-app .mobile-shortcut svg { flex: 0 0 auto; }
+  .native-app .content { padding-bottom: 18px; }
+}
