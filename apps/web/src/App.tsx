@@ -485,8 +485,7 @@ export default function App() {
     { name: "Cards" as const, icon: CreditCard },
     { name: "Activity" as const, icon: Clock3 },
     { name: "Customer Profile" as const, icon: UserRound },
-    { name: "View Account Number" as const, icon: Eye },
-    { name: "Security" as const, icon: ShieldCheck }
+    { name: "View Account Number" as const, icon: Eye }
   ];
 
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -526,21 +525,6 @@ export default function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="security-note">
-            <ShieldCheck size={20} />
-            <div>
-              <strong>Security first</strong>
-              <span>Never share your PIN or password.</span>
-            </div>
-          </div>
-          <div className="profile">
-            <div className="avatar">F</div>
-            <div className="profile-info">
-              <strong>FlowPay</strong>
-              <span>Customer preview</span>
-            </div>
-            <CircleHelp size={18} className="muted-icon" />
-          </div>
           <button className="logout-button" type="button" onClick={() => window.location.assign("/logout")}>
             <LogOut size={18} />
             <span>Log out</span>
