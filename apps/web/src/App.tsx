@@ -387,6 +387,10 @@ export default function App() {
         setCardEvents(eventResult.events);
         setCustomerMessage("Card metadata and audit history loaded. Sensitive card credentials are never returned.");
       } else if (target === "Customer Profile" || target === "View Account Number") {
+        // A customer may open Profile or Account Number before visiting Overview.
+        // Ensure the authenticated identity has its own FlowPay profile/account first.
+        // This is idempotent and does not create a bank account number or move funds.
+        await apiPost<{ status: string }>("/v1/me/bootstrap");
         const [profileResult, accountResult, cardResult] = await Promise.all([
           apiGet<{ profile: CustomerProfile }>("/v1/me/profile"),
           apiGet<{ accounts: Account[] }>("/v1/me/accounts"),
