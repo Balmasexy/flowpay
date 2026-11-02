@@ -497,9 +497,6 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="main-content">
-        <PasskeyAutoPrompt apiUrl={API_URL} getAccessToken={getAccessToken} />
-      </div>
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <span className="brand-mark">F</span>
@@ -557,6 +554,7 @@ export default function App() {
         </header>
 
         <div className="content">
+          <PasskeyAutoPrompt apiUrl={API_URL} getAccessToken={getAccessToken} />
           {page !== "Overview" && <div className="welcome-row">
             <div>
               <div className="eyebrow">YOUR MONEY, IN VIEW</div>
