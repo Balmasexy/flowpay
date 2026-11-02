@@ -5,7 +5,8 @@ import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, Clock3, CreditCard, Home,
   Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, Building2, Mail, Banknote, LogOut
+  Eye, Building2, Mail, Banknote, LogOut, Store, Smartphone, Tv, Gift,
+  PiggyBank, Users, MoreHorizontal, Bookmark, Landmark, CircleDollarSign
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -590,20 +591,8 @@ export default function App() {
             <BulkOperations mode="verification" />
           ) : page === "Overview" ? (
             <>
-          <section className="notice">
-            <div className="notice-icon"><ShieldCheck size={21} /></div>
-            <div>
-              <strong>FlowPay workspace</strong>
-              <p>FlowPay checks API health and database readiness. Account balances, cards, and transaction history are shown only when authenticated services return verified records.</p>
-            </div>
-          </section>
-
           <section className="section-heading dashboard-section-heading">
-            <div>
-              <h2>Account overview</h2>
-              <p>Live financial figures will appear only after they can be loaded from authenticated account services.</p>
-            </div>
-            <span className="preview-label">PREVIEW</span>
+            <div><h2>Account overview</h2></div>
           </section>
 
           <section className="stat-grid dashboard-stat-grid">
@@ -641,6 +630,56 @@ export default function App() {
               <span className="quick-action-arrow">↗</span>
             </button>
           </section>
+
+          {transactions[0] && (
+            <button className="dashboard-transaction-banner" onClick={() => { setPage("Activity"); window.sessionStorage.setItem("flowpay.currentPage", "Activity"); }}>
+              <span className="dashboard-banner-check"><CheckCircle2 size={21} /></span>
+              <span className="dashboard-banner-copy"><strong>{transactions[0].description || transactions[0].transaction_type}</strong><small>{formatDate(transactions[0].created_at)} · {transactions[0].status}</small></span>
+              <strong className="dashboard-banner-amount">{formatMinor(String(Math.abs(Number(transactions[0].amount_minor))), transactions[0].currency)}</strong>
+              <span className="dashboard-banner-link">Transactions <ArrowRight size={17} /></span>
+            </button>
+          )}
+
+          <section className="dashboard-business-strip">
+            <span className="dashboard-service-icon"><Store size={20} /></span>
+            <span><strong>Business services</strong><small>Sales summary from recorded activity</small></span>
+            <strong className="dashboard-business-value">Today's sales: {transactions.length ? "See activity" : "—"}</strong>
+            <button onClick={() => { setPage("Activity"); window.sessionStorage.setItem("flowpay.currentPage", "Activity"); }} aria-label="Open business activity"><ArrowRight size={19} /></button>
+          </section>
+
+          <section className="dashboard-action-tiles" aria-label="Quick money actions">
+            <button onClick={() => { setPage("Transfers"); window.sessionStorage.setItem("flowpay.currentPage", "Transfers"); }}><span><UserRound size={25} /></span><strong>To FlowPay</strong></button>
+            <button onClick={() => { setPage("Transfers"); window.sessionStorage.setItem("flowpay.currentPage", "Transfers"); }}><span><Landmark size={25} /></span><strong>To Bank</strong></button>
+            <button onClick={() => { setPage("Customer Profile"); window.sessionStorage.setItem("flowpay.currentPage", "Customer Profile"); }}><span><Bookmark size={25} /></span><strong>Saved</strong></button>
+          </section>
+
+          <section className="dashboard-services-panel">
+            <div className="panel-heading"><div><h2>Everyday services</h2><p>Explore FlowPay services</p></div><MoreHorizontal size={20} /></div>
+            <div className="dashboard-services-grid">
+              <button onClick={() => setPage("Transfers")}><span><Smartphone size={22} /></span><strong>Airtime</strong></button>
+              <button onClick={() => setPage("Transfers")}><span><Smartphone size={22} /></span><strong>Data</strong></button>
+              <button onClick={() => setPage("Transfers")}><span><CircleDollarSign size={22} /></span><strong>Betting</strong></button>
+              <button onClick={() => setPage("Transfers")}><span><Tv size={22} /></span><strong>TV</strong></button>
+              <button onClick={() => setPage("Transfers")}><span><PiggyBank size={22} /></span><strong>Fixed</strong></button>
+              <button onClick={() => setPage("Transfers")}><span><Wallet size={22} /></span><strong>Spend & Save</strong></button>
+              <button onClick={() => setPage("Customer Profile")}><span><Gift size={22} /></span><strong>Invitation</strong></button>
+              <button onClick={() => setPage("Activity")}><span><MoreHorizontal size={22} /></span><strong>More</strong></button>
+            </div>
+            <p className="dashboard-services-note">Service options will open when their secure provider integrations are enabled.</p>
+          </section>
+
+          <section className="dashboard-savings-banner">
+            <div><span className="dashboard-savings-kicker">FLOWPAY SAVINGS</span><h2>Build a stronger savings habit.</h2><p>Explore savings tools as they become available in FlowPay.</p></div>
+            <button onClick={() => { setPage("Transfers"); window.sessionStorage.setItem("flowpay.currentPage", "Transfers"); }}>Explore <ArrowRight size={17} /></button>
+          </section>
+
+          <nav className="dashboard-mobile-nav" aria-label="Mobile dashboard navigation">
+            <button className="active" onClick={() => { setPage("Overview"); window.sessionStorage.setItem("flowpay.currentPage", "Overview"); }}><Home size={21} /><span>Home</span></button>
+            <button onClick={() => { setPage("Activity"); window.sessionStorage.setItem("flowpay.currentPage", "Activity"); }}><Gift size={21} /><span>Rewards</span></button>
+            <button onClick={() => { setPage("Money Received"); window.sessionStorage.setItem("flowpay.currentPage", "Money Received"); }}><CircleDollarSign size={21} /><span>Wealth</span></button>
+            <button onClick={() => { setPage("Cards"); window.sessionStorage.setItem("flowpay.currentPage", "Cards"); }}><CreditCard size={21} /><span>Cards</span></button>
+            <button onClick={() => { setPage("Customer Profile"); window.sessionStorage.setItem("flowpay.currentPage", "Customer Profile"); }}><UserRound size={21} /><span>Profile</span></button>
+          </nav>
 
           <section className="lower-grid dashboard-lower-grid">
             <article className="panel activity-panel">
