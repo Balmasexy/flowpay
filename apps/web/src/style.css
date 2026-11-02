@@ -1298,3 +1298,25 @@ html, body, #root, .app-shell, .main {
   outline: 2px solid #ff7a1855;
   outline-offset: 2px;
 }
+
+
+/* Accessible show/hide control for login and registration password fields */
+.auth-input-wrap { position: relative; }
+.auth-input-wrap .password-visibility-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #777b82;
+  cursor: pointer;
+}
+.auth-input-wrap .password-visibility-toggle:hover { color: var(--orange, #ff7a18); }
+.auth-input-wrap .password-visibility-toggle:focus-visible {
+  outline: 2px solid var(--orange, #ff7a18);
+  outline-offset: 2px;
+}
