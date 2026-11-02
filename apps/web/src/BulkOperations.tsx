@@ -13,8 +13,8 @@ type BeneficiaryRow = {
 type ParsedRow = BeneficiaryRow & { line: number; issues: string[] };
 
 const panel: CSSProperties = { background: "#171a20", border: "1px solid #303641", borderRadius: 14, padding: 18 };
-const muted: React.CSSProperties = { color: "#a6afbd", fontSize: 13 };
-const field: React.CSSProperties = { background: "#101319", color: "#f3f5f8", border: "1px solid #39414e", borderRadius: 8, padding: "10px 12px" };
+const muted: CSSProperties = { color: "#a6afbd", fontSize: 13 };
+const field: CSSProperties = { background: "#101319", color: "#f3f5f8", border: "1px solid #39414e", borderRadius: 8, padding: "10px 12px" };
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
