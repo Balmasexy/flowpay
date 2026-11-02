@@ -40,6 +40,7 @@ function validateRows(rows: string[][], mode: Mode): ParsedRow[] {
   if (!rows.length) return [];
   const headers = rows[0].map((value) => value.toLowerCase().replace(/[\s-]+/g, "_"));
   const index = (name: string) => headers.indexOf(name);
+  const seenBeneficiaries = new Set<string>();
   return rows.slice(1).map((cells, i) => {
     const value = (name: string) => { const at = index(name); return at >= 0 ? (cells[at] ?? "").trim() : ""; };
     const item: ParsedRow = {
@@ -55,6 +56,11 @@ function validateRows(rows: string[][], mode: Mode): ParsedRow[] {
     if (!item.beneficiaryName) item.issues.push("Beneficiary name is missing");
     if (!/^\d{10}$/.test(item.accountNumber)) item.issues.push("Account number must contain 10 digits");
     if (!/^\d{3,10}$/.test(item.bankCode)) item.issues.push("Bank code is missing or malformed");
+    const beneficiaryKey = item.bankCode + ":" + item.accountNumber;
+    if (/^\\d{10}$/.test(item.accountNumber) && /^\\d{3,10}$/.test(item.bankCode)) {
+      if (seenBeneficiaries.has(beneficiaryKey)) item.issues.push("Duplicate beneficiary row");
+      seenBeneficiaries.add(beneficiaryKey);
+    }
     if (mode === "payments") {
       if (!item.amount || !/^\d+(\.\d{1,2})?$/.test(item.amount) || Number(item.amount) <= 0) item.issues.push("Amount must be a positive number");
       if (item.currency !== "NGN") item.issues.push("Only NGN is currently accepted for this draft template");
@@ -94,10 +100,15 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
       setError("Please upload a CSV file. Download the FlowPay template below; Excel files can be saved as CSV.");
       return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("The CSV exceeds the 2 MB upload limit.");
+      return;
+    }
     setLoading(true);
     try {
       const parsed = validateRows(parseCsv(await file.text()), mode);
       if (!parsed.length) setError("The CSV contains no beneficiary rows. Add rows below the header and try again.");
+      else if (parsed.length > 5000) setError("A batch can contain at most 5,000 rows. Split the file into smaller batches.");
       else setRows(parsed);
     } catch {
       setError("The CSV could not be read. Check its format and try again.");
@@ -148,7 +159,7 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
           <tbody>{rows.map((row) => <tr key={row.line}>
             <td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.line}</td>
             <td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.beneficiaryName || "—"}</td>
-            <td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.accountNumber || "—"}</td>
+            <td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.accountNumber ? `••••••${row.accountNumber.slice(-4)}` : "—"}</td>
             <td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.bankCode || "—"}</td>
             {isPayments && <><td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.amount || "—"}</td><td style={{ padding: 10, borderBottom: "1px solid #303641" }}>{row.currency || "—"}</td></>}
             <td style={{ padding: 10, borderBottom: "1px solid #303641", color: row.issues.length ? "#ffb36b" : "#73d6a1" }}>
