@@ -617,12 +617,12 @@ export default function App() {
               <div className="balance-value">{summaryTotals.length ? summaryTotals.map((total) => formatMinor(total.net_balance_minor, total.currency)).join(" · ") : "Not available"}</div>
               <div className="stat-foot">{summaryTotals.length ? "Posted ledger balances" : "Awaiting verified account data"}</div>
             </article>
-            <article className="stat-card stat-card-link" role="button" tabIndex={0} onClick={() => { setPage("Money Received"); window.sessionStorage.setItem("flowpay.currentPage", "Money Received"); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPage("Money Received"); window.sessionStorage.setItem("flowpay.currentPage", "Money Received"); } }}>
+            <article className="stat-card stat-card-link money-received-card" role="button" tabIndex={0} onClick={() => { setPage("Money Received"); window.sessionStorage.setItem("flowpay.currentPage", "Money Received"); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPage("Money Received"); window.sessionStorage.setItem("flowpay.currentPage", "Money Received"); } }}>
               <div className="stat-top"><span>Money received</span><ArrowDownLeft size={19} /></div>
               <div className="stat-value">{summaryTotals.length ? summaryTotals.map((total) => formatMinor(total.money_received_minor, total.currency)).join(" · ") : "—"}</div>
               <div className="stat-foot">{summaryTotals.length ? "Posted ledger credits" : "Awaiting authenticated ledger data"}</div>
             </article>
-            <article className="stat-card stat-card-link" role="button" tabIndex={0} onClick={() => { setPage("Money Sent"); window.sessionStorage.setItem("flowpay.currentPage", "Money Sent"); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPage("Money Sent"); window.sessionStorage.setItem("flowpay.currentPage", "Money Sent"); } }}>
+            <article className="stat-card stat-card-link money-sent-card" role="button" tabIndex={0} onClick={() => { setPage("Money Sent"); window.sessionStorage.setItem("flowpay.currentPage", "Money Sent"); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setPage("Money Sent"); window.sessionStorage.setItem("flowpay.currentPage", "Money Sent"); } }}>
               <div className="stat-top"><span>Money sent</span><ArrowUpRight size={19} /></div>
               <div className="stat-value">{summaryTotals.length ? summaryTotals.map((total) => formatMinor(total.money_sent_minor, total.currency)).join(" · ") : "—"}</div>
               <div className="stat-foot">{summaryTotals.length ? "Posted ledger debits" : "Awaiting authenticated ledger data"}</div>
