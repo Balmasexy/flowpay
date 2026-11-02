@@ -25,21 +25,17 @@ type CardEvent = { id: string; card_id: string; event_type: string; outcome: str
 async function getAccessToken(): Promise<string | null> {
   if (!AUTH_URL) return null;
   try {
-    const response = await fetch(`${AUTH_URL}/token`, {
+    // Managed Neon Auth issues the API JWT on GET /get-session in this header.
+    // The browser session itself remains in the HttpOnly cookie.
+    const response = await fetch(`${AUTH_URL}/get-session`, {
       method: "GET",
       credentials: "include",
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(8000)
     });
     if (!response.ok) return null;
-    const body: unknown = await response.json();
-    if (typeof body !== "object" || body === null) return null;
-    const record = body as Record<string, unknown>;
-    const session = typeof record.session === "object" && record.session !== null
-      ? record.session as Record<string, unknown> : {};
-    const token = [record.access_token, record.token, session.access_token]
-      .find((value): value is string => typeof value === "string" && value.split(".").length === 3);
-    return token ?? null;
+    const token = response.headers.get("set-auth-jwt")?.trim();
+    return token && token.split(".").length === 3 ? token : null;
   } catch {
     return null;
   }
