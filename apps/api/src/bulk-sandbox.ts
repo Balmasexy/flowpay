@@ -50,7 +50,7 @@ export async function handleBulkSandboxRoute(
     return true;
   }
 
-  const detail = /^\\/v1\\/sandbox\\/batches\\/([0-9a-f-]{36})$/i.exec(pathname);
+  const detail = /^\/v1\/sandbox\/batches\/([0-9a-f-]{36})$/i.exec(pathname);
   if (req.method === "GET" && detail) {
     const batch = await pool.query(
       `SELECT id, batch_type, status, row_count, valid_count, invalid_count, created_at
