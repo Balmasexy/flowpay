@@ -274,7 +274,7 @@ export default function App() {
   const [apiMessage, setApiMessage] = useState("Checking API connection…");
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
   const [page, setPage] = useState<Page>(() => {
-    const routeSlug = window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
+    const routeSlug = new URLSearchParams(window.location.search).get("page") ?? window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
     const routePages: Record<string, Page> = { overview: "Overview", activity: "Activity", cards: "Cards", transfers: "Transfers", more: "More", search: "Search" };
     if (routeSlug && routePages[routeSlug]) return routePages[routeSlug];
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
@@ -500,13 +500,13 @@ export default function App() {
     setPage(target);
     window.sessionStorage.setItem("flowpay.currentPage", target);
     const slug = target.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    window.history.pushState({ flowpayPage: target }, "", `/app/${slug}`);
+    window.history.pushState({ flowpayPage: target }, "", `/?page=${encodeURIComponent(slug)}`);
     setMenuOpen(false);
     setRefreshMenuOpen(false);
   };
   useEffect(() => {
     const syncRoute = () => {
-      const slug = window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
+      const slug = new URLSearchParams(window.location.search).get("page") ?? window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
       if (slug && routePages[slug]) {
         setPage(routePages[slug]);
         window.sessionStorage.setItem("flowpay.currentPage", routePages[slug]);
@@ -515,7 +515,7 @@ export default function App() {
     window.addEventListener("popstate", syncRoute);
     return () => window.removeEventListener("popstate", syncRoute);
   }, []);
-  if (pathname === "/") return <LandingPage />;
+  if (pathname === "/" && !new URLSearchParams(window.location.search).has("page")) return <LandingPage />;
   if (pathname === "/login" || pathname === "/signin") return <AuthPage mode="login" />;
   if (pathname === "/signup" || pathname === "/register" || pathname === "/registration") return <AuthPage mode="signup" />;
   if (pathname === "/logout" || pathname === "/signout") return <LogoutPage />;
