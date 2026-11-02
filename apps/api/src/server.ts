@@ -2,6 +2,7 @@ import { createPublicKey, timingSafeEqual, verify as verifySignature } from "nod
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Pool } from "pg";
 import { handlePasskeyRoute } from "./passkeys.js";
+import { handleSandboxRoute } from "./sandbox.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -275,7 +276,16 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-  // Development-only ledger simulation. Never calls OPay or any payment provider.
+  // Isolated sandbox endpoints. They use separate sandbox tables and never call a provider.
+  if (pathname.startsWith("/v1/sandbox/")) {
+    const auth = await authenticate(req);
+    if ("error" in auth) { authError(res, auth.error); return; }
+    if (!pool) { sendJson(res, 503, { error: "DATABASE_NOT_CONFIGURED" }); return; }
+    await handleSandboxRoute(req, res, pool, auth.subject, pathname);
+    return;
+  }
+
+  // Development-only ledger simulation. Never calls OPay or any payment provider. Never calls OPay or any payment provider.
   if (req.method === "POST" && pathname === "/dev/simulated-transfers/opay") {
     if (process.env.NODE_ENV !== "development" || process.env.FLOWPAY_SIMULATED_TRANSFERS_ENABLED !== "true") {
       sendJson(res, 404, { error: "NOT_FOUND" });
