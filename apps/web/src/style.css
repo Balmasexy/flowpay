@@ -1217,3 +1217,28 @@ html, body, #root, .app-shell, .main {
   text-align: center;
 }
 .logout-card .auth-submit { margin-top: 18px; }
+
+
+/* Keep the available-balance card unmistakably dark with high-contrast text. */
+.dashboard-stat-grid .balance-card {
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 100% 0%, #ff7a1824 0%, transparent 38%),
+    linear-gradient(135deg, #101010 0%, #050505 72%);
+  border: 1px solid #292929;
+  box-shadow: 0 14px 30px #00000024, inset 0 1px 0 #ffffff0a;
+}
+.dashboard-stat-grid .balance-card .stat-top {
+  color: #e2e2e2;
+}
+.dashboard-stat-grid .balance-card .balance-value {
+  color: #fff;
+  text-shadow: 0 1px 12px #00000066;
+}
+.dashboard-stat-grid .balance-card .stat-foot {
+  color: #bdbdbd;
+}
+.dashboard-stat-grid .balance-card .stat-top svg {
+  color: #ff8a32;
+  background: #ff7a1824;
+}
