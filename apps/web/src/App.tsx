@@ -558,11 +558,9 @@ export default function App() {
           {page !== "Overview" && <div className="welcome-row">
             <div>
               <div className="eyebrow">YOUR MONEY, IN VIEW</div>
-              <h1>{page === "Overview" ? "Welcome to FlowPay" : page}</h1>
+              <h1>{page}</h1>
               <p className="subtitle">
-                {page === "Overview"
-                  ? "A clearer view of your financial life starts here."
-                  : page === "Cards"
+                {page === "Cards"
                     ? "Explore card tools while secure issuing services are being built."
                     : page === "Transfers"
                       ? "Review the transfer workflow and the checks required before it can be enabled."
