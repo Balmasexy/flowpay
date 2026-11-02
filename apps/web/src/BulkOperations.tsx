@@ -57,7 +57,7 @@ function validateRows(rows: string[][], mode: Mode): ParsedRow[] {
     if (!/^\d{10}$/.test(item.accountNumber)) item.issues.push("Account number must contain 10 digits");
     if (!/^\d{3,10}$/.test(item.bankCode)) item.issues.push("Bank code is missing or malformed");
     const beneficiaryKey = item.bankCode + ":" + item.accountNumber;
-    if (/^\\d{10}$/.test(item.accountNumber) && /^\\d{3,10}$/.test(item.bankCode)) {
+    if (/^[0-9]{10}$/.test(item.accountNumber) && /^[0-9]{3,10}$/.test(item.bankCode)) {
       if (seenBeneficiaries.has(beneficiaryKey)) item.issues.push("Duplicate beneficiary row");
       seenBeneficiaries.add(beneficiaryKey);
     }
