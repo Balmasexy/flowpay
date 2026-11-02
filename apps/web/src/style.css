@@ -1242,3 +1242,41 @@ html, body, #root, .app-shell, .main {
   color: #ff8a32;
   background: #ff7a1824;
 }
+
+
+/* Match Money Received and Money Sent summary cards to the dark balance card. */
+.dashboard-stat-grid .money-received-card,
+.dashboard-stat-grid .money-sent-card {
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 100% 0%, #ff7a1824 0%, transparent 38%),
+    linear-gradient(135deg, #101010 0%, #050505 72%);
+  border: 1px solid #292929;
+  box-shadow: 0 14px 30px #00000024, inset 0 1px 0 #ffffff0a;
+}
+.dashboard-stat-grid .money-received-card .stat-top,
+.dashboard-stat-grid .money-sent-card .stat-top {
+  color: #e2e2e2;
+}
+.dashboard-stat-grid .money-received-card .stat-value,
+.dashboard-stat-grid .money-sent-card .stat-value {
+  color: #fff;
+  text-shadow: 0 1px 12px #00000066;
+}
+.dashboard-stat-grid .money-received-card .stat-foot,
+.dashboard-stat-grid .money-sent-card .stat-foot {
+  color: #bdbdbd;
+}
+.dashboard-stat-grid .money-received-card .stat-top svg,
+.dashboard-stat-grid .money-sent-card .stat-top svg {
+  color: #ff8a32;
+  background: #ff7a1824;
+}
+.dashboard-stat-grid .money-received-card:hover,
+.dashboard-stat-grid .money-sent-card:hover,
+.dashboard-stat-grid .money-received-card:focus-visible,
+.dashboard-stat-grid .money-sent-card:focus-visible {
+  border-color: #75401f;
+  outline: 2px solid #ff7a1855;
+  outline-offset: 2px;
+}
