@@ -492,7 +492,6 @@ export default function App() {
   ];
 
   const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-  const routeSegment = pathname.match(/^\/app\/([^/]+)$/)?.[1];
   const routePages: Record<string, Page> = { overview: "Overview", activity: "Activity", cards: "Cards", transfers: "Transfers", more: "More", search: "Search" };
   const navigateToPage = (target: Page) => {
     setPage(target);
