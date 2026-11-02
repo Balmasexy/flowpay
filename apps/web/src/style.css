@@ -1320,3 +1320,46 @@ html, body, #root, .app-shell, .main {
   outline: 2px solid var(--orange, #ff7a18);
   outline-offset: 2px;
 }
+
+
+/* FlowPay authenticated workspace search */
+.search-page { display: grid; gap: 12px; width: 100%; }
+.search-panel { width: 100%; padding: 22px; }
+.search-input-wrap { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 15px; border: 1px solid #e4ddd4; border-radius: 12px; background: #fff; color: #8b8177; }
+.search-input-wrap:focus-within { border-color: #ff9a4b; box-shadow: 0 0 0 3px #ff7a1818; }
+.search-input-wrap input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #25231f; font: 500 13px Manrope, sans-serif; }
+.search-input-wrap input::placeholder { color: #a39b91; }
+.search-clear { display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent; color: #8b8177; }
+.search-clear:not(:disabled):hover { background: #f5eee7; color: #b9570b; }
+.search-clear:disabled { opacity: .35; }
+.search-scope-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 5px; }
+.search-scope { min-height: 34px; padding: 7px 12px; border: 1px solid #e8e2d9; border-radius: 999px; background: #fff; color: #777168; font-size: 10px; font-weight: 700; }
+.search-scope-active { border-color: #ffb77e; background: #fff0e3; color: #a94e09; }
+.search-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 9px; min-height: 230px; padding: 25px 15px; color: #9b9187; text-align: center; }
+.search-empty > svg { color: #d96c19; }
+.search-empty strong { color: #302c27; font-size: 13px; }
+.search-empty span { max-width: 460px; color: #898178; font-size: 11px; line-height: 1.7; }
+.search-results { margin-top: 17px; }
+.search-results-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid #eee8df; }
+.search-results-heading strong { color: #38332d; font-size: 11px; }
+.search-results-heading span { color: #948a80; font-size: 10px; text-align: right; }
+.search-result { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 13px 3px; border: 0; border-bottom: 1px solid #f0ebe5; background: transparent; color: #655d54; text-align: left; cursor: pointer; }
+.search-result:hover { background: #fffaf5; }
+.search-result-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border-radius: 10px; background: #ffead8; color: #d9630a; }
+.search-result-copy { display: grid; flex: 1; min-width: 0; gap: 5px; }
+.search-result-copy strong { overflow-wrap: anywhere; color: #302c27; font-size: 11px; }
+.search-result-copy small { overflow-wrap: anywhere; color: #898178; font-size: 10px; line-height: 1.5; }
+.search-result-category { color: #a0968c; font-size: 9px; font-weight: 700; }
+.search-privacy-note { color: #938a80; font-size: 10px; line-height: 1.6; }
+.workspace-search-button { color: #a95a1a; }
+@media (max-width: 700px) {
+  .search-panel { padding: 14px; }
+  .search-input-wrap { min-height: 52px; padding: 0 11px; }
+  .search-input-wrap input { font-size: 11px; }
+  .search-scope-row { gap: 6px; }
+  .search-scope { padding: 7px 10px; }
+  .search-results-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .search-results-heading span { text-align: left; }
+  .search-result { gap: 8px; }
+  .search-result-category { display: none; }
+}
