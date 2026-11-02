@@ -3,7 +3,7 @@ import PasskeySecurity from "./PasskeySecurity";
 import BulkOperations from "./BulkOperations";
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
-  CheckCircle2, CircleHelp, Clock3, CreditCard, Home,
+  CheckCircle2, Clock3, CreditCard, Home,
   Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
   Eye, Building2, Mail, Banknote, LogOut
 } from "lucide-react";
