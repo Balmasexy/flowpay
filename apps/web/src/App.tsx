@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import PasskeySecurity from "./PasskeySecurity";
+import BulkOperations from "./BulkOperations";
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, CircleHelp, Clock3, CreditCard, Home,
   Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, Building2, Mail
+  Eye, Building2, Mail, Banknote, ShieldCheck as ShieldCheckIcon
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -12,7 +13,7 @@ const AUTH_URL = (import.meta.env.VITE_NEON_AUTH_URL || "").replace(/\/$/, "");
 
 type ApiStatus = "checking" | "connected" | "unavailable";
 type DatabaseStatus = "checking" | "connected" | "unavailable" | "not_configured" | "schema_incomplete";
-type Page = "Overview" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security";
+type Page = "Overview" | "Transfers" | "Cards" | "Activity" | "Money Received" | "Money Sent" | "Customer Profile" | "View Account Number" | "Security" | "Bulk Payments" | "Bulk Verification";
 type ActivityFilter = "all" | "received" | "sent" | "transfers" | "cards";
 type CustomerProfile = { id: string; email: string | null; status: string; created_at: string };
 type Account = { id: string; currency: string; status: string; ledger_balance_minor: string };
@@ -227,7 +228,7 @@ export default function App() {
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
     return savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
       savedPage === "Money Received" || savedPage === "Money Sent" || savedPage === "Customer Profile" ||
-      savedPage === "View Account Number" || savedPage === "Security"
+      savedPage === "View Account Number" || savedPage === "Security" || savedPage === "Bulk Payments" || savedPage === "Bulk Verification"
       ? savedPage
       : "Overview";
   });
@@ -402,6 +403,8 @@ export default function App() {
     { name: "Money Received" as const, icon: ArrowDownLeft },
     { name: "Money Sent" as const, icon: ArrowUpRight },
     { name: "Transfers" as const, icon: ArrowLeftRight },
+    { name: "Bulk Payments" as const, icon: Banknote },
+    { name: "Bulk Verification" as const, icon: ShieldCheckIcon },
     { name: "Cards" as const, icon: CreditCard },
     { name: "Activity" as const, icon: Clock3 },
     { name: "Customer Profile" as const, icon: UserRound },
@@ -502,7 +505,11 @@ export default function App() {
                             ? "Review your registration record, account details, and virtual card preview."
                             : page === "View Account Number"
                               ? "Review account identifiers and the current bank-account assignment status."
-                              : "Review verified account activity when ledger-backed history is available."}
+                              : page === "Bulk Payments"
+                                ? "Prepare and review multi-beneficiary payment batches; execution remains disabled pending provider approval."
+                                : page === "Bulk Verification"
+                                  ? "Check beneficiary file formats before connecting an approved bank-account verification provider."
+                                  : "Review verified account activity when ledger-backed history is available."}
               </p>
             </div>
             <button
@@ -516,7 +523,11 @@ export default function App() {
             </button>
           </div>
 
-          {page === "Overview" ? (
+          {page === "Bulk Payments" ? (
+            <BulkOperations mode="payments" />
+          ) : page === "Bulk Verification" ? (
+            <BulkOperations mode="verification" />
+          ) : page === "Overview" ? (
             <>
           <section className="notice">
             <div className="notice-icon"><ShieldCheck size={21} /></div>
