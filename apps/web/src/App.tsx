@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PasskeySecurity from "./PasskeySecurity";
+import PasskeyAutoPrompt from "./PasskeyAutoPrompt";
 import BulkOperations from "./BulkOperations";
 import SearchPage from "./SearchPage";
 import {
@@ -496,6 +497,9 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="main-content">
+        <PasskeyAutoPrompt apiUrl={API_URL} getAccessToken={getAccessToken} />
+      </div>
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <span className="brand-mark">F</span>
