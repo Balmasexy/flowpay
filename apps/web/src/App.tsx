@@ -590,14 +590,6 @@ export default function App() {
             <BulkOperations mode="verification" />
           ) : page === "Overview" ? (
             <>
-          <section className="notice">
-            <div className="notice-icon"><ShieldCheck size={21} /></div>
-            <div>
-              <strong>FlowPay workspace</strong>
-              <p>FlowPay checks API health and database readiness. Account balances, cards, and transaction history are shown only when authenticated services return verified records.</p>
-            </div>
-          </section>
-
           <section className="section-heading dashboard-section-heading">
             <div>
               <h2>Account overview</h2>
