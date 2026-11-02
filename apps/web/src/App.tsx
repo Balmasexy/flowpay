@@ -269,7 +269,6 @@ export default function App() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [apiMessage, setApiMessage] = useState("Checking API connection…");
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
-  const [databaseName, setDatabaseName] = useState<string | null>(null);
   const [page, setPage] = useState<Page>(() => {
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
     return savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
@@ -294,7 +293,6 @@ export default function App() {
       setApiStatus("unavailable");
       setApiMessage("API URL not configured");
       setDatabaseStatus("not_configured");
-      setDatabaseName(null);
       return;
     }
 
@@ -316,7 +314,6 @@ export default function App() {
       setApiStatus("unavailable");
       setApiMessage("API unavailable — check deployment and CORS");
       setDatabaseStatus("unavailable");
-      setDatabaseName(null);
       return;
     }
 
@@ -327,20 +324,15 @@ export default function App() {
       const readiness: { status?: string; database?: string; database_name?: string; schema?: string } = await response.json();
       if (response.ok && readiness.status === "ready" && readiness.database === "connected" && readiness.schema === "complete") {
         setDatabaseStatus("connected");
-        setDatabaseName(readiness.database_name ?? null);
       } else if (readiness.database === "not_configured") {
         setDatabaseStatus("not_configured");
-        setDatabaseName(null);
       } else if (readiness.database === "connected" && readiness.schema !== "complete") {
         setDatabaseStatus("schema_incomplete");
-        setDatabaseName(readiness.database_name ?? null);
       } else {
         setDatabaseStatus("unavailable");
-        setDatabaseName(null);
       }
     } catch {
       setDatabaseStatus("unavailable");
-      setDatabaseName(null);
     }
   }
 
