@@ -50,9 +50,11 @@ async function getJwks(jwksUrl: string): Promise<Jwk[]> {
   const keys = body.keys.filter((key): key is Jwk =>
     typeof key === "object" && key !== null &&
     "kid" in key && typeof key.kid === "string" &&
-    "kty" in key && key.kty === "RSA" &&
-    (!("use" in key) || key.use === "sig") &&
-    (!("alg" in key) || key.alg === "RS256")
+    "kty" in key &&
+    ((key.kty === "RSA" && (!("alg" in key) || key.alg === "RS256")) ||
+      (key.kty === "OKP" && "crv" in key && key.crv === "Ed25519" &&
+        (!("alg" in key) || key.alg === "EdDSA"))) &&
+    (!("use" in key) || key.use === "sig")
   );
   if (keys.length === 0) throw new Error("No supported signing keys found");
   jwksCache = { keys, expiresAt: Date.now() + 5 * 60_000 };
@@ -70,12 +72,13 @@ async function authenticate(req: IncomingMessage): Promise<AuthResult> {
     const parts = match[1].split(".");
     if (parts.length !== 3) return { error: "invalid" };
     const header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8")) as { alg?: string; kid?: string };
-    if (header.alg !== "RS256" || typeof header.kid !== "string") return { error: "invalid" };
+    if ((header.alg !== "RS256" && header.alg !== "EdDSA") || typeof header.kid !== "string") return { error: "invalid" };
     const keys = await getJwks(config.jwksUrl);
     const jwk = keys.find((key) => key.kid === header.kid);
     if (!jwk) { jwksCache = null; return { error: "invalid" }; }
     const publicKey = createPublicKey({ key: JSON.parse(JSON.stringify(jwk)), format: "jwk" });
-    if (!verifySignature("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), publicKey, Buffer.from(parts[2], "base64url"))) {
+    const verificationAlgorithm = header.alg === "EdDSA" ? null : "RSA-SHA256";
+    if (!verifySignature(verificationAlgorithm, Buffer.from(parts[0] + "." + parts[1]), publicKey, Buffer.from(parts[2], "base64url"))) {
       return { error: "invalid" };
     }
     const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as JwtClaims;
