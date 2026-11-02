@@ -81,3 +81,20 @@ The migration defaults provider live access off and constrains `live_enabled` to
 ## Production gate (not authorized)
 
 Live processing remains disabled until provider contract/onboarding, terminal certification, Nigerian legal/compliance review, security review, webhook and reconciliation tests, incident/refund/reversal operations, production secret provisioning and explicit owner approval are complete. The existence of an adapter or a green build is not approval to process real money.
+
+## Bulk payments and bulk beneficiary verification
+
+The merchant workspace includes two separate preparation pages:
+- **Bulk Payments** accepts the documented CSV template (`beneficiary_name,account_number,bank_code,amount,currency,reference`), performs local format checks, and presents a review table. Its submit action is deliberately disabled; it does not call a bank, create payment intents, debit funds or post ledger entries.
+- **Bulk Verification** accepts `beneficiary_name,account_number,bank_code` and performs local format checks only. An account number passing these checks is not bank-verified. Actual account-name enquiry and account status checks require an approved provider verification endpoint and authenticated server-side response.
+
+The current UI reads the uploaded CSV in the browser and does not persist the file or beneficiary rows. It does not accept XLSX directly; spreadsheet users can export to CSV using the supplied template. Do not put customer data or account details in browser logs, analytics, or support screenshots.
+
+Before enabling server-side batch persistence, establish merchant roles/permissions and a data-protection design. Full account numbers and beneficiary identity data must be encrypted with managed keys (or tokenized by the provider), never stored as plaintext in generic metadata. Batch creation must have a maker/checker approval workflow, per-row idempotency, batch-level totals and limits, immutable audit history, provider status reconciliation, duplicate-beneficiary detection, and a controlled cancellation/reversal process. Verification results must record provider, timestamp, request reference and normalized outcome without retaining unnecessary sensitive payloads.
+
+Suggested future endpoints (not implemented by the current UI):
+- `POST /v1/merchant/bulk-verifications` — submit a verification batch to an approved verification provider.
+- `GET /v1/merchant/bulk-verifications/:id` — read per-beneficiary verification outcomes.
+- `POST /v1/merchant/bulk-payment-batches` — create a draft batch only.
+- `POST /v1/merchant/bulk-payment-batches/:id/approve` — maker/checker approval; still blocked unless a provider is explicitly production-approved.
+- `POST /v1/merchant/bulk-payment-batches/:id/execute` — unavailable while live payments are disabled.
