@@ -5,7 +5,7 @@ import {
   ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Bell,
   CheckCircle2, CircleHelp, Clock3, CreditCard, Home,
   Menu, RefreshCw, ShieldCheck, Wallet, X, UserRound, LockKeyhole,
-  Eye, Building2, Mail, Banknote
+  Eye, Building2, Mail, Banknote, LogOut
 } from "lucide-react";
 
 const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://flowpay-backend-qz79.onrender.com").replace(/\/$/, "");
@@ -211,6 +211,49 @@ function AuthPage({ mode }: { mode: "login" | "signup" }) {
         </div>
       </section>
       <footer className="auth-footer">© {new Date().getFullYear()} FlowPay</footer>
+    </main>
+  );
+}
+
+function LogoutPage() {
+  const [status, setStatus] = useState("Signing out securely…");
+  const [failed, setFailed] = useState(false);
+
+  async function signOut() {
+    setFailed(false);
+    setStatus("Signing out securely…");
+    if (!AUTH_URL) {
+      setFailed(true);
+      setStatus("Sign-out could not reach the authentication service. Please try again.");
+      return;
+    }
+    try {
+      const response = await fetch(`${AUTH_URL}/sign-out`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10000)
+      });
+      if (!response.ok) throw new Error(`Sign-out failed (HTTP ${response.status})`);
+      window.sessionStorage.removeItem("flowpay.currentPage");
+      window.location.replace("/login");
+    } catch (error) {
+      setFailed(true);
+      setStatus(error instanceof Error ? error.message : "Unable to sign out. Please try again.");
+    }
+  }
+
+  useEffect(() => { void signOut(); }, []);
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-card logout-card">
+        <span className="auth-card-icon"><LogOut size={21} /></span>
+        <h2>{failed ? "Sign-out needs attention" : "Signing out"}</h2>
+        <p role="status">{status}</p>
+        {failed && <button className="auth-submit" type="button" onClick={() => { void signOut(); }}>Try again <LogOut size={17} /></button>}
+        {failed && <a className="auth-switch" href="/login">Return to sign in</a>}
+      </section>
     </main>
   );
 }
@@ -443,6 +486,7 @@ export default function App() {
   if (pathname === "/") return <LandingPage />;
   if (pathname === "/login" || pathname === "/signin") return <AuthPage mode="login" />;
   if (pathname === "/signup" || pathname === "/register" || pathname === "/registration") return <AuthPage mode="signup" />;
+  if (pathname === "/logout" || pathname === "/signout") return <LogoutPage />;
 
   return (
     <div className="app-shell">
@@ -490,6 +534,10 @@ export default function App() {
             </div>
             <CircleHelp size={18} className="muted-icon" />
           </div>
+          <button className="logout-button" type="button" onClick={() => window.location.assign("/logout")}>
+            <LogOut size={18} />
+            <span>Log out</span>
+          </button>
         </div>
       </aside>
 

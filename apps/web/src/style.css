@@ -1188,3 +1188,32 @@ html, body, #root, .app-shell, .main {
     min-height: 0;
   }
 }
+
+
+/* Customer sign-out action and standalone logout route. */
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 10px;
+  background: transparent;
+  color: #f0eeee;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.logout-button:hover,
+.logout-button:focus-visible {
+  background: rgba(255,255,255,.08);
+  outline: none;
+}
+.logout-card {
+  width: min(100% - 32px, 420px);
+  margin: auto;
+  text-align: center;
+}
+.logout-card .auth-submit { margin-top: 18px; }
