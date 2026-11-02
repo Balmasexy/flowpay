@@ -150,19 +150,18 @@ export async function handleSandboxRoute(
   try {
     await client.query("BEGIN");
     const source = await ensureAccount(client, customer.id);
-    const clearingResult = await client.query<AccountRow>(
-      "SELECT id, currency, status, user_id FROM fp_sandbox_accounts WHERE account_type = 'clearing' AND currency = 'NGN' FOR UPDATE"
-    );
-    const clearing = clearingResult.rows[0];
-    if (!clearing) throw new Error("SANDBOX_CLEARING_ACCOUNT_UNAVAILABLE");
-
+    // Lock the source account before reading its balance. This serializes concurrent
+    // withdrawals/payments/transfers and prevents two requests spending the same funds.
     let destination: AccountRow | null = null;
     if (type === "transfer") {
-      const destinationResult = await client.query<AccountRow>(
-        "SELECT id, currency, status, user_id FROM fp_sandbox_accounts WHERE id = $1 AND account_type = 'customer' FOR UPDATE",
-        [counterpartyId]
+      // Lock both customer accounts in a stable UUID order to avoid reciprocal-transfer deadlocks.
+      const accountIds = [source.id, String(counterpartyId)].sort();
+      const locked = await client.query<AccountRow>(
+        "SELECT id, currency, status, user_id FROM fp_sandbox_accounts WHERE id = ANY($1::uuid[]) AND account_type = 'customer' ORDER BY id FOR UPDATE",
+        [accountIds]
       );
-      destination = destinationResult.rows[0] ?? null;
+      destination = locked.rows.find((row) => row.id === counterpartyId) ?? null;
+      if (!locked.rows.some((row) => row.id === source.id)) throw new Error("SANDBOX_ACCOUNT_UNAVAILABLE");
       if (!destination || destination.status !== "active" || destination.currency.trim() !== "NGN") {
         await client.query("ROLLBACK");
         reply(res, 404, { error: "SANDBOX_DESTINATION_NOT_FOUND" });
@@ -173,7 +172,19 @@ export async function handleSandboxRoute(
         reply(res, 400, { error: "CANNOT_TRANSFER_TO_SAME_ACCOUNT" });
         return true;
       }
+    } else {
+      const sourceLock = await client.query<AccountRow>(
+        "SELECT id, currency, status, user_id FROM fp_sandbox_accounts WHERE id = $1 FOR UPDATE",
+        [source.id]
+      );
+      if (!sourceLock.rows[0] || sourceLock.rows[0].status !== "active") throw new Error("SANDBOX_ACCOUNT_UNAVAILABLE");
     }
+
+    const clearingResult = await client.query<AccountRow>(
+      "SELECT id, currency, status, user_id FROM fp_sandbox_accounts WHERE account_type = 'clearing' AND currency = 'NGN' FOR UPDATE"
+    );
+    const clearing = clearingResult.rows[0];
+    if (!clearing) throw new Error("SANDBOX_CLEARING_ACCOUNT_UNAVAILABLE");
 
     const replay = await client.query<{
       id: string; transaction_type: string; amount_minor: string; counterparty_account_id: string | null;
