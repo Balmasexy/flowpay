@@ -274,6 +274,9 @@ export default function App() {
   const [apiMessage, setApiMessage] = useState("Checking API connection…");
   const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
   const [page, setPage] = useState<Page>(() => {
+    const routeSlug = window.location.pathname.match(/^\/app\/([^/]+)$/)?.[1];
+    const routePages: Record<string, Page> = { overview: "Overview", activity: "Activity", cards: "Cards", transfers: "Transfers", more: "More", search: "Search" };
+    if (routeSlug && routePages[routeSlug]) return routePages[routeSlug];
     const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
     return savedPage === "Search" || savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity" ||
       savedPage === "Money Received" || savedPage === "Money Sent" || savedPage === "Customer Profile" ||
