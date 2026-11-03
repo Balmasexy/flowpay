@@ -140,6 +140,7 @@ export default function App() {
           <button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={22} />
           </button>
+          <div className="mobile-brand" aria-label="FlowPay"><span className="brand-mark">F</span><span>flow<span className="brand-accent">pay</span></span></div>
           <div className="breadcrumb">Workspace <span>/</span> <strong>{page}</strong></div>
           <div className="topbar-right">
             <span className={`api-indicator api-${apiStatus}`}>
@@ -352,6 +353,18 @@ export default function App() {
             <span>Independent product · Development preview</span>
           </footer>
         </div>
+        <nav className="mobile-bottom-nav" aria-label="Main navigation">
+          {nav.map(({ name, icon: Icon }) => (
+            <button key={name} className={`mobile-nav-item ${page === name ? "mobile-nav-active" : ""}`} onClick={() => {
+              setPage(name);
+              window.sessionStorage.setItem("flowpay.currentPage", name);
+              setMenuOpen(false);
+            }} aria-current={page === name ? "page" : undefined}>
+              <Icon size={20} strokeWidth={page === name ? 2.4 : 1.9} />
+              <span>{name === "Overview" ? "Home" : name}</span>
+            </button>
+          ))}
+        </nav>
       </main>
     </div>
   );
