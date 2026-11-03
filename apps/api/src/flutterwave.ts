@@ -146,7 +146,7 @@ export async function handleFlutterwaveDeposit(
   if (typeof accountId !== "string" ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(accountId) ||
       typeof amountMinor !== "string" || !/^[1-9][0-9]{0,11}$/.test(amountMinor) ||
-      BigInt(amountMinor) > 100_000_000_000n) {
+      BigInt(amountMinor) < 100n || BigInt(amountMinor) > 100_000_000_000n) {
     reply(res, 400, { error: "INVALID_DEPOSIT_FIELDS", details: "Provide an owned NGN accountId and a positive amountMinor in kobo." });
     return;
   }
