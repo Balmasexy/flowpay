@@ -73,14 +73,13 @@ function amountAsNaira(amountMinor: string): string {
 async function flutterwaveRequest(path: string, init: RequestInit = {}) {
   const key = secretKey();
   if (!key) throw new Error("FLUTTERWAVE_TEST_SECRET_NOT_CONFIGURED");
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  headers.set("Content-Type", "application/json");
+  headers.set("Authorization", `Bearer ${key}`);
   const response = await fetch(`https://api.flutterwave.com/v3${path}`, {
     ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-      ...(init.headers ?? {})
-    },
+    headers,
     signal: AbortSignal.timeout(15_000)
   });
   const payload: unknown = await response.json().catch(() => ({}));
