@@ -361,7 +361,8 @@ export async function handleFlutterwaveWebhook(
 ): Promise<void> {
   if (!sandboxEnabled()) { reply(res, 404, { error: "FLUTTERWAVE_SANDBOX_DISABLED" }); return; }
   const hash = webhookHash();
-  if (!hash || !safeEqual(req.headers["verif-hash"] as string | undefined, hash)) {
+  const signature = req.headers["verif-hash"];
+  if (!hash || typeof signature !== "string" || !safeEqual(signature, hash)) {
     reply(res, 401, { error: "INVALID_FLUTTERWAVE_WEBHOOK_SIGNATURE" });
     return;
   }
