@@ -45,21 +45,11 @@ export default function App() {
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
-  const [apiReady, setApiReady] = useState<"checking" | "connected" | "unavailable">("checking");
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
-  useEffect(() => {
-    const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-    if (!base) { setApiReady("unavailable"); return; }
-    fetch(`${base}/health`, { headers: { Accept: "application/json" } })
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error("API unavailable")))
-      .then((d) => setApiReady(d.status === "ok" ? "connected" : "unavailable"))
-      .catch(() => setApiReady("unavailable"));
   }, []);
 
   const active = useMemo(() => routeFor(path), [path]);
@@ -77,7 +67,6 @@ export default function App() {
           <span className="fp-logo">F</span><span>flow<span>pay</span></span>
         </button>
         <div className="fp-header-actions">
-          <span className={`fp-api-dot ${apiReady}`} title={apiReady === "connected" ? "API connected" : "API not available"} />
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
           <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile"><UserRound size={19}/></button>
         </div>
