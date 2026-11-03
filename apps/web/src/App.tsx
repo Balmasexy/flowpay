@@ -485,7 +485,7 @@ export default function App() {
     setDepositReference("");
     setDepositStatus("");
     const account = accounts.find((item) => item.id === depositAccountId && item.currency === "NGN" && item.status === "active");
-    const amountMatch = /^(0|[1-9][0-9]{0,8})(?:\\.([0-9]{1,2}))?$/.exec(depositAmount.trim());
+    const amountMatch = /^(0|[1-9][0-9]{0,9})(?:\\.([0-9]{1,2}))?$/.exec(depositAmount.trim());
     if (!account) { setDepositMessage("Choose an active FlowPay NGN wallet account first."); return; }
     if (!amountMatch) { setDepositMessage("Enter a valid NGN amount, for example 500 or 500.50."); return; }
     const whole = BigInt(amountMatch[1]);
