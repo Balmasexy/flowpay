@@ -1,371 +1,197 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell,
-  CheckCircle2, CircleHelp, Clock3, CreditCard, Home,
-  Menu, RefreshCw, ShieldCheck, Wallet, X
+  Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, BookOpen,
+  Cable, CheckCircle2, ChevronRight, CircleHelp, Clock3, CreditCard,
+  FileText, Gift, Home, LockKeyhole, Menu, Phone, ShieldCheck, Smartphone,
+  UserRound, Wallet, Wifi, Zap
 } from "lucide-react";
 
-const API_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+type Route = {
+  path: string; label: string; icon: typeof Home; group: "main" | "services" | "account";
+};
+const routes: Route[] = [
+  { path: "/", label: "Home", icon: Home, group: "main" },
+  { path: "/transfers", label: "Transfers", icon: ArrowLeftRight, group: "main" },
+  { path: "/cards", label: "Cards", icon: CreditCard, group: "main" },
+  { path: "/activity", label: "Transaction history", icon: Activity, group: "main" },
+  { path: "/airtime", label: "Airtime", icon: Phone, group: "services" },
+  { path: "/data", label: "Data", icon: Wifi, group: "services" },
+  { path: "/bills", label: "Bill payments", icon: Zap, group: "services" },
+  { path: "/cable-tv", label: "Cable TV", icon: Cable, group: "services" },
+  { path: "/savings", label: "Savings", icon: Wallet, group: "services" },
+  { path: "/profile", label: "My profile", icon: UserRound, group: "account" },
+  { path: "/documents", label: "Documents", icon: FileText, group: "account" },
+  { path: "/security", label: "Security", icon: LockKeyhole, group: "account" },
+  { path: "/support", label: "Help & support", icon: CircleHelp, group: "account" },
+];
 
-type ApiStatus = "checking" | "connected" | "unavailable";
-type DatabaseStatus = "checking" | "connected" | "unavailable" | "not_configured";
-type Page = "Overview" | "Transfers" | "Cards" | "Activity";
+const providers = ["MTN", "Airtel", "Glo", "9mobile"];
+const services = [
+  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Top up any Nigerian network" },
+  { label: "Data", path: "/data", icon: Wifi, detail: "Buy data bundles" },
+  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Send money to a bank" },
+  { label: "Cards", path: "/cards", icon: CreditCard, detail: "Manage virtual and physical cards" },
+  { label: "Electricity", path: "/bills", icon: Zap, detail: "Pay electricity bills" },
+  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Pay TV subscriptions" },
+  { label: "Savings", path: "/savings", icon: Wallet, detail: "Savings tools and goals" },
+  { label: "History", path: "/activity", icon: Clock3, detail: "Track every transaction" },
+];
+
+function routeFor(path: string) {
+  return routes.find((r) => r.path === path) ?? routes[0];
+}
 
 export default function App() {
-  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
-  const [apiMessage, setApiMessage] = useState("Checking API connection…");
-  const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>("checking");
-  const [databaseName, setDatabaseName] = useState<string | null>(null);
-  const [page, setPage] = useState<Page>(() => {
-    const savedPage = window.sessionStorage.getItem("flowpay.currentPage");
-    return savedPage === "Transfers" || savedPage === "Cards" || savedPage === "Activity"
-      ? savedPage
-      : "Overview";
-  });
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [featureMessage, setFeatureMessage] = useState("Card issuing and controls are not connected to the backend.");
-
-  async function checkApi() {
-    if (!API_URL) {
-      setApiStatus("unavailable");
-      setApiMessage("API URL not configured");
-      setDatabaseStatus("not_configured");
-      setDatabaseName(null);
-      return;
-    }
-
-    setApiStatus("checking");
-    setApiMessage("Checking API connection…");
-
-    try {
-      const response = await fetch(`${API_URL}/health`, {
-        headers: { Accept: "application/json" }
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data: { status?: string } = await response.json();
-      if (data.status !== "ok") throw new Error("Unexpected API response");
-
-      setApiStatus("connected");
-      setApiMessage("API connected");
-    } catch {
-      setApiStatus("unavailable");
-      setApiMessage("API unavailable — check deployment and CORS");
-      setDatabaseStatus("unavailable");
-      setDatabaseName(null);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/ready`, {
-        headers: { Accept: "application/json" }
-      });
-      const readiness: { status?: string; database?: string; database_name?: string } = await response.json();
-      if (response.ok && readiness.status === "ready" && readiness.database === "connected") {
-        setDatabaseStatus("connected");
-        setDatabaseName(readiness.database_name ?? null);
-      } else {
-        setDatabaseStatus(readiness.database === "not_configured" ? "not_configured" : "unavailable");
-        setDatabaseName(null);
-      }
-    } catch {
-      setDatabaseStatus("unavailable");
-      setDatabaseName(null);
-    }
-  }
+  const [path, setPath] = useState(() => window.location.pathname);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [network, setNetwork] = useState("Airtel");
+  const [phone, setPhone] = useState("");
+  const [amount, setAmount] = useState("");
+  const [apiReady, setApiReady] = useState<"checking" | "connected" | "unavailable">("checking");
 
   useEffect(() => {
-    void checkApi();
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const nav = [
-    { name: "Overview" as const, icon: Home },
-    { name: "Transfers" as const, icon: ArrowLeftRight },
-    { name: "Cards" as const, icon: CreditCard },
-    { name: "Activity" as const, icon: Clock3 }
-  ];
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+    if (!base) { setApiReady("unavailable"); return; }
+    fetch(`${base}/health`, { headers: { Accept: "application/json" } })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error("API unavailable")))
+      .then((d) => setApiReady(d.status === "ok" ? "connected" : "unavailable"))
+      .catch(() => setApiReady("unavailable"));
+  }, []);
+
+  const active = useMemo(() => routeFor(path), [path]);
+  const go = (next: string) => {
+    if (next !== window.location.pathname) window.history.pushState({}, "", next);
+    setPath(next);
+    setMobileMenuOpen(false);
+    window.scrollTo({ top: 0, behavior: "instant" });
+  };
+  const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
 
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
-        <div className="brand">
-          <span className="brand-mark">F</span>
-          <span>flow<span className="brand-accent">pay</span></span>
-          <button className="icon-button mobile-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
-            <X size={20} />
-          </button>
+    <div className="flowpay-app">
+      <header className="fp-header">
+        <button className="fp-brand" onClick={() => go("/")} aria-label="FlowPay home">
+          <span className="fp-logo">F</span><span>flow<span>pay</span></span>
+        </button>
+        <div className="fp-header-actions">
+          <span className={`fp-api-dot ${apiReady}`} title={apiReady === "connected" ? "API connected" : "API not available"} />
+          <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
+          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile"><UserRound size={19}/></button>
         </div>
+      </header>
 
-        <div className="workspace-label">YOUR FINANCES</div>
-        <nav>
-          {nav.map(({ name, icon: Icon }) => (
-            <button
-              key={name}
-              className={`nav-item ${page === name ? "nav-active" : ""}`}
-              onClick={() => {
-                setPage(name);
-                window.sessionStorage.setItem("flowpay.currentPage", name);
-                setMenuOpen(false);
-              }}
-            >
-              <Icon size={19} />
-              <span>{name}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="security-note">
-            <ShieldCheck size={20} />
-            <div>
-              <strong>Security first</strong>
-              <span>Never share your PIN or password.</span>
+      <div className="fp-layout">
+        <main className="fp-main">
+          <div className="fp-page-heading">
+            <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/" ? "Good day" : active.label}</h1>
+              <p>{path === "/" ? "Your money, services and account—all in one place." : pageDescription(path)}</p>
             </div>
-          </div>
-          <div className="profile">
-            <div className="avatar">F</div>
-            <div className="profile-info">
-              <strong>FlowPay</strong>
-              <span>Customer preview</span>
-            </div>
-            <CircleHelp size={18} className="muted-icon" />
-          </div>
-        </div>
-      </aside>
-
-      {menuOpen && <button className="scrim" aria-label="Close navigation" onClick={() => setMenuOpen(false)} />}
-
-      <main className="main">
-        <header className="topbar">
-          <button className="icon-button mobile-menu" onClick={() => setMenuOpen(true)} aria-label="Open menu">
-            <Menu size={22} />
-          </button>
-          <div className="mobile-brand" aria-label="FlowPay"><span className="brand-mark">F</span><span>flow<span className="brand-accent">pay</span></span></div>
-          <div className="breadcrumb">Workspace <span>/</span> <strong>{page}</strong></div>
-          <div className="topbar-right">
-            <span className={`api-indicator api-${apiStatus}`}>
-              <span className="status-dot" />
-              {apiMessage}
-            </span>
-            <button className="icon-button notification-button" aria-label="Notifications">
-              <Bell size={19} />
-            </button>
-          </div>
-        </header>
-
-        <div className="content">
-          <div className="welcome-row">
-            <div>
-              <div className="eyebrow">YOUR MONEY, IN VIEW</div>
-              <h1>{page === "Overview" ? "Welcome to FlowPay" : page}</h1>
-              <p className="subtitle">
-                {page === "Overview"
-                  ? "A clearer view of your financial life starts here."
-                  : page === "Cards"
-                    ? "Explore card tools while secure issuing services are being built."
-                    : page === "Transfers"
-                      ? "Review the transfer workflow and the checks required before it can be enabled."
-                      : "Review verified account activity when ledger-backed history is available."}
-              </p>
-            </div>
-            <button
-              className="refresh-button"
-              onClick={() => {
-                window.sessionStorage.setItem("flowpay.currentPage", page);
-                window.location.reload();
-              }}
-              aria-label="Refresh FlowPay"
-              title="Refresh all FlowPay page content and connection status"
-            >
-              <RefreshCw size={16} /> Refresh
-            </button>
+            {path === "/" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
           </div>
 
-          {page === "Overview" ? (
+          {path === "/" ? (
             <>
-          <section className="notice">
-            <div className="notice-icon"><ShieldCheck size={21} /></div>
-            <div>
-              <strong>Development preview</strong>
-              <p>FlowPay now checks the live API health and database-readiness endpoints. Account balances, cards, and transaction history remain hidden until authenticated, ledger-backed services are implemented.</p>
-            </div>
-          </section>
-
-          <section className="section-heading">
-            <div>
-              <h2>Account overview</h2>
-              <p>Live financial figures will appear only after they can be loaded from authenticated account services.</p>
-            </div>
-            <span className="preview-label">PREVIEW</span>
-          </section>
-
-          <section className="stat-grid">
-            <article className="stat-card balance-card">
-              <div className="stat-top"><span>Available balance</span><Wallet size={19} /></div>
-              <div className="balance-value">Not available</div>
-              <div className="stat-foot">Awaiting verified account data</div>
-            </article>
-            <article className="stat-card">
-              <div className="stat-top"><span>Money received</span><ArrowDownLeft size={19} /></div>
-              <div className="stat-value">—</div>
-              <div className="stat-foot">No transaction data connected</div>
-            </article>
-            <article className="stat-card">
-              <div className="stat-top"><span>Money sent</span><ArrowUpRight size={19} /></div>
-              <div className="stat-value">—</div>
-              <div className="stat-foot">No transaction data connected</div>
-            </article>
-          </section>
-
-          <section className="quick-actions" aria-label="Quick navigation">
-            <button className="quick-action" onClick={() => { setPage("Transfers"); window.sessionStorage.setItem("flowpay.currentPage", "Transfers"); }}>
-              <span className="quick-action-icon"><ArrowLeftRight size={19} /></span>
-              <span><strong>Transfers</strong><small>Review secure transfer setup</small></span>
-              <span className="quick-action-arrow">↗</span>
-            </button>
-            <button className="quick-action" onClick={() => { setPage("Cards"); window.sessionStorage.setItem("flowpay.currentPage", "Cards"); }}>
-              <span className="quick-action-icon"><CreditCard size={19} /></span>
-              <span><strong>Cards</strong><small>Explore card controls</small></span>
-              <span className="quick-action-arrow">↗</span>
-            </button>
-            <button className="quick-action" onClick={() => { setPage("Activity"); window.sessionStorage.setItem("flowpay.currentPage", "Activity"); }}>
-              <span className="quick-action-icon"><Clock3 size={19} /></span>
-              <span><strong>Activity</strong><small>View activity availability</small></span>
-              <span className="quick-action-arrow">↗</span>
-            </button>
-          </section>
-
-          <section className="lower-grid">
-            <article className="panel activity-panel">
-              <div className="panel-heading">
-                <div><h2>Recent activity</h2><p>Your latest account movements</p></div>
-                <Clock3 size={20} />
-              </div>
-              <div className="empty-state">
-                <div className="empty-icon"><ArrowLeftRight size={23} /></div>
-                <strong>No activity to display</strong>
-                <span>Transactions will appear once the secure ledger and account services are ready.</span>
-              </div>
-            </article>
-
-            <article className="panel connection-panel">
-              <div className="panel-heading">
-                <div><h2>System status</h2><p>Frontend to backend connectivity</p></div>
-                <CheckCircle2 size={20} />
-              </div>
-              <div className="connection-row">
-                <span>Customer interface</span><span className="status-ok"><CheckCircle2 size={15} /> Running</span>
-              </div>
-              <div className="connection-row">
-                <span>API health endpoint</span>
-                <span className={apiStatus === "connected" ? "status-ok" : apiStatus === "checking" ? "status-wait" : "status-error"}>
-                  <span className="status-dot" />{apiStatus === "connected" ? "Connected" : apiStatus === "checking" ? "Checking" : "Unavailable"}
-                </span>
-              </div>
-              <div className="connection-row">
-                <span>Database readiness{databaseName ? ` (${databaseName})` : ""}</span>
-                <span className={databaseStatus === "connected" ? "status-ok" : databaseStatus === "checking" ? "status-wait" : "status-error"}>
-                  <span className="status-dot" />
-                  {databaseStatus === "connected" ? "Connected" : databaseStatus === "checking" ? "Checking" : databaseStatus === "not_configured" ? "Not configured" : "Unavailable"}
-                </span>
-              </div>
-              <div className="connection-row">
-                <span>Payments</span><span className="status-wait">Disabled</span>
-              </div>
-              <p className="connection-help">API status comes from <code>/health</code>; database status comes from <code>/ready</code>. A connected database does not mean account, balance, or payment features are implemented.</p>
-            </article>
-          </section>
-
+              <section className="fp-balance">
+                <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
+                <strong>₦ — —</strong>
+                <small>Balance will appear when your secure account is connected.</small>
+                <div className="fp-balance-actions">
+                  <button onClick={() => go("/transfers")}> <ArrowDownLeft size={17}/> Add money</button>
+                  <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>
+                </div>
+              </section>
+              <section className="fp-section">
+                <div className="fp-section-title"><h2>Quick services</h2><span>Everyday banking</span></div>
+                <div className="fp-service-grid">
+                  {services.map(({label, path: target, icon: Icon, detail}) => (
+                    <button className="fp-service-tile" key={target} onClick={() => go(target)}>
+                      <span className="fp-service-icon"><Icon size={21}/></span><b>{label}</b><small>{detail}</small>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="fp-section">
+                <div className="fp-section-title"><h2>Mobile networks</h2><span>Airtime and data</span></div>
+                <div className="fp-network-row">{providers.map((p) => <button key={p} className="fp-network" onClick={() => {setNetwork(p);go("/airtime");}}>{p}</button>)}</div>
+              </section>
+              <section className="fp-section fp-activity-preview">
+                <div className="fp-section-title"><h2>Recent activity</h2><button onClick={() => go("/activity")}>See all <ChevronRight size={15}/></button></div>
+                <div className="fp-empty"><Clock3 size={23}/><b>No verified transactions yet</b><span>Your actual ledger activity will appear here after account services are connected.</span></div>
+              </section>
             </>
-          ) : page === "Cards" ? (
-            <section className="page-grid">
-              <section className="notice">
-                <div className="notice-icon"><ShieldCheck size={21} /></div>
-                <div>
-                  <strong>Card services are not connected yet</strong>
-                  <p>These card panels are available to explore, but FlowPay has no card-issuing or card-control API yet. No real card is issued or activated from this preview.</p>
-                </div>
-              </section>
-              <section className="section-heading">
-                <div><h2>Your cards</h2><p>Card management becomes available after secure issuing services are implemented.</p></div>
-                <span className="preview-label">PREVIEW</span>
-              </section>
-              <p className="feature-feedback" role="status">{featureMessage}</p>
-              <section className="card-feature-grid">
-                <article className="panel feature-card">
-                  <div className="feature-icon"><CreditCard size={24} /></div>
-                  <h2>Virtual card</h2>
-                  <p>For supported online purchases after card issuance is integrated.</p>
-                  <div className="feature-status"><span className="status-dot" /> Not issued</div>
-                  <button className="feature-button" onClick={() => setFeatureMessage("Virtual card issuance is not connected. No card has been created.")}>Check virtual card</button>
-                </article>
-                <article className="panel feature-card">
-                  <div className="feature-icon"><Wallet size={24} /></div>
-                  <h2>Physical card</h2>
-                  <p>Physical card ordering and delivery are not connected to the backend.</p>
-                  <div className="feature-status"><span className="status-dot" /> Not issued</div>
-                  <button className="feature-button" onClick={() => setFeatureMessage("Physical card ordering and delivery are not connected. No order has been placed.")}>Check physical card</button>
-                </article>
-                <article className="panel feature-card">
-                  <div className="feature-icon"><ShieldCheck size={24} /></div>
-                  <h2>Card security</h2>
-                  <p>Freeze, unfreeze, PIN management, and spending limits require verified card services.</p>
-                  <div className="feature-status"><span className="status-dot" /> Not connected</div>
-                  <button className="feature-button" onClick={() => setFeatureMessage("Freeze, PIN, and spending-limit controls need a verified card service before they can be enabled.")}>Check security tools</button>
-                </article>
-              </section>
-            </section>
-          ) : page === "Transfers" ? (
-            <section className="page-grid">
-              <section className="notice">
-                <div className="notice-icon"><ShieldCheck size={21} /></div>
-                <div>
-                  <strong>Transfers are safely disabled</strong>
-                  <p>The current API exposes health and readiness endpoints only. No transfer can be submitted, and no balance is changed by this preview.</p>
-                </div>
-              </section>
-              <section className="panel feature-card">
-                <div className="feature-icon"><ArrowLeftRight size={24} /></div>
-                <h2>Transfer workflow</h2>
-                <p>Before transfers can be enabled, FlowPay needs authenticated accounts, server-side double-entry posting, idempotency, limits, and audit events.</p>
-                <div className="connection-row"><span>Account authentication</span><span className="status-wait">Not implemented</span></div>
-                <div className="connection-row"><span>Ledger posting</span><span className="status-wait">Validation required</span></div>
-                <div className="connection-row"><span>Live transfers</span><span className="status-wait">Disabled</span></div>
-              </section>
+          ) : servicePage ? (
+            <section className="fp-panel fp-form-panel">
+              <div className="fp-form-icon">{path === "/airtime" ? <Phone/> : path === "/data" ? <Wifi/> : path === "/cable-tv" ? <Cable/> : <Zap/>}</div>
+              <h2>{active.label}</h2>
+              <p className="fp-muted">Choose a provider and enter the details. This form is a preview; it will not debit your wallet or submit a bill payment.</p>
+              {path === "/airtime" || path === "/data" ? <>
+                <label>Mobile network</label><div className="fp-network-select">{providers.map(p => <button type="button" key={p} className={network === p ? "selected" : ""} onClick={() => setNetwork(p)}>{p}</button>)}</div>
+                <label htmlFor="phone">Phone number</label><input id="phone" value={phone} onChange={e => setPhone(e.target.value)} inputMode="numeric" placeholder="080 0000 0000" maxLength={11}/>
+              </> : <>
+                <label>Service provider</label><select defaultValue=""><option value="" disabled>Select provider</option>{(path === "/cable-tv" ? ["DStv", "GOtv", "StarTimes"] : ["IKEDC", "EKEDC", "AEDC", "IBEDC", "KEDCO", "PHED", "Jos Electricity", "KAEDCO"]).map(x => <option key={x}>{x}</option>)}</select>
+                <label>Customer / smartcard / meter number</label><input placeholder="Enter your account number"/>
+              </>}
+              <label htmlFor="amount">Amount (NGN)</label><input id="amount" value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" placeholder="₦ 0.00"/>
+              <div className="fp-preview-warning"><ShieldCheck size={17}/> Payments are disabled until authenticated billing, provider verification, ledger posting and webhook reconciliation are live.</div>
+              <button className="fp-primary" disabled>Continue (not active)</button>
             </section>
           ) : (
-            <section className="page-grid">
-              <section className="panel activity-panel">
-                <div className="panel-heading">
-                  <div><h2>Activity history</h2><p>Account movements from the verified ledger</p></div>
-                  <Clock3 size={20} />
-                </div>
-                <div className="empty-state">
-                  <div className="empty-icon"><Clock3 size={23} /></div>
-                  <strong>No verified activity available</strong>
-                  <span>Activity will appear after account authentication and ledger-backed transaction history are implemented. No sample transactions are shown as real.</span>
-                </div>
-              </section>
-            </section>
+            <RouteContent path={path} go={go}/>
           )}
-          <footer>
-            <span>© {new Date().getFullYear()} FlowPay</span>
-            <span>Independent product · Development preview</span>
-          </footer>
+          <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
+        </main>
+      </div>
+
+      <nav className="fp-bottom-nav" aria-label="Main navigation">
+        {[routes[0], routes[1], routes[2], routes[3], routes[9]].map(({path: target,label,icon: Icon}) =>
+          <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}>
+            <Icon size={19}/><span>{label === "Transaction history" ? "History" : label === "My profile" ? "Profile" : label}</span>
+          </button>)}
+      </nav>
+
+      {mobileMenuOpen && <div className="fp-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+        <div className="fp-menu-sheet" onClick={e => e.stopPropagation()}>
+          <div className="fp-menu-title"><b>All FlowPay services</b><button onClick={() => setMobileMenuOpen(false)}>Close</button></div>
+          {routes.map(({path: target,label,icon: Icon}) => <button key={target} onClick={() => go(target)}><Icon size={18}/>{label}<ChevronRight size={15}/></button>)}
         </div>
-        <nav className="mobile-bottom-nav" aria-label="Main navigation">
-          {nav.map(({ name, icon: Icon }) => (
-            <button key={name} className={`mobile-nav-item ${page === name ? "mobile-nav-active" : ""}`} onClick={() => {
-              setPage(name);
-              window.sessionStorage.setItem("flowpay.currentPage", name);
-              setMenuOpen(false);
-            }} aria-current={page === name ? "page" : undefined}>
-              <Icon size={20} strokeWidth={page === name ? 2.4 : 1.9} />
-              <span>{name === "Overview" ? "Home" : name}</span>
-            </button>
-          ))}
-        </nav>
-      </main>
+      </div>}
     </div>
   );
+}
+
+function pageDescription(path: string) {
+  const descriptions: Record<string,string> = {
+    "/transfers":"Send money and manage transfer requests.",
+    "/cards":"Manage your virtual and physical card services.",
+    "/activity":"Search and review your account transaction history.",
+    "/airtime":"Recharge MTN, Airtel, Glo and 9mobile numbers.",
+    "/data":"Choose a data plan for any supported network.",
+    "/bills":"Pay electricity and other supported utility bills.",
+    "/cable-tv":"Manage DStv, GOtv and StarTimes subscriptions.",
+    "/savings":"Explore savings goals and account saving options.",
+    "/profile":"Review your personal and account information.",
+    "/documents":"View verification documents and account statements.",
+    "/security":"Manage sign-in and account security.",
+    "/support":"Get help with your FlowPay account."
+  };
+  return descriptions[path] ?? "Manage your FlowPay account.";
+}
+
+function RouteContent({path,go}:{path:string;go:(path:string)=>void}) {
+  const unavailable = <div className="fp-preview-warning"><ShieldCheck size={17}/> This service is not connected to a verified FlowPay API yet. No real transaction or account change can be made here.</div>;
+  if (path === "/profile") return <section className="fp-panel fp-detail-panel"><div className="fp-profile-hero"><div className="fp-profile-avatar"><UserRound size={30}/></div><div><h2>Customer profile</h2><p>Personal and account information</p></div></div><div className="fp-detail-list">{["Full name","Email address","Phone number","FlowPay account number","Account tier","Account status","Residential address"].map(k=><div key={k}><span>{k}</span><b>Not yet linked</b></div>)}</div><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button>{unavailable}</section>;
+  if (path === "/documents") return <section className="fp-panel fp-detail-panel"><h2>Documents & statements</h2><p className="fp-muted">Your verification and account documents will be available here after secure document storage is connected.</p><div className="fp-doc-list">{["Government ID (NIN / Driver’s Licence / Passport)","BVN verification receipt","Proof of address","Customer account-opening form","Terms and conditions acceptance","Privacy notice acknowledgement","Monthly account statement","Transaction receipt"].map(d=><div key={d}><FileText size={19}/><span>{d}<small>Not uploaded / not generated</small></span><b>Pending</b></div>)}</div>{unavailable}</section>;
+  if (path === "/transfers") return <section className="fp-panel fp-detail-panel"><h2>Transfers</h2><p className="fp-muted">Bank and FlowPay wallet transfers.</p><div className="fp-feature-list">{["Transfer to FlowPay","Transfer to other Nigerian banks","Beneficiary management","Transfer limits and fees","Transfer receipt and status"].map(x=><div key={x}><ArrowLeftRight size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
+  if (path === "/cards") return <section className="fp-panel fp-detail-panel"><h2>Cards</h2><div className="fp-feature-list">{["Virtual card application","Physical card request and delivery","View card details securely","Freeze / unfreeze card","Change card PIN","Set spending limits"].map(x=><div key={x}><CreditCard size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
+  if (path === "/activity") return <section className="fp-panel fp-detail-panel"><h2>Transaction history</h2><p className="fp-muted">Search, filter and download account activity and receipts.</p><div className="fp-empty"><Activity size={24}/><b>No verified history available</b><span>Only ledger-confirmed transactions will be displayed here.</span></div>{unavailable}</section>;
+  if (path === "/savings") return <section className="fp-panel fp-detail-panel"><h2>Savings</h2><div className="fp-feature-list">{["Savings goals","Recurring savings","Fixed savings","Savings withdrawals","Interest and statements"].map(x=><div key={x}><Wallet size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
+  if (path === "/security") return <section className="fp-panel fp-detail-panel"><h2>Security centre</h2><div className="fp-feature-list">{["Change password","Passkey / device biometrics","Two-step verification","Trusted devices and sessions","Transaction PIN","Account recovery and lock"].map(x=><div key={x}><LockKeyhole size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
+  if (path === "/support") return <section className="fp-panel fp-detail-panel"><h2>Help & support</h2><div className="fp-feature-list">{["Report a failed transaction","Account access and recovery","Card support","Airtime and bill-payment support","Complaints and dispute tracking","Frequently asked questions"].map(x=><div key={x}><CircleHelp size={18}/>{x}<span>Help</span></div>)}</div>{unavailable}</section>;
+  return <section className="fp-panel fp-detail-panel"><h2>Page not found</h2><button className="fp-primary" onClick={()=>go("/")}>Return to home</button></section>;
 }
