@@ -296,6 +296,13 @@ export default function App() {
   const [cards, setCards] = useState<CustomerCard[]>([]);
   const [cardEvents, setCardEvents] = useState<CardEvent[]>([]);
   const [customerLoading, setCustomerLoading] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositAccountId, setDepositAccountId] = useState("");
+  const [depositReference, setDepositReference] = useState("");
+  const [depositStatus, setDepositStatus] = useState("");
+  const [depositCheckoutUrl, setDepositCheckoutUrl] = useState("");
+  const [depositBusy, setDepositBusy] = useState(false);
+  const [depositMessage, setDepositMessage] = useState("");
 
   async function checkApi() {
     if (!API_URL) {
@@ -360,12 +367,13 @@ export default function App() {
     return body as T;
   }
 
-  async function apiPost<T>(path: string, token: string): Promise<T> {
+  async function apiPost<T>(path: string, token: string, payload?: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
+      body: payload ? JSON.stringify(payload) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(15000)
     });
     const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -404,6 +412,13 @@ export default function App() {
         setTransactions(history.transactions);
         setCustomerMessage("Customer financial summary loaded from posted ledger entries.");
       } else if (target === "Money Received" || target === "Money Sent" || target === "Activity") {
+        if (target === "Money Received") {
+          await apiPost<{ status: string }>("/v1/me/bootstrap", token);
+          const accountResult = await apiGet<{ accounts: Account[] }>("/v1/me/accounts", token);
+          setAccounts(accountResult.accounts);
+          const preferred = accountResult.accounts.find((account) => account.currency === "NGN" && account.status === "active");
+          if (preferred) setDepositAccountId(preferred.id);
+        }
         const filter = target === "Money Received" ? "received"
           : target === "Money Sent" ? "sent" : activityFilter;
         if (target !== "Activity") {
@@ -460,6 +475,66 @@ export default function App() {
       setTransactions([]);
     } finally {
       setCustomerLoading(false);
+    }
+  }
+
+  async function startFlutterwaveDeposit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDepositMessage("");
+    setDepositCheckoutUrl("");
+    setDepositReference("");
+    setDepositStatus("");
+    const account = accounts.find((item) => item.id === depositAccountId && item.currency === "NGN" && item.status === "active");
+    const amountMatch = /^(0|[1-9][0-9]{0,9})(?:\.([0-9]{1,2}))?$/.exec(depositAmount.trim());
+    if (!account) { setDepositMessage("Choose an active FlowPay NGN wallet account first."); return; }
+    if (!amountMatch) { setDepositMessage("Enter a valid NGN amount, for example 500 or 500.50."); return; }
+    const whole = BigInt(amountMatch[1]);
+    const fraction = BigInt((amountMatch[2] || "").padEnd(2, "0"));
+    const amountMinor = (whole * 100n + fraction).toString();
+    if (BigInt(amountMinor) < 100n || BigInt(amountMinor) > 100_000_000_000n) {
+      setDepositMessage("Sandbox deposits must be between ₦1 and ₦1,000,000,000.");
+      return;
+    }
+    setDepositBusy(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("AUTHENTICATION_REQUIRED");
+      const result = await apiPost<{
+        mode?: string; status?: string; reference?: string; checkoutUrl?: string;
+        error?: string; live_payments?: string;
+      }>("/v1/payments/flutterwave/deposits", token, { accountId: account.id, amountMinor }, crypto.randomUUID());
+      if (!result.checkoutUrl || !result.reference) throw new Error(result.error || "CHECKOUT_URL_NOT_RETURNED");
+      setDepositReference(result.reference);
+      setDepositStatus(result.status || "pending");
+      setDepositCheckoutUrl(result.checkoutUrl);
+      setDepositMessage("Sandbox checkout created. Your wallet is not credited until Flutterwave confirms payment and the server verifies it.");
+    } catch (error) {
+      setDepositMessage(error instanceof Error ? error.message : "Unable to start sandbox deposit.");
+    } finally {
+      setDepositBusy(false);
+    }
+  }
+
+  async function refreshFlutterwaveDeposit() {
+    if (!depositReference) return;
+    setDepositBusy(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("AUTHENTICATION_REQUIRED");
+      const response = await apiGet<{ status: string; reference: string }>(
+        `/v1/payments/flutterwave/deposits/${encodeURIComponent(depositReference)}`, token
+      );
+      setDepositStatus(response.status);
+      setDepositMessage(response.status === "posted"
+        ? "Payment verified and posted to your NGN wallet."
+        : response.status === "failed"
+          ? "This deposit was marked failed. No wallet credit was posted."
+          : "Payment is still pending provider confirmation. No wallet credit has been posted.");
+      if (response.status === "posted") void loadCustomerData("Money Received");
+    } catch (error) {
+      setDepositMessage(error instanceof Error ? error.message : "Unable to refresh deposit status.");
+    } finally {
+      setDepositBusy(false);
     }
   }
 
@@ -958,6 +1033,32 @@ export default function App() {
           ) : page === "Money Received" || page === "Money Sent" ? (
             <section className="page-grid activity-page">
               <section className="notice"><div className="notice-icon"><ShieldCheck size={21} /></div><div><strong>Read-only ledger history</strong><p>These totals and records come from posted ledger entries only. No payment is created or initiated from this page.</p></div></section>
+              {page === "Money Received" && (
+                <section className="panel activity-history-panel">
+                  <div className="panel-heading"><div><h2>Deposit with Flutterwave</h2><p>NGN sandbox checkout · test payments only</p></div><ArrowDownLeft size={20} /></div>
+                  <form onSubmit={startFlutterwaveDeposit} className="deposit-form">
+                    <label htmlFor="flowpay-deposit-account">NGN wallet account</label>
+                    <select id="flowpay-deposit-account" value={depositAccountId} onChange={(event) => setDepositAccountId(event.target.value)} required>
+                      <option value="">Select an active NGN account</option>
+                      {accounts.filter((account) => account.currency === "NGN" && account.status === "active").map((account) => (
+                        <option key={account.id} value={account.id}>FlowPay NGN wallet · {account.id.slice(0, 8)}</option>
+                      ))}
+                    </select>
+                    <label htmlFor="flowpay-deposit-amount">Amount (NGN)</label>
+                    <input id="flowpay-deposit-amount" type="number" min="1" max="1000000000" step="0.01" inputMode="decimal" placeholder="e.g. 500.00" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} required />
+                    <button className="feature-button" type="submit" disabled={depositBusy || customerLoading || !accounts.some((account) => account.currency === "NGN" && account.status === "active")}>
+                      {depositBusy ? "Please wait…" : "Continue to sandbox checkout"}
+                    </button>
+                  </form>
+                  {depositReference && <div className="deposit-status" role="status">
+                    <div><strong>Deposit {depositStatus || "pending"}</strong><span>Reference: {depositReference}</span></div>
+                    {depositCheckoutUrl && <a href={depositCheckoutUrl} target="_blank" rel="noopener noreferrer">Open secure Flutterwave checkout</a>}
+                    <button className="refresh-button" type="button" onClick={() => { void refreshFlutterwaveDeposit(); }} disabled={depositBusy}>Refresh payment status</button>
+                  </div>}
+                  {depositMessage && <p className="connection-help" role="status">{depositMessage}</p>}
+                  <p className="connection-help">This is Flutterwave sandbox only. No live payment is enabled. Your balance changes only after a signed webhook and server-side provider verification.</p>
+                </section>
+              )}
               <section className="panel activity-history-panel">
                 <div className="panel-heading"><div><h2>{page}</h2><p>{page === "Money Received" ? "Incoming posted ledger entries" : "Outgoing posted ledger entries"}</p></div>{page === "Money Received" ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}</div>
                 <div className="history-readiness-grid">

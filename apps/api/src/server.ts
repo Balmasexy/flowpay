@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { handlePasskeyRoute } from "./passkeys.js";
 import { handleSandboxRoute } from "./sandbox.js";
 import { handleBulkSandboxRoute } from "./bulk-sandbox.js";
+import { handleFlutterwaveDeposit, handleFlutterwaveDepositStatus, handleFlutterwaveWebhook } from "./flutterwave.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -283,6 +284,67 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
+  // Flutterwave webhook is public but authenticated by the configured test-mode webhook hash.
+  if (pathname === "/webhooks/flutterwave") {
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST, OPTIONS");
+      sendJson(res, 405, { error: "METHOD_NOT_ALLOWED" });
+      return;
+    }
+    await handleFlutterwaveWebhook(req, res, pool);
+    return;
+  }
+
+  // Flutterwave hosted checkout is available only when the explicit sandbox feature flag is enabled.
+  if (pathname === "/v1/payments/flutterwave/deposits") {
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST, OPTIONS");
+      sendJson(res, 405, { error: "METHOD_NOT_ALLOWED", live_payments: "disabled" });
+      return;
+    }
+    const auth = await authenticate(req);
+    if ("error" in auth) { authError(res, auth.error); return; }
+    if (!pool) { sendJson(res, 503, { error: "DATABASE_NOT_CONFIGURED" }); return; }
+    let customer: Customer | null;
+    try { customer = await getCustomer(auth.subject); }
+    catch (error) {
+      sendJson(res, error instanceof Error && error.message === "CUSTOMER_PROFILE_INACTIVE" ? 403 : 503,
+        { error: error instanceof Error && error.message === "CUSTOMER_PROFILE_INACTIVE" ? "CUSTOMER_PROFILE_INACTIVE" : "CUSTOMER_DATA_UNAVAILABLE" });
+      return;
+    }
+    if (!customer) { sendJson(res, 404, { error: "CUSTOMER_PROFILE_NOT_FOUND" }); return; }
+    await handleFlutterwaveDeposit(req, res, pool, { id: customer.id, email: customer.email });
+    return;
+  }
+
+  // Authenticated, customer-scoped deposit status lookup.
+  const depositStatusPrefix = "/v1/payments/flutterwave/deposits/";
+  if (pathname.startsWith(depositStatusPrefix)) {
+    if (req.method !== "GET") {
+      res.setHeader("Allow", "GET, OPTIONS");
+      sendJson(res, 405, { error: "METHOD_NOT_ALLOWED" });
+      return;
+    }
+    const reference = decodeURIComponent(pathname.slice(depositStatusPrefix.length));
+    if (!reference || reference.length > 100 || reference.includes("/")) {
+      sendJson(res, 400, { error: "INVALID_DEPOSIT_REFERENCE" });
+      return;
+    }
+    const auth = await authenticate(req);
+    if ("error" in auth) { authError(res, auth.error); return; }
+    if (!pool) { sendJson(res, 503, { error: "DATABASE_NOT_CONFIGURED" }); return; }
+    let customer: Customer | null;
+    try { customer = await getCustomer(auth.subject); }
+    catch (error) {
+      sendJson(res, error instanceof Error && error.message === "CUSTOMER_PROFILE_INACTIVE" ? 403 : 503,
+        { error: error instanceof Error && error.message === "CUSTOMER_PROFILE_INACTIVE" ? "CUSTOMER_PROFILE_INACTIVE" : "CUSTOMER_DATA_UNAVAILABLE" });
+      return;
+    }
+    if (!customer) { sendJson(res, 404, { error: "CUSTOMER_PROFILE_NOT_FOUND" }); return; }
+    await handleFlutterwaveDepositStatus(res, pool, { id: customer.id, email: customer.email }, reference);
+    return;
+  }
+
   // Isolated sandbox endpoints. They use separate sandbox tables and never call a provider.
   if (pathname.startsWith("/v1/sandbox/")) {
     const auth = await authenticate(req);
@@ -443,7 +505,8 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && pathname === "/") {
     sendJson(res, 200, { service: "flowpay-api", status: "ok", endpoints: [
       "/health", "/ready", "/v1/me/profile", "/v1/me/accounts", "/v1/me/summary",
-      "/v1/me/transactions", "/v1/me/cards", "/v1/me/card-events", "/v1/me/bootstrap"
+      "/v1/me/transactions", "/v1/me/cards", "/v1/me/card-events", "/v1/me/bootstrap",
+      "/v1/payments/flutterwave/deposits", "/webhooks/flutterwave"
     ]});
     return;
   }
@@ -452,7 +515,7 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === "GET" && pathname === "/ready") {
-    const requiredMigrations = ["001_core", "002_ledger_invariants", "003_customer_profile_cards", "004_passkeys_security", "005_admin_bootstrap"];
+    const requiredMigrations = ["001_core", "002_ledger_invariants", "003_customer_profile_cards", "004_passkeys_security", "005_admin_bootstrap", ...(process.env.FLOWPAY_FLUTTERWAVE_SANDBOX_ENABLED === "true" ? ["007_flutterwave_sandbox_deposits"] : [])];
     if (!pool) {
       sendJson(res, 503, { service: "flowpay-api", status: "not_ready", database: "not_configured", schema: "unknown", payments: "disabled" });
       return;

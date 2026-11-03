@@ -1408,3 +1408,27 @@ html, body, #root, .app-shell, .main {
   .native-app .mobile-shortcut svg { flex: 0 0 auto; }
   .native-app .content { padding-bottom: 18px; }
 }
+
+
+/* Flutterwave sandbox deposit form */
+.deposit-form { display: grid; grid-template-columns: 1fr; gap: 9px; max-width: 520px; margin-top: 18px; }
+.deposit-form label { color: #666760; font-size: 11px; font-weight: 700; }
+.deposit-form select, .deposit-form input {
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 9px; background: #fff; color: var(--charcoal); font: 500 13px Manrope, sans-serif;
+}
+.deposit-form select:focus, .deposit-form input:focus { outline: 2px solid #ffc08f; border-color: var(--orange); }
+.deposit-form .feature-button { width: fit-content; min-height: 42px; margin-top: 7px; border-color: var(--orange); background: var(--orange); color: #fff; font-weight: 700; cursor: pointer; }
+.deposit-form .feature-button:hover { background: #c65b0b; color: #fff; }
+.deposit-form .feature-button:disabled { opacity: .55; cursor: not-allowed; }
+.deposit-status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 16px; padding: 13px; border: 1px solid #f0dfcf; border-radius: 10px; background: #fffaf5; }
+.deposit-status > div { display: grid; gap: 4px; min-width: 190px; flex: 1; }
+.deposit-status strong { color: #87501f; font-size: 12px; text-transform: capitalize; }
+.deposit-status span { color: #8b8379; font-size: 10px; overflow-wrap: anywhere; }
+.deposit-status a { color: #b9570b; font-size: 11px; font-weight: 700; }
+.deposit-status .refresh-button { margin-left: auto; }
+@media (max-width: 700px) {
+  .deposit-form .feature-button { width: 100%; }
+  .deposit-status { align-items: stretch; flex-direction: column; }
+  .deposit-status .refresh-button { margin-left: 0; }
+}
