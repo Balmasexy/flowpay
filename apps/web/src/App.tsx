@@ -354,10 +354,9 @@ export default function App() {
 
   async function apiGet<T>(path: string, token: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
-      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: payload ? JSON.stringify(payload) : undefined,
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       cache: "no-store",
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(10000)
     });
     const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -371,9 +370,10 @@ export default function App() {
   async function apiPost<T>(path: string, token: string, payload?: Record<string, unknown>): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: payload ? JSON.stringify(payload) : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(15000)
     });
     const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
