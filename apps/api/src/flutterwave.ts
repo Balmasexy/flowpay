@@ -300,15 +300,20 @@ async function postVerifiedDeposit(pool: Pool, tx: ProviderTransaction, eventTyp
 
     // Ensure one NGN system clearing account exists without changing any customer balance.
     await client.query("SELECT pg_advisory_xact_lock(71020261103)");
-    let clearingResult = await client.query<{ id: string }>(
-      "SELECT id FROM public.fp_accounts WHERE account_type = 'system' AND currency = 'NGN' AND status = 'active' ORDER BY created_at, id LIMIT 1 FOR UPDATE"
+    let clearingResult = await client.query<{ account_id: string }>(
+      "SELECT account_id FROM public.fp_provider_accounts WHERE provider = 'flutterwave' AND currency = 'NGN' FOR UPDATE"
     );
     if (!clearingResult.rows[0]) {
-      clearingResult = await client.query<{ id: string }>(
+      const createdAccount = await client.query<{ id: string }>(
         "INSERT INTO public.fp_accounts (user_id, account_type, currency, status) VALUES (NULL, 'system', 'NGN', 'active') RETURNING id"
       );
+      await client.query(
+        "INSERT INTO public.fp_provider_accounts (provider, currency, account_id) VALUES ('flutterwave', 'NGN', $1)",
+        [createdAccount.rows[0].id]
+      );
+      clearingResult = { rows: [{ account_id: createdAccount.rows[0].id }], rowCount: 1, command: "SELECT", oid: 0, fields: [] } as typeof clearingResult;
     }
-    const clearingId = clearingResult.rows[0].id;
+    const clearingId = clearingResult.rows[0].account_id;
     const transactionKey = `flutterwave:${reference}`;
     const existingTransaction = await client.query(
       "SELECT id FROM public.fp_ledger_transactions WHERE idempotency_key = $1",
