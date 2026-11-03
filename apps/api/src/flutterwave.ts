@@ -101,6 +101,38 @@ async function getDepositByReference(pool: Pool, reference: string) {
   return result.rows[0] ?? null;
 }
 
+export async function handleFlutterwaveDepositStatus(
+  res: ServerResponse,
+  pool: Pool,
+  customer: Customer,
+  reference: string
+): Promise<void> {
+  const result = await pool.query(
+    `SELECT provider_reference, amount_minor::text, currency, status,
+            checkout_url, created_at, posted_at
+       FROM public.fp_flutterwave_deposits
+      WHERE provider_reference = $1 AND user_id = $2
+      LIMIT 1`,
+    [reference, customer.id]
+  );
+  const deposit = result.rows[0];
+  if (!deposit) {
+    reply(res, 404, { error: "DEPOSIT_NOT_FOUND" });
+    return;
+  }
+  reply(res, 200, {
+    mode: "flutterwave_sandbox",
+    reference: deposit.provider_reference,
+    amountMinor: String(deposit.amount_minor),
+    currency: String(deposit.currency).trim(),
+    status: deposit.status,
+    checkoutUrl: deposit.checkout_url,
+    createdAt: deposit.created_at,
+    postedAt: deposit.posted_at,
+    live_payments: "disabled"
+  });
+}
+
 export async function handleFlutterwaveDeposit(
   req: IncomingMessage,
   res: ServerResponse,
