@@ -20,20 +20,11 @@ ALTER TABLE public.fp_flutterwave_deposits
   ADD COLUMN IF NOT EXISTS provider_reference TEXT,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'fp_flutterwave_deposits'
-      AND column_name = 'transaction_id'
-  ) THEN
-    UPDATE public.fp_flutterwave_deposits
-       SET id = COALESCE(id, gen_random_uuid()),
-           idempotency_key = COALESCE(idempotency_key, 'legacy:' || COALESCE(transaction_id::text, gen_random_uuid()::text)),
-           provider_reference = COALESCE(provider_reference, provider_tx_ref)
-     WHERE id IS NULL OR idempotency_key IS NULL OR provider_reference IS NULL;
-  END IF;
-END $$;
+UPDATE public.fp_flutterwave_deposits
+   SET id = COALESCE(id, gen_random_uuid()),
+       idempotency_key = COALESCE(idempotency_key, 'legacy:' || transaction_id::text),
+       provider_reference = COALESCE(provider_reference, provider_tx_ref)
+ WHERE id IS NULL OR idempotency_key IS NULL OR provider_reference IS NULL;
 ALTER TABLE public.fp_flutterwave_deposits
   ALTER COLUMN id SET NOT NULL,
   ALTER COLUMN idempotency_key SET NOT NULL,
