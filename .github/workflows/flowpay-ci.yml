@@ -151,12 +151,14 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/flowpay-upload.jks"
           printf '%s' "$FLOWPAY_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           test -s "$KEYSTORE_PATH"
-          export FLOWPAY_KEYSTORE_PATH="$KEYSTORE_PATH"
+          echo "FLOWPAY_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path("app/build.gradle")
           s = p.read_text()
+          if not re.search(r"(?m)^\s*compileSdk\s+", s):
+              s = re.sub(r"(android\s*\{)", r"\1\n    compileSdk 36", s, count=1)
           if "signingConfigs {" not in s:
               s = s.replace("android {", """android {
               signingConfigs {
