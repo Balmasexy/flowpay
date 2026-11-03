@@ -158,14 +158,14 @@ jobs:
           import re
           p = Path("app/build.gradle")
           s = p.read_text()
-          android = re.search(r"(?m)^(\\s*)android\\s*\\{", s)
+          android = re.search(r"(?m)^(\s*)android\s*\{", s)
           if not android:
               raise SystemExit("Generated app/build.gradle has no android { block")
-          s = re.sub(r"(?m)^\\s*compileSdk(?:Version)?\\s+.*$", "    compileSdk 36", s)
-          if not re.search(r"(?m)^\\s*compileSdk\\s+36\\s*$", s):
+          s = re.sub(r"(?m)^\s*compileSdk(?:Version)?\s+.*$", "    compileSdk 36", s)
+          if not re.search(r"(?m)^\s*compileSdk\s+36\s*$", s):
               pos = android.end()
-              s = s[:pos] + "\\n    compileSdk 36" + s[pos:]
-          if not re.search(r"(?m)^\\s*compileSdk\\s+36\\s*$", s):
+              s = s[:pos] + "\n    compileSdk 36" + s[pos:]
+          if not re.search(r"(?m)^\s*compileSdk\s+36\s*$", s):
               raise SystemExit("compileSdk 36 was not configured")
           if "signingConfigs {" not in s:
               s = s.replace("android {", """android {
@@ -199,7 +199,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s "$FLOWPAY_KEYSTORE_PATH"
-          grep -qE '^\\s*compileSdk 36\\s*
+          grep -qE '^\s*compileSdk 36\s*
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
