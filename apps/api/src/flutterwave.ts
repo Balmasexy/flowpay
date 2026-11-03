@@ -254,7 +254,7 @@ export async function handleFlutterwaveDeposit(
 }
 
 function providerAmountToMinor(value: number | string | undefined): bigint | null {
-  if (value === undefined || !/^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,2})?$/.test(String(value))) return null;
+  if (value === undefined || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(String(value))) return null;
   const [whole, fraction = ""] = String(value).split(".");
   try { return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0")); }
   catch { return null; }
