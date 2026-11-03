@@ -1,37 +1,40 @@
-name: FlowPay CI and Android APK
+name: FlowPay Web and API CI
 
 on:
   push:
     branches:
       - main
       - feat/api-foundation
+      - feat/customer-banking-routes-no-sidebar
     paths:
       - "apps/**"
       - ".github/workflows/**"
       - "README.md"
       - "IMPLEMENTATION_PLAN.md"
+      - "docs/**"
   pull_request:
     branches:
-      - feat/api-foundation
+      - main
     paths:
       - "apps/**"
       - ".github/workflows/**"
       - "README.md"
       - "IMPLEMENTATION_PLAN.md"
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: flowpay-ci-${{ github.ref }}
+  group: flowpay-web-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify-and-build-android:
-    name: Verify API and web; build debug APK
+  verify-api-and-web:
+    name: Verify API and build web app only
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -45,24 +48,6 @@ jobs:
           cache-dependency-path: |
             apps/api/package-lock.json
             apps/web/package-lock.json
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Verify runner Android SDK and install required packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${ANDROID_HOME:?GitHub runner Android SDK path is missing}"
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          test -x "$SDKMANAGER"
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          set -o pipefail
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Install API dependencies
         run: npm ci --prefix apps/api
@@ -122,26 +107,3 @@ jobs:
         run: npm run build --prefix apps/web
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
-
-      - name: Install pinned Capacitor tooling without changing the lockfile
-        run: npm install --prefix apps/web --no-save --package-lock=false @capacitor/core@8.5.3 @capacitor/android@8.5.3 @capacitor/cli@8.5.3
-
-      - name: Generate Android project
-        working-directory: apps/web
-        run: npx cap add android
-
-      - name: Sync web assets to Android
-        working-directory: apps/web
-        run: npx cap sync android
-
-      - name: Build debug APK
-        working-directory: apps/web/android
-        run: ./gradlew assembleDebug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: flowpay-debug-apk
-          path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
