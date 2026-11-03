@@ -367,10 +367,10 @@ export default function App() {
     return body as T;
   }
 
-  async function apiPost<T>(path: string, token: string, payload?: Record<string, unknown>): Promise<T> {
+  async function apiPost<T>(path: string, token: string, payload?: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
       body: payload ? JSON.stringify(payload) : undefined,
       cache: "no-store",
       signal: AbortSignal.timeout(15000)
@@ -502,7 +502,7 @@ export default function App() {
       const result = await apiPost<{
         mode?: string; status?: string; reference?: string; checkoutUrl?: string;
         error?: string; live_payments?: string;
-      }>("/v1/payments/flutterwave/deposits", token, { accountId: account.id, amountMinor });
+      }>("/v1/payments/flutterwave/deposits", token, { accountId: account.id, amountMinor }, crypto.randomUUID());
       if (!result.checkoutUrl || !result.reference) throw new Error(result.error || "CHECKOUT_URL_NOT_RETURNED");
       setDepositReference(result.reference);
       setDepositStatus(result.status || "pending");
