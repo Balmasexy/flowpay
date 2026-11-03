@@ -1,4 +1,4 @@
-# FlowPay customer routes and service readiness
+# FlowPay customer routes and backend coverage
 
 ## Purpose
 
@@ -34,7 +34,7 @@ Public OPay product information describes:
 
 FlowPay should consider equivalent customer needs, but implement each only after the relevant backend, provider contract, operational process, and compliance review exist. No OPay branding, private systems, code, or customer data should be copied.
 
-## Critical API readiness gap
+## Current backend API coverage
 
 The current API implementation exposes only:
 - `GET /`
