@@ -40,7 +40,7 @@ function webhookHash(): string | null {
 }
 
 function callbackUrl(): string | null {
-  const value = (process.env.FLOWPAY_FLUTTERWAVE_CALLBACK_URL || process.env.FLUTTERWAVE_CALLBACK_URL || "").trim();
+  const value = process.env.FLOWPAY_FLUTTERWAVE_CALLBACK_URL?.trim() || "";
   try {
     const url = new URL(value);
     return url.protocol === "https:" ? url.toString() : null;
