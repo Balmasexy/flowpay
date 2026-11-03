@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, BookOpen,
-  Cable, CheckCircle2, ChevronRight, CircleHelp, Clock3, CreditCard,
-  FileText, Gift, Home, LockKeyhole, Menu, Phone, ShieldCheck, Smartphone,
-  UserRound, Wallet, Wifi, Zap
+  Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
+  ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Home,
+  LockKeyhole, Phone, ShieldCheck, UserRound, Wallet, Wifi, Zap
 } from "lucide-react";
 
 type Route = {
@@ -43,7 +42,6 @@ function routeFor(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
@@ -68,8 +66,7 @@ export default function App() {
   const go = (next: string) => {
     if (next !== window.location.pathname) window.history.pushState({}, "", next);
     setPath(next);
-    setMobileMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: "instant" });
+    window.scrollTo({ top: 0, behavior: "auto" });
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
 
@@ -155,12 +152,6 @@ export default function App() {
           </button>)}
       </nav>
 
-      {mobileMenuOpen && <div className="fp-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
-        <div className="fp-menu-sheet" onClick={e => e.stopPropagation()}>
-          <div className="fp-menu-title"><b>All FlowPay services</b><button onClick={() => setMobileMenuOpen(false)}>Close</button></div>
-          {routes.map(({path: target,label,icon: Icon}) => <button key={target} onClick={() => go(target)}><Icon size={18}/>{label}<ChevronRight size={15}/></button>)}
-        </div>
-      </div>}
     </div>
   );
 }
