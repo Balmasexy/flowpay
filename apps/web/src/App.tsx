@@ -63,7 +63,7 @@ export default function App() {
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
 
-  if (path === "/dashboard") return <LandingPage />;
+  if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
   if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
 
