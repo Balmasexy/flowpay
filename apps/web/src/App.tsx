@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminPage from "./AdminPage";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
+import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Home,
@@ -45,6 +46,7 @@ function routeFor(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
+  const authSession = authClient.useSession();
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
@@ -66,6 +68,9 @@ export default function App() {
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
   if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
+  if (!authConfigured) return <LoginPage />;
+  if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
+  if (!authSession.data?.user) { window.location.replace("/login"); return null; }
 
   return (
     <div className="flowpay-app">
@@ -76,6 +81,7 @@ export default function App() {
         <div className="fp-header-actions">
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
           <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile"><UserRound size={19}/></button>
+          <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
         </div>
       </header>
 
