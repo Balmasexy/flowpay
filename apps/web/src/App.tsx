@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AdminPage from "./AdminPage";
+import LandingPage from "./LandingPage";
+import LoginPage from "./LoginPage";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Home,
@@ -10,7 +12,7 @@ type Route = {
   path: string; label: string; icon: typeof Home; group: "main" | "services" | "account";
 };
 const routes: Route[] = [
-  { path: "/", label: "Home", icon: Home, group: "main" },
+  { path: "/dashboard", label: "Home", icon: Home, group: "main" },
   { path: "/transfers", label: "Transfers", icon: ArrowLeftRight, group: "main" },
   { path: "/cards", label: "Cards", icon: CreditCard, group: "main" },
   { path: "/activity", label: "Transaction history", icon: Activity, group: "main" },
@@ -61,6 +63,8 @@ export default function App() {
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
 
+  if (path === "/") return <LandingPage />;
+  if (path === "/login") return <LoginPage />;
   if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
 
   return (
