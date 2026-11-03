@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import AdminPage from "./AdminPage";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Home,
@@ -59,6 +60,8 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "auto" });
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
+
+  if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
 
   return (
     <div className="flowpay-app">
