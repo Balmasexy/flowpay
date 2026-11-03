@@ -17,6 +17,15 @@ CREATE TABLE IF NOT EXISTS public.fp_flutterwave_deposits (
   posted_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS public.fp_provider_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  currency CHAR(3) NOT NULL CHECK (currency = 'NGN'),
+  account_id UUID NOT NULL UNIQUE REFERENCES public.fp_accounts(id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (provider, currency)
+);
+
 CREATE INDEX IF NOT EXISTS fp_flutterwave_deposits_user_created_idx
   ON public.fp_flutterwave_deposits(user_id, created_at DESC);
 
