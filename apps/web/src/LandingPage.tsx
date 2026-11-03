@@ -1,4 +1,4 @@
-import { ArrowRight, ShieldCheck, Wallet, CreditCard, Smartphone, Landmark, LockKeyhole, Activity } from "lucide-react";
+import { ArrowRight, ShieldCheck, Wallet, CreditCard, Smartphone, LockKeyhole, Activity } from "lucide-react";
 
 const features = [
   { icon: Wallet, title: "One clear money view", text: "See your available balance and account activity when securely connected." },
