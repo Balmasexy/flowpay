@@ -253,6 +253,13 @@ export async function handleFlutterwaveDeposit(
   }
 }
 
+function providerAmountToMinor(value: number | string | undefined): bigint | null {
+  if (value === undefined || !/^(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,2})?$/.test(String(value))) return null;
+  const [whole, fraction = ""] = String(value).split(".");
+  try { return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0")); }
+  catch { return null; }
+}
+
 async function postVerifiedDeposit(pool: Pool, tx: ProviderTransaction, eventType: string) {
   const reference = String(tx.tx_ref ?? "");
   const providerId = String(tx.id ?? "");
@@ -260,9 +267,9 @@ async function postVerifiedDeposit(pool: Pool, tx: ProviderTransaction, eventTyp
   if (!deposit) return "unmatched";
   if (deposit.status === "posted") return "duplicate";
 
-  const actualMinor = Math.round(Number(tx.amount) * 100);
+  const actualMinor = providerAmountToMinor(tx.amount);
   if (tx.status !== "successful" || String(tx.currency ?? "").toUpperCase() !== "NGN" ||
-      !Number.isFinite(actualMinor) || actualMinor !== Number(deposit.amount_minor)) {
+      actualMinor === null || actualMinor !== BigInt(deposit.amount_minor)) {
     return "not_verified";
   }
 
