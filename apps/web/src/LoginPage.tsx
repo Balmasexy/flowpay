@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
 import { authClient, authConfigured } from "./auth-client";
 
@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState("");
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     if (!authConfigured) {
