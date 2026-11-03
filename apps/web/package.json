@@ -14,7 +14,8 @@
     "typescript": "~5.8.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "@neondatabase/auth": "^0.7.0-beta"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
