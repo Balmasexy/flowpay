@@ -3,6 +3,7 @@ name: FlowPay CI and Android APK
 on:
   push:
     branches:
+      - main
       - feat/api-foundation
     paths:
       - "apps/**"
