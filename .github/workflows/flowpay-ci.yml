@@ -151,14 +151,22 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/flowpay-upload.jks"
           printf '%s' "$FLOWPAY_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           test -s "$KEYSTORE_PATH"
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$FLOWPAY_KEYSTORE_PASSWORD" -alias "$FLOWPAY_KEY_ALIAS" >/dev/null
           echo "FLOWPAY_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path("app/build.gradle")
           s = p.read_text()
-          if not re.search(r"(?m)^\s*compileSdk\s+", s):
-              s = re.sub(r"(android\s*\{)", r"\1\n    compileSdk 36", s, count=1)
+          android = re.search(r"(?m)^(\\s*)android\\s*\\{", s)
+          if not android:
+              raise SystemExit("Generated app/build.gradle has no android { block")
+          s = re.sub(r"(?m)^\\s*compileSdk(?:Version)?\\s+.*$", "    compileSdk 36", s)
+          if not re.search(r"(?m)^\\s*compileSdk\\s+36\\s*$", s):
+              pos = android.end()
+              s = s[:pos] + "\\n    compileSdk 36" + s[pos:]
+          if not re.search(r"(?m)^\\s*compileSdk\\s+36\\s*$", s):
+              raise SystemExit("compileSdk 36 was not configured")
           if "signingConfigs {" not in s:
               s = s.replace("android {", """android {
               signingConfigs {
@@ -183,7 +191,24 @@ jobs:
 
       - name: Build debug APK
         working-directory: apps/web/android
-        run: ./gradlew assembleDebug
+        env:
+          FLOWPAY_KEYSTORE_PATH: ${{ runner.temp }}/flowpay-upload.jks
+          FLOWPAY_KEYSTORE_PASSWORD: ${{ secrets.FLOWPAY_KEYSTORE_PASSWORD }}
+          FLOWPAY_KEY_ALIAS: ${{ secrets.FLOWPAY_KEY_ALIAS }}
+          FLOWPAY_KEY_PASSWORD: ${{ secrets.FLOWPAY_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -s "$FLOWPAY_KEYSTORE_PATH"
+          grep -qE '^\\s*compileSdk 36\\s*
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpay-debug-apk
+          path: apps/web/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+ app/build.gradle
+          ./gradlew assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
