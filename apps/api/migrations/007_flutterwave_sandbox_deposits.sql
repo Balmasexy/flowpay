@@ -17,6 +17,34 @@ CREATE TABLE IF NOT EXISTS public.fp_flutterwave_deposits (
   posted_at TIMESTAMPTZ
 );
 
+-- Earlier FlowPay builds created this table with transaction_id/provider_tx_ref.
+-- Upgrade that empty-or-populated legacy shape in place; retain every legacy column and row.
+ALTER TABLE public.fp_flutterwave_deposits
+  ADD COLUMN IF NOT EXISTS id UUID DEFAULT gen_random_uuid(),
+  ADD COLUMN IF NOT EXISTS idempotency_key TEXT,
+  ADD COLUMN IF NOT EXISTS provider_reference TEXT,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS posted_at TIMESTAMPTZ;
+
+UPDATE public.fp_flutterwave_deposits
+   SET id = COALESCE(id, gen_random_uuid()),
+       idempotency_key = COALESCE(idempotency_key, 'legacy:' || COALESCE(transaction_id::text, gen_random_uuid()::text)),
+       provider_reference = COALESCE(provider_reference, provider_tx_ref)
+ WHERE id IS NULL OR idempotency_key IS NULL OR provider_reference IS NULL;
+
+ALTER TABLE public.fp_flutterwave_deposits
+  ALTER COLUMN id SET NOT NULL,
+  ALTER COLUMN idempotency_key SET NOT NULL,
+  ALTER COLUMN provider_reference SET NOT NULL,
+  ALTER COLUMN checkout_url DROP NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS fp_flutterwave_deposits_id_uidx
+  ON public.fp_flutterwave_deposits(id);
+CREATE UNIQUE INDEX IF NOT EXISTS fp_flutterwave_deposits_idempotency_key_uidx
+  ON public.fp_flutterwave_deposits(idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS fp_flutterwave_deposits_provider_reference_uidx
+  ON public.fp_flutterwave_deposits(provider_reference);
+
 CREATE TABLE IF NOT EXISTS public.fp_provider_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   provider TEXT NOT NULL,
