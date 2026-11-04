@@ -5,6 +5,7 @@ import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import BulkOperations from "./BulkOperations";
 import CustomerProfile from "./CustomerProfile";
+import OverviewDashboard from "./OverviewDashboard";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -159,35 +160,12 @@ export default function App() {
           </div>
 
           {path === "/dashboard" ? (
-            <>
-              <section className="fp-balance">
-                <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
-                <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>
-                <small>Your authenticated ledger balance is not connected yet. No estimated or sample amount is shown.</small>
-                <div className="fp-balance-actions">
-                  <button onClick={() => go("/transfers")}> <ArrowDownLeft size={17}/> Add money</button>
-                  <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>
-                </div>
-              </section>
-              <section className="fp-section">
-                <div className="fp-section-title"><h2>Quick services</h2><span>Everyday banking</span></div>
-                <div className="fp-service-grid">
-                  {services.map(({label, path: target, icon: Icon, detail}) => (
-                    <button className="fp-service-tile" key={target} onClick={() => go(target)}>
-                      <span className="fp-service-icon"><Icon size={21}/></span><b>{label}</b><small>{detail}</small>
-                    </button>
-                  ))}
-                </div>
-              </section>
-              <section className="fp-section">
-                <div className="fp-section-title"><h2>Mobile networks</h2><span>Airtime and data</span></div>
-                <div className="fp-network-row">{providers.map((p) => <button key={p} className="fp-network" onClick={() => {setNetwork(p);go("/airtime");}}>{p}</button>)}</div>
-              </section>
-              <section className="fp-section fp-activity-preview">
-                <div className="fp-section-title"><h2>Recent activity</h2><button onClick={() => go("/activity")}>See all <ChevronRight size={15}/></button></div>
-                <div className="fp-empty"><Clock3 size={23}/><b>No verified transactions yet</b><span>Your actual ledger activity will appear here after account services are connected.</span></div>
-              </section>
-            </>
+            <OverviewDashboard
+              token={authSession.data.session?.token ?? ""}
+              go={go}
+              network={network}
+              onNetworkChange={setNetwork}
+            />
           ) : servicePage ? (
             <section className="fp-panel fp-form-panel">
               <div className="fp-form-icon">{path === "/airtime" ? <Phone/> : path === "/data" ? <Wifi/> : path === "/cable-tv" ? <Cable/> : <Zap/>}</div>
