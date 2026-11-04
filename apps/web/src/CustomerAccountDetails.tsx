@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
@@ -8,7 +8,19 @@ type AccountDetails = {
   message: string;
 };
 
-export default function CustomerAccountDetails({ token }: { token: string }) {
+export default function CustomerAccountDetails({ token, go }: { token: string; go?: (path: string) => void }) {
+  const [copied, setCopied] = useState("");
+
+  const copyValue = async (label: string, value: string | null | undefined) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+      window.setTimeout(() => setCopied(current => current === label ? "" : current), 2200);
+    } catch {
+      setCopied("Copy unavailable — select the value manually");
+    }
+  };
   const [data, setData] = useState<AccountDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -52,6 +64,6 @@ export default function CustomerAccountDetails({ token }: { token: string }) {
       </div> : <div className="fp-empty"><Wallet size={22}/><b>No wallet account is linked</b><span>Contact FlowPay support if you believe this is incorrect.</span></div>}
       <div className="fp-preview-warning"><ShieldCheck size={17}/>{data?.message}</div>
     </>}
-    <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh account details</button>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh account details</button>{go && <button className="fp-outline" type="button" onClick={() => go("/documents")}><FileText size={16}/> Documents</button>}</div>
   </section>;
 }
