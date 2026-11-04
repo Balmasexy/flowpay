@@ -22,13 +22,13 @@ type SecurityData = {
   message: string;
 };
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/+$/, "") || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") || "";
 function dateLabel(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
 }
 function label(value: string) {
-  return value.replace(/[_-]+/g, " ").replace(/\\b\\w/g, letter => letter.toUpperCase());
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 export default function SecurityCenter({ token }: { token: string }) {
