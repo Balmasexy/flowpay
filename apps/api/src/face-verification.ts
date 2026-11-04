@@ -221,29 +221,72 @@ export function createFaceVerificationHandler(deps: Dependencies) {
       }
       const resultCode = String(callback.ResultCode ?? "").trim().slice(0, 20);
       const actions = isRecord(callback.Actions) ? callback.Actions : {};
-      const status = deriveVerificationStatus(resultCode, actions);
+      const incoming = {
+        liveness: actionText(actions, "Liveness_Check"),
+        selfie: actionText(actions, "Selfie_Check"),
+        selfieProvided: actionText(actions, "Selfie_Provided"),
+        registerSelfie: actionText(actions, "Register_Selfie"),
+        humanReviewLiveness: actionText(actions, "Human_Review_Liveness_Check"),
+        humanReviewSelfie: actionText(actions, "Human_Review_Selfie_Check")
+      };
+      const client = await pool.connect();
       try {
-        const updated = await pool.query(
-          "UPDATE public.fp_face_verification_jobs SET smile_job_id = COALESCE(NULLIF($3, ''), smile_job_id), status = CASE WHEN status IN ('verified', 'rejected', 'failed') THEN status WHEN $4 = 'pending' AND status = 'under_review' THEN 'under_review' ELSE $4 END, result_code = NULLIF($5, ''), result_text = $6, liveness_check = $7, selfie_check = $8, selfie_provided = $9, register_selfie = $10, human_review_liveness_check = $11, human_review_selfie_check = $12, verified_at = CASE WHEN $4 = 'verified' THEN COALESCE(verified_at, NOW()) ELSE verified_at END, updated_at = NOW() WHERE job_id = $1 AND smile_user_id = $2 RETURNING id",
+        await client.query("BEGIN");
+        const existing = await client.query(
+          "SELECT status, result_code, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check FROM public.fp_face_verification_jobs WHERE job_id = $1 AND smile_user_id = $2 FOR UPDATE",
+          [jobId, smileUserId]
+        );
+        if (existing.rowCount !== 1) {
+          await client.query("COMMIT");
+          send(res, 200, { received: true, matched: false });
+          return true;
+        }
+
+        const previous = existing.rows[0];
+        // Smile ID may send callbacks as individual actions complete. Merge each
+        // callback into the stored snapshot so earlier passing actions are retained.
+        const mergedActions = {
+          Liveness_Check: incoming.liveness ?? previous.liveness_check,
+          Selfie_Check: incoming.selfie ?? previous.selfie_check,
+          Selfie_Provided: incoming.selfieProvided ?? previous.selfie_provided,
+          Register_Selfie: incoming.registerSelfie ?? previous.register_selfie,
+          Human_Review_Liveness_Check: incoming.humanReviewLiveness ?? previous.human_review_liveness_check,
+          Human_Review_Selfie_Check: incoming.humanReviewSelfie ?? previous.human_review_selfie_check
+        };
+        const effectiveResultCode = resultCode || String(previous.result_code ?? "");
+        const proposedStatus = deriveVerificationStatus(effectiveResultCode, mergedActions);
+        const currentStatus = String(previous.status);
+        const nextStatus = ["verified", "rejected", "failed"].includes(currentStatus)
+          ? currentStatus
+          : currentStatus === "under_review" && proposedStatus === "pending"
+            ? "under_review"
+            : proposedStatus;
+
+        await client.query(
+          "UPDATE public.fp_face_verification_jobs SET smile_job_id = COALESCE(NULLIF($3, ''), smile_job_id), status = $4, result_code = COALESCE(NULLIF($5, ''), result_code), result_text = COALESCE($6, result_text), liveness_check = COALESCE($7, liveness_check), selfie_check = COALESCE($8, selfie_check), selfie_provided = COALESCE($9, selfie_provided), register_selfie = COALESCE($10, register_selfie), human_review_liveness_check = COALESCE($11, human_review_liveness_check), human_review_selfie_check = COALESCE($12, human_review_selfie_check), verified_at = CASE WHEN $4 = 'verified' THEN COALESCE(verified_at, NOW()) ELSE verified_at END, updated_at = NOW() WHERE job_id = $1 AND smile_user_id = $2",
           [
             jobId,
             smileUserId,
             typeof callback.SmileJobID === "string" ? callback.SmileJobID.slice(0, 80) : "",
-            status,
+            nextStatus,
             resultCode,
             safeResultText(callback.ResultText),
-            actionText(actions, "Liveness_Check"),
-            actionText(actions, "Selfie_Check"),
-            actionText(actions, "Selfie_Provided"),
-            actionText(actions, "Register_Selfie"),
-            actionText(actions, "Human_Review_Liveness_Check"),
-            actionText(actions, "Human_Review_Selfie_Check")
+            incoming.liveness,
+            incoming.selfie,
+            incoming.selfieProvided,
+            incoming.registerSelfie,
+            incoming.humanReviewLiveness,
+            incoming.humanReviewSelfie
           ]
         );
-        send(res, 200, { received: true, matched: updated.rowCount === 1 });
+        await client.query("COMMIT");
+        send(res, 200, { received: true, matched: true });
       } catch (error) {
+        try { await client.query("ROLLBACK"); } catch { /* connection may already be closed */ }
         console.error("FlowPay face verification callback persistence failed:", error instanceof Error ? error.message : "unknown database error");
         send(res, 503, { error: "CALLBACK_PERSISTENCE_UNAVAILABLE" });
+      } finally {
+        client.release();
       }
       return true;
     }
