@@ -14,7 +14,7 @@ type Profile = {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
-export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null}}) {
+export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};onPhotoChange:(photo:string|null)=>void}) {
   const authSession=authClient.useSession();
   const [profile,setProfile]=useState<Profile>({fullName:user.name ?? "",email:user.email ?? "",phoneNumber:"",residentialAddress:"",photoUrl:null,updatedAt:null});
   const [loading,setLoading]=useState(true);
@@ -145,7 +145,7 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
       const payload:Record<string,unknown>={phoneNumber:profile.phoneNumber,residentialAddress:profile.residentialAddress};
       if(photoChanged)payload.photoDataUrl=photoDataUrl;
       const value=await request("PATCH",payload);
-      setProfile(value);setPhotoDataUrl(value.photoUrl);setPhotoChanged(false);
+      setProfile(value);setPhotoDataUrl(value.photoUrl);setPhotoChanged(false);onPhotoChange(value.photoUrl);
       setNotice("Your profile details and photo have been saved securely.");
     } catch(reason){setError(reason instanceof Error?reason.message:"Unable to save profile.");}
     finally{setSaving(false);}
