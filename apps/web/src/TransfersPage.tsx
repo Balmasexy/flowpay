@@ -37,7 +37,7 @@ export default function TransfersPage({ token }: { token: string }) {
     if (!token || token.split(".").length !== 3) {
       setError("Your secure session is not ready. Sign in again and retry."); setLoading(false); return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
     setLoading(true); setError("");
     try {
@@ -71,11 +71,11 @@ export default function TransfersPage({ token }: { token: string }) {
 
   const makePreview = () => {
     setPreview(null);
-    const cleanDestination = destination.replace(/\\s+/g, "");
+    const cleanDestination = destination.replace(/\s+/g, "");
     const cleanAmount = amount.trim();
     const numericAmount = Number(cleanAmount);
-    if (!/^\\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number to preview. This does not verify the bank account."); return; }
-    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!/^\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number to preview. This does not verify the bank account."); return; }
+    if (!/^\d+(?:\.\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       setError("Enter a valid amount greater than zero, using up to two decimal places."); return;
     }
     if (!wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")) {
@@ -101,7 +101,7 @@ export default function TransfersPage({ token }: { token: string }) {
         {!wallets.length && <option value="NGN">NGN</option>}
       </select>
       <label htmlFor="fp-transfer-destination">Destination account number</label>
-      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\\D/g, "").slice(0, 10)); setPreview(null); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
+      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\D/g, "").slice(0, 10)); setPreview(null); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
       <label htmlFor="fp-transfer-amount">Amount</label>
       <input id="fp-transfer-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount((decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole).slice(0, 15)); setPreview(null); setError(""); }} inputMode="decimal" placeholder="0.00" maxLength={15}/>
       {error && <div className="fp-preview-warning" role="alert">{error}</div>}
