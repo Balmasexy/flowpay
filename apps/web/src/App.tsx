@@ -17,6 +17,7 @@ import ServicePreview from "./ServicePreview";
 import SavingsPage from "./SavingsPage";
 import SpendSavePage from "./SpendSavePage";
 import FlowPaySearch from "./FlowPaySearch";
+import HelpSupport from "./HelpSupport";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -240,6 +241,6 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/fixed-savings") return <SavingsPage mode="fixed"/>;
   if (path === "/spend-save") return <SpendSavePage/>;
   if (path === "/security") return <SecurityCenter token={token}/>;
-  if (path === "/support") return <section className="fp-panel fp-detail-panel"><h2>Help & support</h2><div className="fp-feature-list">{["Report a failed transaction","Account access and recovery","Card support","Airtime and bill-payment support","Complaints and dispute tracking","Frequently asked questions"].map(x=><div key={x}><CircleHelp size={18}/>{x}<span>Help</span></div>)}</div>{unavailable}</section>;
+  if (path === "/support") return <HelpSupport go={go}/>;
   return <section className="fp-panel fp-detail-panel"><h2>Page not found</h2><button className="fp-primary" onClick={()=>go("/")}>Return to home</button></section>;
 }
