@@ -111,7 +111,7 @@ const server = createServer(async (req, res) => {
             ORDER BY COALESCE(t.posted_at, t.created_at) DESC
             LIMIT 5`, [userId]),
         pool.query(
-          `SELECT a.currency, COUNT(e.id)::int AS posted_entry_count
+          `SELECT a.currency, COUNT(t.id)::int AS posted_entry_count
              FROM public.fp_accounts AS a
              LEFT JOIN public.fp_ledger_entries AS e ON e.account_id = a.id
              LEFT JOIN public.fp_ledger_transactions AS t
