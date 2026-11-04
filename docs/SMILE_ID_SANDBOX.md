@@ -4,7 +4,7 @@
 
 This integration is sandbox-only. It does not submit production jobs, unlock transfers, change balances or ledger records, or treat a profile photo as a verified selfie.
 
-FlowPay uses Smile ID SmartSelfie Registration (job type 4). The official Smart Camera Web Component collects the selfie and liveness frames. The FlowPay API submits the capture through the official server-side smile-identity-core SDK. Smile ID performs liveness and spoof checks and creates a reference selfie for later SmartSelfie Authentication.
+FlowPay uses Smile ID SmartSelfie Registration (job type 4). The official Smile ID Web Components SmartSelfie flow (in strict active-liveness mode) collects the selfie and live head-pose challenge frames. The FlowPay API submits the capture through the official server-side smile-identity-core SDK. Smile ID performs liveness and spoof checks and creates a reference selfie for later SmartSelfie Authentication.
 
 Official references:
 - https://docs.usesmileid.com/products/biometric-authentication
@@ -29,8 +29,8 @@ Review apps/api/migrations/011_face_verification.sql before applying it to the F
 ## Camera and verification flow
 
 1. The customer signs in and opens Face & liveness verification.
-2. The customer explicitly consents before the camera can open.
-3. The official Smile ID Smart Camera Web Component captures the selfie and liveness frames over HTTPS and dispatches the imagesComputed event.
+2. The customer explicitly consents before the camera can open. The page mounts `selfie-capture-screens` with `use-strict-mode=true`, which selects Smile ID Enhanced SmartSelfie active liveness.
+3. The published `@smileid/web-components` SmartSelfie capture UI runs the randomized active head-pose liveness challenge, then publishes `selfie-capture-screens.publish` with selfie (image type 2) and liveness (image type 6) images after customer review.
 4. The browser sends the capture payload to the authenticated FlowPay API. The API creates all Smile ID user/job references; client-supplied IDs are ignored.
 5. The API submits job type 4 using the official Smile ID server-side SDK.
 6. Smile ID calls the HTTPS callback. FlowPay verifies the provider signature and matches the callback to the exact pending job and customer before updating result metadata.
