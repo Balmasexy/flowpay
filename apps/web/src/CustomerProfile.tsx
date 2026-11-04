@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Camera, FileText, ImagePlus, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Camera, FileText, ImagePlus, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { authClient } from "./auth-client";
 
 type Profile = {
@@ -23,8 +23,11 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   const [photoDataUrl,setPhotoDataUrl]=useState<string|null>(null);
   const [photoChanged,setPhotoChanged]=useState(false);
   const [photoBusy,setPhotoBusy]=useState(false);
+  const [cameraOpen,setCameraOpen]=useState(false);
+  const [cameraStream,setCameraStream]=useState<MediaStream|null>(null);
   const uploadInput=useRef<HTMLInputElement>(null);
   const cameraInput=useRef<HTMLInputElement>(null);
+  const cameraVideo=useRef<HTMLVideoElement>(null);
 
   async function request(method:"GET"|"PATCH",body?:object) {
     const tokenClient=authClient as typeof authClient & {getJWTToken?:()=>Promise<string|null>};
@@ -56,6 +59,60 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
     request("GET").then(value=>{if(active){setProfile(value);setPhotoDataUrl(value.photoUrl);setError("");}}).catch(reason=>{if(active)setError(reason instanceof Error?reason.message:"Unable to load profile.");}).finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
   },[]);
+
+  useEffect(()=>{
+    if(cameraVideo.current&&cameraStream){
+      cameraVideo.current.srcObject=cameraStream;
+      void cameraVideo.current.play().catch(()=>setError("Camera preview could not start. Check browser camera permissions."));
+    }
+  },[cameraStream,cameraOpen]);
+
+  useEffect(()=>()=>{cameraStream?.getTracks().forEach(track=>track.stop());},[cameraStream]);
+
+  function closeCamera(){
+    cameraStream?.getTracks().forEach(track=>track.stop());
+    setCameraStream(null);
+    setCameraOpen(false);
+  }
+
+  async function startCamera(){
+    setError("");setNotice("");
+    if(!navigator.mediaDevices?.getUserMedia){
+      setNotice("Direct camera access is unavailable in this browser. Choose Camera from the photo picker instead.");
+      cameraInput.current?.click();
+      return;
+    }
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"user"}},audio:false});
+      setCameraStream(stream);
+      setCameraOpen(true);
+    }catch(reason){
+      const name=reason instanceof DOMException?reason.name:"";
+      if(name==="NotAllowedError"||name==="PermissionDeniedError"){
+        setError("Camera permission was denied. Allow camera access in your browser or device settings, then try again.");
+      }else if(name==="NotFoundError"||name==="DevicesNotFoundError"){
+        setError("No camera was found on this device. You can upload an existing photo instead.");
+      }else{
+        setError("Unable to open the camera. Check that your camera is connected and not being used by another app.");
+      }
+      cameraInput.current?.click();
+    }
+  }
+
+  function captureCameraPhoto(){
+    const video=cameraVideo.current;
+    if(!video||!video.videoWidth||!video.videoHeight){setError("Camera is not ready yet. Please wait for the preview.");return;}
+    const canvas=document.createElement("canvas");
+    canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    const context=canvas.getContext("2d");
+    if(!context){setError("Unable to capture the camera image. Please try again.");return;}
+    context.drawImage(video,0,0,canvas.width,canvas.height);
+    const dataUrl=canvas.toDataURL("image/jpeg",0.9);
+    const size=Math.ceil((dataUrl.length-dataUrl.indexOf(",")-1)*3/4);
+    if(size>MAX_PHOTO_BYTES){setError("The captured photo is larger than 3 MB. Move closer or use a lower-resolution camera setting.");return;}
+    setPhotoDataUrl(dataUrl);setPhotoChanged(true);setNotice("Photo captured. Tap Save profile to store it securely.");setError("");
+    closeCamera();
+  }
 
   async function choosePhoto(event:ChangeEvent<HTMLInputElement>) {
     const file=event.target.files?.[0];
@@ -100,7 +157,7 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
       <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{visiblePhoto?<img src={visiblePhoto} alt="Customer profile" referrerPolicy="no-referrer"/>:<span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{profile.email||user.email||"Email address not provided"}</span></div></div>
       <div className="fp-profile-card-photo-actions">
         <button type="button" className="fp-outline" onClick={()=>uploadInput.current?.click()} disabled={photoBusy||saving}><ImagePlus size={15}/> Upload photo</button>
-        <button type="button" className="fp-outline" onClick={()=>cameraInput.current?.click()} disabled={photoBusy||saving}><Camera size={15}/> Take photo</button>
+        <button type="button" className="fp-outline" onClick={startCamera} disabled={photoBusy||saving}><Camera size={15}/> Take photo</button>
         {visiblePhoto&&<button type="button" className="fp-outline" onClick={()=>{setPhotoDataUrl(null);setPhotoChanged(true);setNotice("Photo removal selected. Tap Save profile to confirm.");}} disabled={saving}><Trash2 size={15}/> Remove</button>}
       </div>
       <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span><b>Customer profile</b></div>
@@ -111,6 +168,13 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
     {loading&&<p className="fp-muted" role="status">Loading saved profile…</p>}
     {error&&<div className="fp-preview-warning" role="alert">{error}</div>}
     {notice&&<div className="fp-profile-success" role="status">{notice}</div>}
+    {cameraOpen&&<div className="fp-camera-backdrop" role="presentation" onClick={closeCamera}>
+      <section className="fp-camera-dialog" role="dialog" aria-modal="true" aria-labelledby="fp-camera-title" onClick={event=>event.stopPropagation()}>
+        <div className="fp-camera-dialog-heading"><div><h3 id="fp-camera-title">Take profile photo</h3><p>Position your face in the frame, then capture.</p></div><button type="button" className="fp-outline" aria-label="Close camera" onClick={closeCamera}><X size={18}/></button></div>
+        <video ref={cameraVideo} className="fp-camera-preview" autoPlay playsInline muted/>
+        <div className="fp-camera-dialog-actions"><button type="button" className="fp-outline" onClick={closeCamera}>Cancel</button><button type="button" className="fp-primary" onClick={captureCameraPhoto}><Camera size={16}/> Capture photo</button></div>
+      </section>
+    </div>}
     <form className="fp-profile-edit-form" onSubmit={save}>
       <div className="fp-profile-section-title"><h3>Personal information</h3><span>Verified identity details are read-only</span></div>
       <label htmlFor="fp-profile-name">Full name</label><input id="fp-profile-name" value={displayName} readOnly/>
