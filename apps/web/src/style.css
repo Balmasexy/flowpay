@@ -286,3 +286,15 @@
 .fp-profile-edit-form textarea { resize:vertical; min-height:88px; }
 .fp-profile-edit-form .fp-primary { justify-self:start; min-width:160px; margin-top:8px; }
 .fp-profile-success { padding:11px 13px; border:1px solid #276c45; border-radius:9px; background:#14271c; color:#a7e4ba; font-size:12px; }
+
+
+/* Customer profile image upload and in-app camera controls. */
+.fp-profile-photo-editor{display:flex;align-items:center;gap:16px;padding:14px;border:1px solid #383b36;border-radius:12px;background:#1a1c19}
+.fp-profile-photo-preview{display:grid;place-items:center;flex:0 0 76px;width:76px;height:76px;overflow:hidden;border:2px solid #55584f;border-radius:50%;background:#fff1e6;color:#bd5b0b;font:800 22px Manrope,sans-serif}
+.fp-profile-photo-preview img{width:100%;height:100%;object-fit:cover}
+.fp-profile-photo-controls{display:grid;gap:9px;min-width:0}
+.fp-profile-photo-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.fp-profile-photo-buttons .fp-outline{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:8px 11px;font-size:11px}
+.fp-profile-photo-controls small{color:#a7aaa2;font-size:10px;line-height:1.5}
+.fp-profile-file-input{display:none}
+@media(max-width:520px){.fp-profile-photo-editor{align-items:flex-start}.fp-profile-photo-preview{flex-basis:62px;width:62px;height:62px}.fp-profile-photo-buttons{display:grid;grid-template-columns:1fr 1fr}.fp-profile-photo-buttons .fp-outline{justify-content:center}.fp-profile-photo-buttons .fp-outline:last-child:nth-child(3){grid-column:1/-1}}
