@@ -63,6 +63,7 @@ function routeFor(path: string) {
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const authSession = authClient.useSession();
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
@@ -104,8 +105,12 @@ export default function App() {
         </div>
       </header>
 
-      <div className="fp-layout">
+      <div className={`fp-layout${sidebarCollapsed ? " fp-sidebar-collapsed" : ""}`}>
         <aside className="fp-sidebar" aria-label="Customer navigation">
+          <button className="fp-sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(value => !value)} aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            {sidebarCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}
+            <span>{sidebarCollapsed ? "Expand" : "Collapse"}</span>
+          </button>
           <div className="fp-sidebar-section"><span>YOUR FINANCES</span>
             {routes.filter(r => r.group === "main").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
           </div>
