@@ -1,12 +1,16 @@
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck, UserRound, MailCheck } from "lucide-react";
 import { authClient, authConfigured } from "./auth-client";
 
+type Step = "signup" | "verify";
+
 export default function SignupPage() {
+  const [step, setStep] = useState<Step>("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -38,11 +42,75 @@ export default function SignupPage() {
         setError(result.error.message || "Registration failed. Please check your details and try again.");
         return;
       }
-      setMessage("Your sign-up request was accepted. Follow any email-verification instructions, then sign in. Your financial profile and account are created only after the secure customer-onboarding process is completed.");
+      if (result.data?.user && result.data.user.emailVerified) {
+        setMessage("Your email is verified. You can now sign in.");
+        setPassword("");
+        setConfirmPassword("");
+        return;
+      }
+      setStep("verify");
+      setMessage("A verification code has been requested for your email. Check your inbox and spam folder.");
       setPassword("");
       setConfirmPassword("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to register. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (!/^\\d{4,10}$/.test(code.trim())) {
+      setError("Enter the numeric verification code from your email.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await authClient.emailOtp.verifyEmail({
+        email: email.trim(),
+        otp: code.trim()
+      });
+      if (result.error) {
+        setError(result.error.message || "That verification code could not be confirmed.");
+        return;
+      }
+      if (result.data?.session) {
+        window.location.assign("/dashboard");
+        return;
+      }
+      setStep("signup");
+      setCode("");
+      setMessage("Email verified successfully. You can now sign in.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to verify this email. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    setMessage("");
+    setError("");
+    if (!email.trim()) {
+      setError("Enter your email address first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await authClient.sendVerificationEmail({
+        email: email.trim(),
+        callbackURL: window.location.origin + "/login"
+      });
+      if (result.error) {
+        setError(result.error.message || "Unable to send a new verification code.");
+        return;
+      }
+      setMessage("A new verification code has been requested. Check your inbox and spam folder.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to resend the verification code.");
     } finally {
       setBusy(false);
     }
@@ -57,11 +125,11 @@ export default function SignupPage() {
         <div className="fp-login-assurance"><ShieldCheck size={18}/> Your credentials are handled by the configured authentication service.</div>
       </div>
       <div className="fp-login-form-wrap">
-        <div className="fp-login-icon"><UserRound size={23}/></div>
+        <div className="fp-login-icon">{step === "verify" ? <MailCheck size={23}/> : <UserRound size={23}/>}</div>
         <span className="fp-login-eyebrow">FLOWPAY ACCOUNT</span>
-        <h2>Create account</h2>
-        <p className="fp-login-subtitle">Enter your details to create your sign-in credentials.</p>
-        <form onSubmit={submit}>
+        <h2>{step === "verify" ? "Verify your email" : "Create account"}</h2>
+        <p className="fp-login-subtitle">{step === "verify" ? <>Enter the numeric code sent to <strong>{email}</strong>.</> : "Enter your details to create your sign-in credentials."}</p>
+        {step === "signup" ? <form onSubmit={submit}>
           <label htmlFor="fp-signup-name">Full name</label>
           <input id="fp-signup-name" autoComplete="name" required minLength={2} maxLength={100} placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)}/>
           <label htmlFor="fp-signup-email">Email address</label>
@@ -74,8 +142,17 @@ export default function SignupPage() {
           {message && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>{message}</span></div>}
           {!authConfigured && <div className="fp-login-notice" role="status">Authentication is not configured on this deployment. No credentials will be sent.</div>}
           <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Creating account…" : "Create account"} <ArrowRight size={16}/></button>
-        </form>
-        <p className="fp-login-help">Already registered? <a href="/login">Sign in</a></p>
+        </form> : <form onSubmit={verify}>
+          <label htmlFor="fp-verification-code">Email verification code</label>
+          <input id="fp-verification-code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4,10}" maxLength={10} required placeholder="Enter verification code" value={code} onChange={e=>setCode(e.target.value.replace(/[^0-9]/g, ""))}/>
+          {error && <div className="fp-login-notice" role="alert">{error}</div>}
+          {message && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>{message}</span></div>}
+          <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Verifying…" : "Verify email"} <ArrowRight size={16}/></button>
+          <button className="fp-login-submit" type="button" disabled={busy || !authConfigured} onClick={resendCode}>Resend verification code</button>
+          <button className="fp-login-back" type="button" onClick={()=>{setStep("signup");setError("");setMessage("");}}>Use a different email</button>
+        </form>}
+        {step === "signup" && <p className="fp-login-help">Already registered? <a href="/login">Sign in</a></p>}
+        {step === "verify" && <p className="fp-login-help">Already verified? <a href="/login">Sign in</a></p>}
       </div>
     </section>
     <footer className="fp-login-footer">© {new Date().getFullYear()} FlowPay <span>Secure account registration</span></footer>
