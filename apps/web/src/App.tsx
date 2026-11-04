@@ -9,7 +9,7 @@ import OverviewDashboard from "./OverviewDashboard";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
-  ChevronLeft, ChevronRight, CircleHelp, Ellipsis, Clock3, CreditCard, FileText, Gift, Home,
+  ChevronLeft, ChevronRight, CircleHelp, Ellipsis, CreditCard, FileText, Gift, Home,
   LockKeyhole, Phone, Search, ShieldCheck, Smartphone, UserRound, Wallet, Wifi, Zap
 } from "lucide-react";
 
