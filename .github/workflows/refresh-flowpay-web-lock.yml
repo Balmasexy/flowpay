@@ -1,0 +1,38 @@
+name: Refresh FlowPay web lockfile
+
+on:
+  push:
+    branches:
+      - feat/face-liveness-smileid-sandbox
+    paths:
+      - "apps/web/package.json"
+      - ".github/workflows/refresh-flowpay-web-lock.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/face-liveness-smileid-sandbox
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Refresh web lockfile without running install scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --prefix apps/web
+      - name: Commit updated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- apps/web/package-lock.json; then
+            echo "Lockfile already matches package.json"
+            exit 0
+          fi
+          git add apps/web/package-lock.json
+          git commit -m "chore(web): lock Smile ID active liveness components"
+          git push origin HEAD:feat/face-liveness-smileid-sandbox
