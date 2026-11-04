@@ -7,7 +7,7 @@ function safeText(value: unknown, fallback: string, max = 120): string {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback;
 }
 
-function parseTransfer(value: unknown, index: number): Transfer | null {
+function parseTransfer(value: unknown): Transfer | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
   const id = safeText(row.id, "", 128);
