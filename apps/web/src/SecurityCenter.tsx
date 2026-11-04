@@ -27,6 +27,57 @@ function dateLabel(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
 }
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+function textValue(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value.slice(0, 160) : fallback;
+}
+function parsePasskey(value: unknown): Passkey | null {
+  const row = record(value);
+  if (!row) return null;
+  const name = textValue(row.name).trim();
+  const createdAt = textValue(row.createdAt);
+  if (!name || !createdAt) return null;
+  return {
+    name,
+    deviceType: typeof row.deviceType === "string" ? row.deviceType.slice(0, 60) : null,
+    backedUp: row.backedUp === true,
+    createdAt,
+    lastUsedAt: typeof row.lastUsedAt === "string" ? row.lastUsedAt : null,
+  };
+}
+function parseEvent(value: unknown): SecurityEvent | null {
+  const row = record(value);
+  if (!row) return null;
+  const type = textValue(row.type).trim();
+  const outcome = textValue(row.outcome).trim();
+  const createdAt = textValue(row.createdAt);
+  return type && outcome && createdAt ? { type, outcome, createdAt } : null;
+}
+function parseSecurityData(value: unknown): SecurityData | null {
+  const body = record(value);
+  const capabilities = record(body?.capabilities);
+  if (!body || !capabilities || !Array.isArray(body.passkeys) || !Array.isArray(body.recentEvents)) return null;
+  const capabilityNames = ["passkeyRegistrationEnabled", "passwordChangeEnabled", "twoStepVerificationEnabled", "sessionRevocationEnabled", "transactionPinEnabled"] as const;
+  if (!capabilityNames.every(key => typeof capabilities[key] === "boolean")) return null;
+  return {
+    passkeys: body.passkeys.map(parsePasskey).filter((item): item is Passkey => item !== null),
+    recentEvents: body.recentEvents.map(parseEvent).filter((item): item is SecurityEvent => item !== null),
+    capabilities: {
+      passkeyRegistrationEnabled: capabilities.passkeyRegistrationEnabled as boolean,
+      passwordChangeEnabled: capabilities.passwordChangeEnabled as boolean,
+      twoStepVerificationEnabled: capabilities.twoStepVerificationEnabled as boolean,
+      sessionRevocationEnabled: capabilities.sessionRevocationEnabled as boolean,
+      transactionPinEnabled: capabilities.transactionPinEnabled as boolean,
+    },
+    message: textValue(body.message, "Security information is read-only."),
+  };
+}
+function apiError(value: unknown): string {
+  const body = record(value);
+  return typeof body?.error === "string" ? body.error.slice(0, 200) : "Unable to load security information.";
+}
 function label(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
@@ -41,15 +92,17 @@ export default function SecurityCenter({ token }: { token: string }) {
       setError("Your secure session is unavailable. Sign in again to view account security.");
       setData(null); setLoading(false); return;
     }
-    if (!API_BASE) { setError("FlowPay API address is not configured."); setLoading(false); return; }
+    if (!API_BASE) { setData(null); setError("FlowPay API address is not configured."); setLoading(false); return; }
     setLoading(true); setError("");
     try {
       const response = await fetch(API_BASE + "/customer/security", {
         method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || "Unable to load security information.");
-      setData(body as SecurityData);
+      const body: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(apiError(body));
+      const parsed = parseSecurityData(body);
+      if (!parsed) throw new Error("The security service returned an invalid response.");
+      setData(parsed);
     } catch (cause) {
       setData(null);
       setError(cause instanceof Error ? cause.message : "Unable to load security information.");
