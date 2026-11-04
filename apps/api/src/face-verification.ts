@@ -107,19 +107,39 @@ function deriveVerificationStatus(resultCode: string, actions: Record<string, un
   const liveness = actionText(actions, "Liveness_Check");
   const selfie = actionText(actions, "Selfie_Check");
   const provided = actionText(actions, "Selfie_Provided");
+  const register = actionText(actions, "Register_Selfie");
   const humanLiveness = actionText(actions, "Human_Review_Liveness_Check");
-  if (["0840", "1240"].includes(resultCode)) {
-    if (liveness === "Passed" && selfie === "Passed" && provided === "Passed") return "verified";
-    if (liveness === "Failed" || selfie === "Failed" || provided === "Failed" || humanLiveness === "Failed") return "rejected";
-    if (humanLiveness === "Under Review" || humanLiveness === "Unable To Determine" || liveness === "Under Review") return "under_review";
-    return "pending";
-  }
-  if (["0844", "0846"].includes(resultCode) || humanLiveness === "Under Review" || humanLiveness === "Unable To Determine") return "under_review";
-  if (["0841", "0941", "0942", "1241", "1242"].includes(resultCode)) return "rejected";
-  if (/^22\d{2}$/.test(resultCode) || resultCode === "0001") return "failed";
+  const humanSelfie = actionText(actions, "Human_Review_Selfie_Check");
+
+  // Any explicit failed check is a failed identity result.
+  if (
+    ["0841", "0941", "0942", "1241", "1242"].includes(resultCode) ||
+    [liveness, selfie, provided, register, humanLiveness, humanSelfie].includes("Failed") ||
+    register === "Rejected"
+  ) return "rejected";
+
+  // A possible spoof or inconclusive human review is never approved.
+  if (
+    ["0844", "0846"].includes(resultCode) ||
+    register === "Provisionally Approved" ||
+    [humanLiveness, humanSelfie, liveness, selfie].some(value =>
+      value === "Under Review" || value === "Unable To Determine"
+    )
+  ) return "under_review";
+
+  // The documented registration result and its registration action must both pass.
+  if (
+    ["0840", "1240"].includes(resultCode) &&
+    register === "Approved" &&
+    liveness === "Passed" &&
+    selfie === "Passed" &&
+    provided === "Passed"
+  ) return "verified";
+
+  // Provider request/processing errors are not identity rejections.
+  if (/^(22|23|24)\d{2}$/.test(resultCode) || resultCode === "0001") return "failed";
   return "pending";
 }
-
 function safeResultText(value: unknown) {
   return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 240) : null;
 }
@@ -204,7 +224,7 @@ export function createFaceVerificationHandler(deps: Dependencies) {
       const status = deriveVerificationStatus(resultCode, actions);
       try {
         const updated = await pool.query(
-          "UPDATE public.fp_face_verification_jobs SET smile_job_id = COALESCE(NULLIF($3, ''), smile_job_id), status = CASE WHEN status = 'verified' THEN 'verified' ELSE $4 END, result_code = NULLIF($5, ''), result_text = $6, liveness_check = $7, selfie_check = $8, selfie_provided = $9, human_review_liveness_check = $10, verified_at = CASE WHEN $4 = 'verified' THEN COALESCE(verified_at, NOW()) ELSE verified_at END, updated_at = NOW() WHERE job_id = $1 AND smile_user_id = $2 RETURNING id",
+          "UPDATE public.fp_face_verification_jobs SET smile_job_id = COALESCE(NULLIF($3, ''), smile_job_id), status = CASE WHEN status IN ('verified', 'rejected', 'failed') THEN status WHEN $4 = 'pending' AND status = 'under_review' THEN 'under_review' ELSE $4 END, result_code = NULLIF($5, ''), result_text = $6, liveness_check = $7, selfie_check = $8, selfie_provided = $9, register_selfie = $10, human_review_liveness_check = $11, human_review_selfie_check = $12, verified_at = CASE WHEN $4 = 'verified' THEN COALESCE(verified_at, NOW()) ELSE verified_at END, updated_at = NOW() WHERE job_id = $1 AND smile_user_id = $2 RETURNING id",
           [
             jobId,
             smileUserId,
@@ -215,7 +235,9 @@ export function createFaceVerificationHandler(deps: Dependencies) {
             actionText(actions, "Liveness_Check"),
             actionText(actions, "Selfie_Check"),
             actionText(actions, "Selfie_Provided"),
-            actionText(actions, "Human_Review_Liveness_Check")
+            actionText(actions, "Register_Selfie"),
+            actionText(actions, "Human_Review_Liveness_Check"),
+            actionText(actions, "Human_Review_Selfie_Check")
           ]
         );
         send(res, 200, { received: true, matched: updated.rowCount === 1 });
@@ -240,7 +262,7 @@ export function createFaceVerificationHandler(deps: Dependencies) {
     try {
       if (req.method === "GET") {
         const result = await pool.query(
-          "SELECT status, result_code, result_text, liveness_check, selfie_check, selfie_provided, human_review_liveness_check, created_at, updated_at, verified_at FROM public.fp_face_verification_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
+          "SELECT status, result_code, result_text, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check, created_at, updated_at, verified_at FROM public.fp_face_verification_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
           [identity.userId]
         );
         const row = result.rows[0];
@@ -258,7 +280,9 @@ export function createFaceVerificationHandler(deps: Dependencies) {
             liveness: row?.liveness_check ?? null,
             selfie: row?.selfie_check ?? null,
             selfieProvided: row?.selfie_provided ?? null,
-            humanReviewLiveness: row?.human_review_liveness_check ?? null
+            registerSelfie: row?.register_selfie ?? null,
+            humanReviewLiveness: row?.human_review_liveness_check ?? null,
+            humanReviewSelfie: row?.human_review_selfie_check ?? null
           },
           createdAt: row?.created_at ?? null,
           updatedAt: row?.updated_at ?? null,
@@ -340,7 +364,7 @@ export function createFaceVerificationHandler(deps: Dependencies) {
         send(res, 202, { accepted: true, status: "pending", message: "Your capture was submitted to Smile ID sandbox. Final status appears after provider checks and callback verification." });
       } catch (error) {
         await pool.query(
-          "UPDATE public.fp_face_verification_jobs SET status = 'failed', result_text = 'Provider submission failed', updated_at = NOW() WHERE job_id = $1",
+          "UPDATE public.fp_face_verification_jobs SET status = 'failed', result_text = 'Provider submission failed', updated_at = NOW() WHERE job_id = $1 AND status NOT IN ('verified', 'rejected')",
           [jobId]
         );
         console.error("FlowPay Smile ID sandbox submission failed:", error instanceof Error ? error.message : "unknown provider error");
