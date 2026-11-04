@@ -3,6 +3,7 @@ import AdminPage from "./AdminPage";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
+import BulkOperations from "./BulkOperations";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -169,7 +170,7 @@ export default function App() {
               <button className="fp-primary" disabled>Continue (not active)</button>
             </section>
           ) : (
-            <RouteContent path={path} go={go}/>
+            {path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go}/>}
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
