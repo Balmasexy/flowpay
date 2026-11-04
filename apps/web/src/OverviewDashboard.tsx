@@ -36,7 +36,7 @@ function dateLabel(value: string) {
 }
 
 function titleCase(value: string) {
-  return value.replace(/[_-]+/g, " ").replace(/\\b\\w/g, letter => letter.toUpperCase());
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
 export default function OverviewDashboard({ token, go, network, onNetworkChange }: {
@@ -51,7 +51,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       setOverview(null); setError("Your secure session is not ready. Refresh after signing in again."); setLoading(false); return;
     }
     setLoading(true); setError("");
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
     if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
     try {
       const response = await fetch(apiBase + "/customer/overview", {
