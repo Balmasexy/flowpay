@@ -13,6 +13,7 @@ import SecurityCenter from "./SecurityCenter";
 import CustomerAccountDetails from "./CustomerAccountDetails";
 import TransfersPage from "./TransfersPage";
 import OverviewDashboard from "./OverviewDashboard";
+import ServicePreview from "./ServicePreview";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -65,8 +66,6 @@ export default function App() {
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const authSession = authClient.useSession();
   const [network, setNetwork] = useState("Airtel");
-  const [phone, setPhone] = useState("");
-  const [amount, setAmount] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   useEffect(() => {
@@ -163,21 +162,7 @@ export default function App() {
               onNetworkChange={setNetwork}
             />
           ) : servicePage ? (
-            <section className="fp-panel fp-form-panel">
-              <div className="fp-form-icon">{path === "/airtime" ? <Phone/> : path === "/data" ? <Wifi/> : path === "/cable-tv" ? <Cable/> : <Zap/>}</div>
-              <h2>{active.label}</h2>
-              <p className="fp-muted">Choose a provider and enter the details. This form is a preview; it will not debit your wallet or submit a bill payment.</p>
-              {path === "/airtime" || path === "/data" ? <>
-                <label>Mobile network</label><div className="fp-network-select">{providers.map(p => <button type="button" key={p} className={network === p ? "selected" : ""} onClick={() => setNetwork(p)}>{p}</button>)}</div>
-                <label htmlFor="phone">Phone number</label><input id="phone" value={phone} onChange={e => setPhone(e.target.value)} inputMode="numeric" placeholder="080 0000 0000" maxLength={11}/>
-              </> : <>
-                <label>Service provider</label><select defaultValue=""><option value="" disabled>Select provider</option>{(path === "/cable-tv" ? ["DStv", "GOtv", "StarTimes"] : ["IKEDC", "EKEDC", "AEDC", "IBEDC", "KEDCO", "PHED", "Jos Electricity", "KAEDCO"]).map(x => <option key={x}>{x}</option>)}</select>
-                <label>Customer / smartcard / meter number</label><input placeholder="Enter your account number"/>
-              </>}
-              <label htmlFor="amount">Amount (NGN)</label><input id="amount" value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" placeholder="₦ 0.00"/>
-              <div className="fp-preview-warning"><ShieldCheck size={17}/> Payments are disabled until authenticated billing, provider verification, ledger posting and webhook reconciliation are live.</div>
-              <button className="fp-primary" disabled>Continue (not active)</button>
-            </section>
+            <ServicePreview path={path}/>
           ) : (
             path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto}/>
           )}
