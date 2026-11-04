@@ -30,6 +30,57 @@ const services = [
 
 const providers = ["MTN", "Airtel", "Glo", "9mobile"];
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function parseOverview(value: unknown): Overview | null {
+  const root = asRecord(value);
+  const body = asRecord(root?.overview);
+  const balance = asRecord(body?.balance);
+  if (!body || !balance || !Array.isArray(body.accounts) || !Array.isArray(body.recentActivity)) return null;
+  if (body.paymentsEnabled !== false || typeof body.generatedAt !== "string") return null;
+  const accounts: AccountSummary[] = [];
+  for (const raw of body.accounts) {
+    const row = asRecord(raw);
+    if (!row || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency) || typeof row.status !== "string" || !Number.isSafeInteger(row.count) || (row.count as number) < 0) return null;
+    accounts.push({ currency: row.currency, status: row.status.slice(0, 30), count: row.count as number });
+  }
+  const recentActivity: ActivityItem[] = [];
+  for (const raw of body.recentActivity) {
+    const row = asRecord(raw);
+    if (!row || typeof row.id !== "string" || !row.id.trim() || typeof row.type !== "string" || typeof row.status !== "string" || !["posted", "reversed"].includes(row.status) || typeof row.createdAt !== "string") return null;
+    recentActivity.push({
+      id: row.id.slice(0, 128), type: row.type.slice(0, 60),
+      description: typeof row.description === "string" ? row.description.slice(0, 160) : "",
+      status: row.status as ActivityItem["status"], createdAt: row.createdAt,
+      postedAt: typeof row.postedAt === "string" ? row.postedAt : null,
+    });
+  }
+  if (balance.available === true) {
+    if (!Array.isArray(balance.balances)) return null;
+    const balances: { currency: string; amountMinor: string }[] = [];
+    for (const raw of balance.balances) {
+      const row = asRecord(raw);
+      if (!row || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency) || (typeof row.amountMinor !== "string" && typeof row.amountMinor !== "number")) return null;
+      const amountMinor = String(row.amountMinor);
+      if (!/^-?\\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
+      balances.push({ currency: row.currency, amountMinor });
+    }
+    return { accounts, recentActivity, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
+  }
+  if (balance.available === false && typeof balance.reason === "string") {
+    return { accounts, recentActivity, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
+  }
+  return null;
+}
+
+function formatBalance(currency: string, amountMinor: string): string {
+  const amount = Number(amountMinor) / 100;
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount); }
+  catch { return currency + " " + amount.toFixed(2); }
+}
+
 function dateLabel(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
@@ -59,7 +110,9 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : data.error || "Unable to load your account overview.");
-      setOverview(data.overview as Overview);
+      const parsed = parseOverview(data);
+      if (!parsed) throw new Error("The account overview service returned an invalid response.");
+      setOverview(parsed);
     } catch (cause) {
       setOverview(null);
       setError(cause instanceof Error ? cause.message : "Unable to load your account overview.");
@@ -75,7 +128,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   return <>
     <section className="fp-balance">
       <div className="fp-balance-top"><span>Available balance</span><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div>
-      {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{new Intl.NumberFormat(undefined, { style: "currency", currency: item.currency }).format(Number(item.amountMinor) / 100)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
+      {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
       <small>{overview?.balance.available && overview.balance.balances.length > 0 ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : !loading && !error && overview?.balance.available ? "No active customer account is available for balance calculation." : "A verified balance will appear when ledger posting and account-side sign conventions can be safely confirmed. No estimated or sample amount is shown."}</small>
       <div className="fp-balance-actions">
         <button onClick={() => go("/transfers")}><ArrowDownLeft size={17}/> Add money</button>
