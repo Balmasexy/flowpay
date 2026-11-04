@@ -3,6 +3,32 @@ import { ArrowUpRight, RefreshCw, ShieldCheck, AlertCircle } from "lucide-react"
 
 type Transfer = { id: string; type: string; status: string; createdAt: string; destinationAccountMasked: string };
 
+function safeText(value: unknown, fallback: string, max = 120): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback;
+}
+
+function parseTransfer(value: unknown, index: number): Transfer | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const id = safeText(row.id, "", 128);
+  const type = safeText(row.type, "", 60);
+  const status = safeText(row.status, "", 40);
+  if (!id || !type || !status) return null;
+  return {
+    id,
+    type,
+    status,
+    createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
+    destinationAccountMasked: safeText(row.destinationAccountMasked, "Unavailable", 80),
+  };
+}
+
+function formatDate(value: string): string {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
+}
+
 export default function MoneySent({ token }: { token: string }) {
   const [items, setItems] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,12 +38,44 @@ export default function MoneySent({ token }: { token: string }) {
 
   useEffect(() => {
     let active = true;
-    if (!token || !apiBase) { setError("Your authenticated transfer history service is not configured."); setLoading(false); return () => { active = false; }; }
-    setLoading(true); setError("");
-    fetch(apiBase + "/customer/money-sent", { method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token } })
-      .then(async response => { const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "Unable to load transfer history."); return data; })
-      .then(data => { if (active) setItems(Array.isArray(data.transfers) ? data.transfers : []); })
-      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Unable to load transfer history."); })
+    if (!token || !apiBase) {
+      setItems([]);
+      setError("Your authenticated transfer history service is not configured.");
+      setLoading(false);
+      return () => { active = false; };
+    }
+    setLoading(true);
+    setError("");
+    fetch(apiBase + "/customer/money-sent", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Authorization: "Bearer " + token },
+    })
+      .then(async response => {
+        const data: unknown = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Unable to load transfer history.";
+          throw new Error(message);
+        }
+        return data;
+      })
+      .then(data => {
+        if (!active) return;
+        const transfers = data && typeof data === "object" && "transfers" in data
+          ? (data as { transfers?: unknown }).transfers
+          : null;
+        setItems(Array.isArray(transfers)
+          ? transfers.map(parseTransfer).filter((item): item is Transfer => item !== null)
+          : []);
+      })
+      .catch(reason => {
+        if (active) {
+          setItems([]);
+          setError(reason instanceof Error ? reason.message : "Unable to load transfer history.");
+        }
+      })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, apiBase, refresh]);
@@ -32,7 +90,7 @@ export default function MoneySent({ token }: { token: string }) {
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
     {!loading && !error && items.length === 0 && <div className="fp-empty"><ArrowUpRight size={24}/><b>No simulated transfers recorded</b><span>Transfer records will appear here after a simulation is created and recorded in the ledger.</span></div>}
     {!loading && !error && items.length > 0 && <div className="fp-feature-list">{items.map(item => <div key={item.id} style={{alignItems:"center",gap:12}}>
-      <ArrowUpRight size={19}/><div style={{minWidth:0,flex:1,display:"grid",gap:4}}><b>{item.type.replaceAll("_"," ")}</b><small>Destination account · {item.destinationAccountMasked}</small><small>{new Date(item.createdAt).toLocaleString()}</small></div><span>{item.status}</span>
+      <ArrowUpRight size={19}/><div style={{minWidth:0,flex:1,display:"grid",gap:4}}><b>{item.type.replace(/_/g," ")}</b><small>Destination account · {item.destinationAccountMasked}</small><small>{formatDate(item.createdAt)}</small></div><span>{item.status}</span>
     </div>)}</div>}
   </section>;
 }
