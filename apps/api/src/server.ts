@@ -75,7 +75,7 @@ const server = createServer(async (req, res) => {
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
       const userId = identity.rows[0].id;
-      const [accounts, recentActivity, balanceRows] = await Promise.all([
+      const [accounts, recentActivity, balanceRows, transactionCounts] = await Promise.all([
         pool.query(
           `SELECT currency, status, COUNT(*)::int AS account_count
              FROM public.fp_accounts
@@ -100,7 +100,15 @@ const server = createServer(async (req, res) => {
                ON t.id = e.transaction_id AND t.status = 'posted'
             WHERE a.user_id = $1 AND a.account_type = 'customer' AND a.status = 'active'
             GROUP BY a.currency
-            ORDER BY a.currency`, [userId])
+            ORDER BY a.currency`, [userId]),
+        pool.query(
+          `SELECT t.status, COUNT(DISTINCT t.id)::int AS transaction_count
+             FROM public.fp_ledger_transactions AS t
+             JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
+             JOIN public.fp_accounts AS a ON a.id = e.account_id
+            WHERE a.user_id = $1 AND a.account_type = 'customer'
+              AND t.status IN ('posted', 'reversed')
+            GROUP BY t.status`, [userId])
       ]);
       // A zero balance is safe to present only when there are no posted ledger
       // entries at all. Non-zero ledgers remain hidden until their sign convention
@@ -114,6 +122,10 @@ const server = createServer(async (req, res) => {
             id: row.id, type: row.transaction_type, description: row.description ?? "",
             status: row.status, createdAt: row.created_at, postedAt: row.posted_at
           })),
+          transactionSummary: {
+            postedCount: Number(transactionCounts.rows.find(row => row.status === "posted")?.transaction_count ?? 0),
+            reversedCount: Number(transactionCounts.rows.find(row => row.status === "reversed")?.transaction_count ?? 0)
+          },
           balance: hasPostedEntries
             ? { available: false, reason: "LEDGER_SIGN_CONVENTION_NOT_CONFIGURED" }
             : { available: true, balances: zeroBalances },

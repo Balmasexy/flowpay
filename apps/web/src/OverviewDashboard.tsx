@@ -12,20 +12,21 @@ type ActivityItem = {
 type Overview = {
   accounts: AccountSummary[];
   recentActivity: ActivityItem[];
+  transactionSummary: { postedCount: number; reversedCount: number } | null;
   balance: { available: true; balances: { currency: string; amountMinor: string }[] } | { available: false; reason: string };
   paymentsEnabled: false;
   generatedAt: string;
 };
 
 const services = [
-  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Top up any Nigerian network" },
-  { label: "Data", path: "/data", icon: Wifi, detail: "Buy data bundles" },
-  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Manage transfer services" },
-  { label: "Cards", path: "/cards", icon: CreditCard, detail: "Manage card services" },
-  { label: "Electricity", path: "/bills", icon: Zap, detail: "Electricity bill services" },
-  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "TV subscription services" },
-  { label: "Savings", path: "/savings", icon: Wallet, detail: "Savings tools and goals" },
-  { label: "History", path: "/activity", icon: Clock3, detail: "Review verified activity" },
+  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Review airtime options (preview only)" },
+  { label: "Data", path: "/data", icon: Wifi, detail: "Review available bundles (preview only)" },
+  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Prepare a transfer preview" },
+  { label: "Cards", path: "/cards", icon: CreditCard, detail: "Review linked card records" },
+  { label: "Electricity", path: "/bills", icon: Zap, detail: "Review bill-payment options (preview only)" },
+  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Review TV subscription options (preview only)" },
+  { label: "Savings", path: "/savings", icon: Wallet, detail: "Review savings tools and goals" },
+  { label: "History", path: "/activity", icon: Clock3, detail: "Review posted and reversed ledger activity" },
 ];
 
 const providers = ["MTN", "Airtel", "Glo", "9mobile"];
@@ -39,6 +40,17 @@ function parseOverview(value: unknown): Overview | null {
   const body = asRecord(root?.overview);
   const balance = asRecord(body?.balance);
   if (!body || !balance || !Array.isArray(body.accounts) || !Array.isArray(body.recentActivity)) return null;
+  let parsedTransactionSummary: { postedCount: number; reversedCount: number } | null = null;
+  if (body.transactionSummary !== undefined) {
+    const transactionSummary = asRecord(body.transactionSummary);
+    if (!transactionSummary ||
+        !Number.isSafeInteger(transactionSummary.postedCount) || (transactionSummary.postedCount as number) < 0 ||
+        !Number.isSafeInteger(transactionSummary.reversedCount) || (transactionSummary.reversedCount as number) < 0) return null;
+    parsedTransactionSummary = {
+      postedCount: transactionSummary.postedCount as number,
+      reversedCount: transactionSummary.reversedCount as number,
+    };
+  }
   if (body.paymentsEnabled !== false || typeof body.generatedAt !== "string") return null;
   const accounts: AccountSummary[] = [];
   for (const raw of body.accounts) {
@@ -67,17 +79,17 @@ function parseOverview(value: unknown): Overview | null {
       if (!/^-?\\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
       balances.push({ currency: row.currency, amountMinor });
     }
-    return { accounts, recentActivity, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
   }
   if (balance.available === false && typeof balance.reason === "string") {
-    return { accounts, recentActivity, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
   }
   return null;
 }
 
 function formatBalance(currency: string, amountMinor: string): string {
   const amount = Number(amountMinor) / 100;
-  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount); }
+  try { return new Intl.NumberFormat("en-NG", { style: "currency", currency }).format(amount); }
   catch { return currency + " " + amount.toFixed(2); }
 }
 
@@ -88,6 +100,10 @@ function dateLabel(value: string) {
 
 function titleCase(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function isVerifiedZeroBalance(balances: { currency: string; amountMinor: string }[]) {
+  return balances.length > 0 && balances.every(item => item.amountMinor === "0");
 }
 
 export default function OverviewDashboard({ token, go, network, onNetworkChange }: {
@@ -124,16 +140,20 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const accountCount = overview?.accounts.reduce((total, account) => total + account.count, 0) ?? 0;
   const activeAccountCount = overview?.accounts.filter(account => account.status === "active").reduce((total, account) => total + account.count, 0) ?? 0;
   const currencies = [...new Set(overview?.accounts.filter(account => account.status === "active").map(account => account.currency) ?? [])];
+  const postedCount = overview?.transactionSummary?.postedCount ?? 0;
+  const reversedCount = overview?.transactionSummary?.reversedCount ?? 0;
+  const transactionCount = postedCount + reversedCount;
 
   return <>
     <section className="fp-balance">
       <div className="fp-balance-top"><span>Available balance</span><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div>
       {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
-      <small>{overview?.balance.available && overview.balance.balances.length > 0 ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : !loading && !error && overview?.balance.available ? "No active customer account is available for balance calculation." : "A verified balance will appear when ledger posting and account-side sign conventions can be safely confirmed. No estimated or sample amount is shown."}</small>
+      <small>{error ? "We could not refresh your verified account data. No estimated or sample amount is displayed." : overview?.balance.available && overview.balance.balances.length > 0 ? isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service." : !loading && overview?.balance.available ? "No active customer account is available for balance calculation." : "Balance is unavailable until the ledger sign convention is confirmed. No estimated or sample amount is shown."}</small>
       <div className="fp-balance-actions">
-        <button onClick={() => go("/transfers")}><ArrowDownLeft size={17}/> Add money</button>
-        <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>
+        <button onClick={() => go("/money-received")}><ArrowDownLeft size={17}/> Money received</button>
+        <button onClick={() => go("/money-sent")}><ArrowUpRight size={17}/> Money sent</button>
       </div>
+      {!loading && !error && overview?.generatedAt && <small className="fp-overview-updated">Last updated {dateLabel(overview.generatedAt)}</small>}
     </section>
 
     <section className="fp-overview-grid" aria-label="Account overview">
@@ -144,6 +164,17 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
           <div className="fp-overview-currencies"><span>Active account currencies</span><b>{currencies.length ? currencies.join(" · ") : "No active account assigned"}</b></div>
         </>}
         <button className="fp-overview-link" onClick={() => go("/account-number")}>Account information <ChevronRight size={15}/></button>
+      </article>
+      <article className="fp-overview-card fp-transaction-summary-card">
+        <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Activity size={19}/></span><span>Ledger activity summary</span></div>
+        {loading ? <p className="fp-overview-muted">Loading posted and reversed transaction totals…</p> : error ? <p className="fp-overview-muted">Transaction totals are temporarily unavailable.</p> : overview?.transactionSummary ? <>
+          <div className="fp-overview-stat-row">
+            <div><strong>{postedCount.toLocaleString("en-NG")}</strong><span>Posted transactions</span></div>
+            <div><strong>{reversedCount.toLocaleString("en-NG")}</strong><span>Reversed transactions</span></div>
+          </div>
+          <div className="fp-overview-currencies"><span>Total recorded ledger transactions</span><b>{transactionCount.toLocaleString("en-NG")}</b></div>
+        </> : <p className="fp-overview-muted">Transaction totals are not available from the current API version. Refresh to try again.</p>}
+        <button className="fp-overview-link" onClick={() => go("/activity")}>Open transaction history <ChevronRight size={15}/></button>
       </article>
       <article className="fp-overview-card fp-account-safety-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ShieldCheck size={19}/></span><span>Account services</span></div>

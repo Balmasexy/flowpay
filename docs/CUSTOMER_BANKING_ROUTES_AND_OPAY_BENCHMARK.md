@@ -36,7 +36,7 @@ FlowPay should consider equivalent customer needs, but implement each only after
 
 ## Current backend API coverage
 
-The current API exposes health/readiness, protected customer profile reads/updates, and a protected customer overview read endpoint. The overview endpoint returns the authenticated customer's own account currency/status summary and the five latest posted or reversed ledger transactions. It deliberately does not calculate or present an available balance because the account-side sign convention and balance presentation contract have not yet been established. Transfers, card issuing, airtime/data vending, bill payments, savings, document storage, security settings, notifications, and support workflows remain unconnected. The web dashboard must not imply that any money movement or provider purchase is operational.
+The current API exposes health/readiness, protected customer profile reads/updates, and a protected customer overview read endpoint. The overview endpoint returns the authenticated customer's own account currency/status summary, authenticated counts of posted and reversed ledger transactions, and the five latest posted or reversed ledger transactions. It presents a zero balance only when there are no posted ledger entries for the customer's active accounts; non-zero balances remain withheld until the account-side sign convention and balance presentation contract are verified. Transfers, card issuing, airtime/data vending, bill payments, savings, document storage, security settings, notifications, and support workflows remain unconnected. The web dashboard must not imply that any money movement or provider purchase is operational.
 
 ## Required backend delivery sequence
 
@@ -56,7 +56,7 @@ The current API exposes health/readiness, protected customer profile reads/updat
 
 - No fake balances, sample transactions presented as real, or invented account details.
 - No customer data or balances are modified by the route/UI work.
-- Payment and provider actions remain disabled until server-side verification, ledger posting, idempotency, webhooks and reconciliation tests pass.
+- Payment and provider actions remain disabled until server-side verification, ledger posting, idempotency, webhooks and reconciliation tests pass. Dashboard Money Received/Money Sent shortcuts open record-history pages only; they do not initiate transactions.
 - Flutterwave remains sandbox-only unless a separate, explicit live-launch approval and compliance gate is completed.
 - Do not store BVN, NIN, card PAN, PIN, passwords, or provider secrets in browser storage or logs.
 - Customer profile and documents must be fetched only after authentication and authorization.

@@ -351,3 +351,12 @@
 .fp-overview-footnote{margin:9px 2px 0;color:#92938d;font-size:9px;line-height:1.5}
 .fp-network.selected{border-color:var(--orange);background:#fff4eb;color:#bd5b0b}
 @media(max-width:760px){.fp-overview-grid{grid-template-columns:1fr;gap:9px}.fp-overview-card{padding:15px}.fp-overview-activity-item{gap:8px;padding:11px 10px}.fp-overview-activity-copy small{font-size:8px}.fp-overview-activity-status{font-size:8px;padding:4px 6px}}
+
+
+/* Overview dashboard completion: three grounded summary cards and refresh timestamp. */
+.fp-overview-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fp-overview-updated{display:block;margin-top:2px;color:#b5b7b0;font-size:9px}
+.fp-account-safety-card .fp-overview-muted{min-height:0}
+.fp-transaction-summary-card .fp-overview-stat-row strong{font-size:23px}
+@media(max-width:900px){.fp-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.fp-overview-grid{grid-template-columns:1fr}}
