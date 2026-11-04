@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
@@ -9,6 +9,16 @@ type AccountDetails = {
 };
 
 export default function CustomerAccountDetails({ token, go }: { token: string; go?: (path: string) => void }) {
+  const [copied, setCopied] = useState("");
+  const copyValue = async (label: string, value: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
+    } catch {
+      setCopied("Clipboard unavailable");
+    }
+  };
   const [data, setData] = useState<AccountDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,10 +49,11 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
     <p className="fp-muted">Your FlowPay wallet ledger account and any verified virtual bank account assignment.</p>
     {loading ? <p className="fp-overview-muted" role="status">Loading your account records…</p> : error ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
       <div className="fp-detail-list">
-        <div><span>Virtual bank account number</span><b>{data?.virtualBankAccount.assigned ? data.virtualBankAccount.accountNumber : "Not yet assigned"}</b></div>
-        <div><span>Bank / provider</span><b>{data?.virtualBankAccount.bankName || "Not yet assigned"}</b></div>
-        <div><span>Account name</span><b>{data?.virtualBankAccount.accountName || "Not yet linked"}</b></div>
+        <div><span>Virtual bank account number</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.assigned ? data.virtualBankAccount.accountNumber : "Not yet assigned"}</b>{data?.virtualBankAccount.assigned && data.virtualBankAccount.accountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("Account number", data.virtualBankAccount.accountNumber)}><Copy size={14}/> Copy</button>}</span></div>
+        <div><span>Bank / provider</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.bankName || "Not yet assigned"}</b>{data?.virtualBankAccount.bankName && <button type="button" className="fp-outline" onClick={() => void copyValue("Bank name", data.virtualBankAccount.bankName)}><Copy size={14}/> Copy</button>}</span></div>
+        <div><span>Account name</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.accountName || "Not yet linked"}</b>{data?.virtualBankAccount.accountName && <button type="button" className="fp-outline" onClick={() => void copyValue("Account name", data.virtualBankAccount.accountName)}><Copy size={14}/> Copy</button>}</span></div>
       </div>
+      {copied && <p className="fp-muted" role="status"><Check size={14}/> {copied === "Clipboard unavailable" ? copied : copied + " copied"}</p>}
       <h3 className="fp-account-section-title"><Wallet size={17}/> FlowPay wallet accounts</h3>
       {data?.walletAccounts.length ? <div className="fp-detail-list">
         {data.walletAccounts.map((account, index) => <div key={account.currency + "-" + index}>
