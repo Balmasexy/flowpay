@@ -4,6 +4,7 @@ import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import BulkOperations from "./BulkOperations";
+import BalanceCard from "./BalanceCard";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -129,15 +130,7 @@ export default function App() {
 
           {path === "/dashboard" ? (
             <>
-              <section className="fp-balance">
-                <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
-                <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>
-                <small>Your authenticated ledger balance is not connected yet. No estimated or sample amount is shown.</small>
-                <div className="fp-balance-actions">
-                  <button onClick={() => go("/transfers")}> <ArrowDownLeft size={17}/> Add money</button>
-                  <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>
-                </div>
-              </section>
+              <BalanceCard go={go} />
               <section className="fp-section">
                 <div className="fp-section-title"><h2>Quick services</h2><span>Everyday banking</span></div>
                 <div className="fp-service-grid">
