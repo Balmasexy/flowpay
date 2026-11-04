@@ -15,6 +15,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.repl
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
 export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null}}) {
+  const authSession=authClient.useSession();
   const [profile,setProfile]=useState<Profile>({fullName:user.name ?? "",email:user.email ?? "",phoneNumber:"",residentialAddress:"",photoUrl:null,updatedAt:null});
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
@@ -30,10 +31,13 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   const cameraVideo=useRef<HTMLVideoElement>(null);
 
   async function request(method:"GET"|"PATCH",body?:object) {
-    const tokenClient=authClient as typeof authClient & {getJWTToken?:()=>Promise<string|null>};
-    // Call through the client object: the SDK method relies on its own client context.
-    const token=await tokenClient.getJWTToken?.();
-    if(!token) throw new Error("The Neon Auth JWT helper is unavailable. Please sign out and sign in again.");
+    if(authSession.isPending) throw new Error("Your sign-in session is still loading. Please wait a moment and try again.");
+    // Neon Auth injects the signed JWT into the React session after sign-in.
+    // Reuse the active session instead of invoking a second token-fetch request.
+    const token=authSession.data?.session?.token;
+    if(typeof token!=="string"||token.split(".").length!==3) {
+      throw new Error("Your secure session token is unavailable or expired. Please sign out and sign in again.");
+    }
     if(!API_BASE) throw new Error("FlowPay API address is missing from the web app configuration.");
     const response=await fetch(API_BASE+"/customer/profile",{method,credentials:"omit",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json().catch(()=>({}));
