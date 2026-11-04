@@ -23,7 +23,7 @@ function parseDeposit(value: unknown, index: number): Deposit | null {
   const rawAmount = row.amountMinor;
   if (
     !(typeof rawAmount === "string" || typeof rawAmount === "number") ||
-    !/^\\d+$/.test(String(rawAmount)) ||
+    !/^\d+$/.test(String(rawAmount)) ||
     !Number.isSafeInteger(Number(rawAmount))
   ) return null;
 
@@ -55,7 +55,7 @@ export default function MoneyReceived({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 
   useEffect(() => {
     let active = true;
