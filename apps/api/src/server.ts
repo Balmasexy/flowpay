@@ -294,6 +294,39 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/customer/account-details") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "ACCOUNT_DETAILS_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const accounts = await pool.query(
+        `SELECT currency, status, created_at
+           FROM public.fp_accounts
+          WHERE user_id = $1 AND account_type = 'customer'
+          ORDER BY currency, created_at`, [identity.rows[0].id]);
+      send(res, 200, {
+        walletAccounts: accounts.rows.map(row => ({
+          currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
+        })),
+        virtualBankAccount: { assigned: false, accountNumber: null, bankName: null, accountName: null },
+        message: "Wallet ledger accounts are not bank account numbers. A virtual bank account will appear only after a verified provider assignment is recorded."
+      });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay customer account details request failed:", error instanceof Error ? error.message : "unknown account details error");
+      send(res, 503, { error: "ACCOUNT_DETAILS_SERVICE_UNAVAILABLE" });
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/customer/security") {
     if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "SECURITY_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
