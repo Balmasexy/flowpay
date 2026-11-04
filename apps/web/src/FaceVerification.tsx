@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import "@smileid/web-components/selfie-capture";
 import { Camera, CheckCircle2, Clock3, RefreshCw, ShieldAlert, ShieldCheck, XCircle } from "lucide-react";
 
 type VerificationStatus = "not_started" | "pending" | "under_review" | "verified" | "rejected" | "failed";
@@ -15,11 +16,11 @@ type StatusResponse = {
 };
 type CapturedPayload = {
   images?: Array<{ image_type_id: number | string; image: string }>;
-  partner_params?: { libraryVersion?: string };
+  meta?: { libraryVersion?: string };
 };
+type ForcedFailurePayload = { reason?: string };
 
 const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
-const CAMERA_SDK_URL = "https://cdn.smileidentity.com/js/v11.0.1/smart-camera-web.js";
 
 export default function FaceVerification({ token }: Props) {
   const [status, setStatus] = useState<StatusResponse>({});
@@ -32,6 +33,7 @@ export default function FaceVerification({ token }: Props) {
   const [error, setError] = useState("");
   const cameraMount = useRef<HTMLDivElement>(null);
   const cameraElement = useRef<HTMLElement | null>(null);
+  const livenessFailure = useRef<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!API_BASE || !token) {
@@ -71,8 +73,24 @@ export default function FaceVerification({ token }: Props) {
     cameraElement.current = null;
   }, []);
 
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const onForcedFailure = (event: Event) => {
+      const detail = (event as CustomEvent<ForcedFailurePayload>).detail;
+      livenessFailure.current = detail?.reason || "ACTIVE_LIVENESS_FAILED";
+    };
+    window.addEventListener("enhanced-smartselfie.force-fail-published", onForcedFailure);
+    return () => window.removeEventListener("enhanced-smartselfie.force-fail-published", onForcedFailure);
+  }, [cameraOpen]);
+
   const handleCapture = useCallback(async (event: Event) => {
     const detail = (event as CustomEvent<CapturedPayload>).detail;
+    if (livenessFailure.current) {
+      setError("The active liveness challenge was not completed successfully. No images were submitted. Please restart verification and follow every face-pose instruction.");
+      setNotice("");
+      stopCamera();
+      return;
+    }
     if (!detail || !Array.isArray(detail.images) || detail.images.length < 2) {
       setError("The camera did not return the required selfie and liveness frames. Please try again.");
       stopCamera();
@@ -89,7 +107,7 @@ export default function FaceVerification({ token }: Props) {
         body: JSON.stringify({
           consentGiven: true,
           images: detail.images,
-          partner_params: { libraryVersion: detail.partner_params?.libraryVersion }
+          partner_params: { libraryVersion: detail.meta?.libraryVersion }
         })
       });
       const data = await response.json() as { message?: string; error?: string };
@@ -122,36 +140,32 @@ export default function FaceVerification({ token }: Props) {
       return;
     }
     setCameraLoading(true);
+    livenessFailure.current = null;
     try {
-      let script = document.querySelector<HTMLScriptElement>("script[data-flowpay-smile-camera]");
-      if (!customElements.get("smart-camera-web") && !script) {
-        script = document.createElement("script");
-        script.src = CAMERA_SDK_URL;
-        script.async = true;
-        script.dataset.flowpaySmileCamera = "true";
-        document.head.appendChild(script);
-      }
-      if (!customElements.get("smart-camera-web")) {
-        await new Promise<void>((resolve, reject) => {
-          const timeout = window.setTimeout(() => reject(new Error("Smile ID camera SDK did not finish loading. Check your internet connection and retry.")), 20000);
-          script?.addEventListener("load", () => { window.clearTimeout(timeout); resolve(); }, { once: true });
-          script?.addEventListener("error", () => { window.clearTimeout(timeout); reject(new Error("Unable to load the Smile ID camera SDK.")); }, { once: true });
-        });
-      }
-      await customElements.whenDefined("smart-camera-web");
+      await customElements.whenDefined("selfie-capture-screens");
       const host = cameraMount.current;
       if (!host) throw new Error("Camera panel is not available.");
       host.replaceChildren();
-      const element = document.createElement("smart-camera-web");
+      const element = document.createElement("selfie-capture-screens");
+      element.setAttribute("use-strict-mode", "true");
+      element.setAttribute("theme-color", "#ff7a18");
       element.style.display = "block";
       element.style.width = "100%";
-      element.addEventListener("imagesComputed", handleCapture, { once: true });
+      element.style.height = "100%";
+      element.addEventListener("selfie-capture-screens.publish", handleCapture, { once: true });
+      const onCameraCancelled = () => {
+        setNotice("Face verification was cancelled. No images were submitted.");
+        setError("");
+        stopCamera();
+      };
+      element.addEventListener("selfie-capture-screens.cancelled", onCameraCancelled, { once: true });
+      element.addEventListener("selfie-capture-screens.close", onCameraCancelled, { once: true });
       cameraElement.current = element;
       host.appendChild(element);
       setCameraOpen(true);
-      setNotice("Allow camera access, keep your face inside the guide, and complete every on-screen liveness prompt.");
+      setNotice("Allow camera access, complete the active liveness head-pose challenge, and confirm your selfie when the review screen appears.");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to start the verification camera.");
+      setError(reason instanceof Error ? reason.message : "Unable to start Smile ID active liveness capture.");
       setCameraOpen(false);
     } finally {
       setCameraLoading(false);
@@ -171,7 +185,7 @@ export default function FaceVerification({ token }: Props) {
     <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
       <div>
         <h2>Face & liveness verification</h2>
-        <p className="fp-muted">Confirm that you are a real person using a live selfie capture—not a profile photo upload.</p>
+        <p className="fp-muted">Confirm that you are a real person using Smile ID’s active liveness head-pose challenge—not a profile photo upload.</p>
       </div>
       <button type="button" className="fp-outline" onClick={() => void refreshStatus()} disabled={loading || submitting}>
         <RefreshCw size={16}/> Refresh status
@@ -217,13 +231,13 @@ export default function FaceVerification({ token }: Props) {
     </div>}
 
     <div style={{ display: "block", marginTop: cameraOpen ? 18 : 0, border: cameraOpen ? "1px solid var(--fp-border, #d8dee8)" : "0", borderRadius: 14, padding: cameraOpen ? 12 : 0 }}>
-      <div ref={cameraMount}/>
+      <div ref={cameraMount} style={{ height: cameraOpen ? "min(76vh, 760px)" : 0, minHeight: cameraOpen ? 620 : 0, width: "100%", overflow: "auto" }}/>
       {cameraOpen && <button type="button" className="fp-outline" onClick={stopCamera} disabled={submitting} style={{ marginTop: 12 }}>Cancel camera</button>}
     </div>
 
     {submitting && <p className="fp-muted" style={{ marginTop: 14 }}>Submitting securely. Do not close this page until the submission finishes.</p>}
     <div className="fp-preview-warning" style={{ marginTop: 18 }}>
-      <ShieldCheck size={17}/> Verification passes only when Smile ID confirms an approved result and the liveness, selfie, and selfie-provided checks pass. Pending or inconclusive checks are never treated as verified. This feature does not change balances, transaction history, or transfer/payment permissions.
+      <ShieldCheck size={17}/> Verification passes only when Smile ID confirms an approved registration and the active liveness, selfie, and selfie-provided checks pass. Pending or inconclusive checks are never treated as verified. This feature does not change balances, transaction history, or transfer/payment permissions.
     </div>
   </section>;
 }
