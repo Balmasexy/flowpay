@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -143,6 +143,41 @@ const server = createServer(async (req, res) => {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay customer overview request failed:", error instanceof Error ? error.message : "unknown overview error");
       send(res, 503, { error: "OVERVIEW_SERVICE_UNAVAILABLE" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/customer/money-sent") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "MONEY_SENT_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const result = await pool.query(
+        `SELECT DISTINCT t.id, t.transaction_type, t.status, t.created_at,
+                d.destination_account
+           FROM public.fp_simulated_transfer_details AS d
+           JOIN public.fp_ledger_transactions AS t ON t.id = d.transaction_id
+           JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
+           JOIN public.fp_accounts AS a ON a.id = e.account_id
+          WHERE a.user_id = $1 AND a.account_type = 'customer'
+          ORDER BY t.created_at DESC LIMIT 100`, [identity.rows[0].id]);
+      send(res, 200, { transfers: result.rows.map(row => ({
+        id: row.id, type: row.transaction_type, status: row.status,
+        createdAt: row.created_at,
+        destinationAccountMasked: "******" + String(row.destination_account).slice(-4)
+      })), simulationOnly: true, liveTransfersEnabled: false });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay money sent request failed:", error instanceof Error ? error.message : "unknown money sent error");
+      send(res, 503, { error: "MONEY_SENT_SERVICE_UNAVAILABLE" });
     }
     return;
   }
