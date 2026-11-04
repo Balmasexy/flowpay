@@ -85,7 +85,7 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
       const seen = new Set<string>();
       const nextRows = parsed.slice(1).map((values, index) => ({
         line: index + 2,
-        values: headers.map((header, column) => expected.includes(header) ? (values[column] ?? "") : ""),
+        values: expected.map(header => values[headers.indexOf(header)] ?? ""),
         errors: validate(mode, headers, values, seen)
       }));
       setRows(nextRows); setFileName(file.name);
