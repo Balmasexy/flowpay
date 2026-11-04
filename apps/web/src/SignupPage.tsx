@@ -63,7 +63,7 @@ export default function SignupPage() {
     event.preventDefault();
     setMessage("");
     setError("");
-    if (!/^\\d{4,10}$/.test(code.trim())) {
+    if (!/^\d{4,10}$/.test(code.trim())) {
       setError("Enter the numeric verification code from your email.");
       return;
     }
