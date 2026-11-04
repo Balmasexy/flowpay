@@ -4,6 +4,7 @@ import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import BulkOperations from "./BulkOperations";
+import CustomerProfile from "./CustomerProfile";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -245,30 +246,7 @@ function RouteContent({path,go,user}:{path:string;go:(path:string)=>void;user:{n
   if (path === "/money-received" || path === "/money-sent") return <section className="fp-panel fp-detail-panel"><h2>{path === "/money-received" ? "Money Received" : "Money Sent"}</h2><p className="fp-muted">Only transactions confirmed by the FlowPay ledger will appear here.</p><div className="fp-empty"><Activity size={24}/><b>No verified transactions available</b><span>No sample or fabricated transaction records are displayed.</span></div>{unavailable}</section>;
   if (path === "/account-number") return <section className="fp-panel fp-detail-panel"><h2>View Account Number</h2><p className="fp-muted">Your assigned FlowPay account number and provider assignment will appear here once the account profile is provisioned.</p><div className="fp-detail-list"><div><span>Account number</span><b>Not yet assigned</b></div><div><span>Bank / provider</span><b>Not yet assigned</b></div><div><span>Account name</span><b>Not yet linked</b></div></div>{unavailable}</section>;
   if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/fixed-savings" || path === "/spend-save" || path === "/invitations" || path === "/more") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
-  if (path === "/profile") {
-    const displayName = user.name?.trim() || "FlowPay customer";
-    const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "F";
-    return <section className="fp-panel fp-detail-panel fp-profile-panel">
-      <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Your signed-in identity and customer details.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
-      <article className="fp-profile-card" aria-label="FlowPay customer profile card">
-        <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span><span className="fp-profile-card-label">CUSTOMER PROFILE</span></div>
-        <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{user.image ? <img src={user.image} alt="" referrerPolicy="no-referrer"/> : <span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{user.email || "Email address not provided"}</span></div></div>
-        <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span><b>Customer profile</b></div>
-      </article>
-      <div className="fp-profile-section-title"><h3>Personal information</h3><span>From your authenticated session</span></div>
-      <div className="fp-detail-list fp-profile-details">
-        <div><span>Full name</span><b>{user.name?.trim() || "Not provided"}</b></div>
-        <div><span>Email address</span><b>{user.email || "Not provided"}</b></div>
-        <div><span>Phone number</span><b>Not yet linked</b></div>
-        <div><span>FlowPay account number</span><b>Not yet assigned</b></div>
-        <div><span>Account tier</span><b>Not yet assigned</b></div>
-        <div><span>Account status</span><b>Signed in</b></div>
-        <div><span>Residential address</span><b>Not yet linked</b></div>
-      </div>
-      <div className="fp-profile-actions"><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button><button className="fp-outline" onClick={()=>go("/security")}><ShieldCheck size={16}/> Security settings</button></div>
-      {unavailable}
-    </section>;
-  }
+  if (path === "/profile") return <CustomerProfile go={go} user={user}/>;
   if (path === "/documents") return <section className="fp-panel fp-detail-panel"><h2>Documents & statements</h2><p className="fp-muted">Your verification and account documents will be available here after secure document storage is connected.</p><div className="fp-doc-list">{["Government ID (NIN / Driver’s Licence / Passport)","BVN verification receipt","Proof of address","Customer account-opening form","Terms and conditions acceptance","Privacy notice acknowledgement","Monthly account statement","Transaction receipt"].map(d=><div key={d}><FileText size={19}/><span>{d}<small>Not uploaded / not generated</small></span><b>Pending</b></div>)}</div>{unavailable}</section>;
   if (path === "/transfers") return <section className="fp-panel fp-detail-panel"><h2>Transfers</h2><p className="fp-muted">Bank and FlowPay wallet transfers.</p><div className="fp-feature-list">{["Transfer to FlowPay","Transfer to other Nigerian banks","Beneficiary management","Transfer limits and fees","Transfer receipt and status"].map(x=><div key={x}><ArrowLeftRight size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
   if (path === "/cards") return <section className="fp-panel fp-detail-panel"><h2>Cards</h2><div className="fp-feature-list">{["Virtual card application","Physical card request and delivery","View card details securely","Freeze / unfreeze card","Change card PIN","Set spending limits"].map(x=><div key={x}><CreditCard size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;

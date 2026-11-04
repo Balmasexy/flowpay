@@ -277,3 +277,12 @@
   .fp-profile-actions { display:grid; grid-template-columns:1fr; }
   .fp-profile-actions .fp-outline { justify-content:center; }
 }
+
+.fp-profile-edit-form { display:grid; gap:9px; }
+.fp-profile-edit-form label { margin-top:5px; color:#c8cbc5; font-size:12px; font-weight:700; }
+.fp-profile-edit-form input,.fp-profile-edit-form textarea { width:100%; min-width:0; padding:12px 13px; border:1px solid #41443f; border-radius:10px; outline:none; background:#191b19; color:#f5f5f2; font:inherit; font-size:13px; }
+.fp-profile-edit-form input:focus,.fp-profile-edit-form textarea:focus { border-color:#ff8b36; box-shadow:0 0 0 3px #ff8b3620; }
+.fp-profile-edit-form input[readonly] { color:#a4a69f; background:#20221f; }
+.fp-profile-edit-form textarea { resize:vertical; min-height:88px; }
+.fp-profile-edit-form .fp-primary { justify-self:start; min-width:160px; margin-top:8px; }
+.fp-profile-success { padding:11px 13px; border:1px solid #276c45; border-radius:9px; background:#14271c; color:#a7e4ba; font-size:12px; }

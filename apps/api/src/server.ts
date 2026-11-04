@@ -34,13 +34,13 @@ const server = createServer(async (req, res) => {
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -74,6 +74,57 @@ const server = createServer(async (req, res) => {
         ? "Sandbox credentials detected. Face verification submission remains disabled until the signed SDK flow and verified callback handler are deployed."
         : "Sandbox setup is incomplete. Configure the Smile ID sandbox environment variables on the API service.",
     });
+    return;
+  }
+
+
+  if ((req.method === "GET" || req.method === "PATCH") && pathname === "/customer/profile") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "PROFILE_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id, auth_user.name, auth_user.email
+           FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const userId = identity.rows[0].id;
+      if (req.method === "GET") {
+        const result = await pool.query(
+          `SELECT phone_number, residential_address, updated_at FROM public.fp_customer_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
+        const profile = result.rows[0] ?? {};
+        send(res, 200, { profile: { fullName: identity.rows[0].name ?? "", email: identity.rows[0].email ?? "",
+          phoneNumber: profile.phone_number ?? "", residentialAddress: profile.residential_address ?? "", updatedAt: profile.updated_at ?? null } });
+        return;
+      }
+      let raw = "";
+      for await (const chunk of req) { raw += chunk; if (raw.length > 12_000) { send(res, 413, { error: "PROFILE_PAYLOAD_TOO_LARGE" }); return; } }
+      let body: unknown;
+      try { body = JSON.parse(raw || "{}"); } catch { send(res, 400, { error: "INVALID_JSON" }); return; }
+      if (!body || typeof body !== "object" || Array.isArray(body)) { send(res, 400, { error: "INVALID_PROFILE_PAYLOAD" }); return; }
+      const input = body as Record<string, unknown>;
+      if (Object.keys(input).some(key => !["phoneNumber", "residentialAddress"].includes(key))) { send(res, 400, { error: "UNSUPPORTED_PROFILE_FIELD" }); return; }
+      const phone = typeof input.phoneNumber === "string" ? input.phoneNumber.trim() : "";
+      const address = typeof input.residentialAddress === "string" ? input.residentialAddress.trim() : "";
+      if (phone.length > 24 || (phone && !/^\+?[0-9][0-9 ()-]{6,22}$/.test(phone))) { send(res, 400, { error: "INVALID_PHONE_NUMBER" }); return; }
+      if (address.length > 500) { send(res, 400, { error: "ADDRESS_TOO_LONG" }); return; }
+      const saved = await pool.query(
+        `INSERT INTO public.fp_customer_profiles (user_id, phone_number, residential_address, updated_at)
+         VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NOW())
+         ON CONFLICT (user_id) DO UPDATE SET phone_number = EXCLUDED.phone_number,
+           residential_address = EXCLUDED.residential_address, updated_at = NOW()
+         RETURNING phone_number, residential_address, updated_at`, [userId, phone, address]);
+      send(res, 200, { saved: true, profile: { fullName: identity.rows[0].name ?? "", email: identity.rows[0].email ?? "",
+        phoneNumber: saved.rows[0].phone_number ?? "", residentialAddress: saved.rows[0].residential_address ?? "", updatedAt: saved.rows[0].updated_at } });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay customer profile request failed:", error instanceof Error ? error.message : "unknown error");
+      send(res, 503, { error: "PROFILE_SERVICE_UNAVAILABLE" });
+    }
     return;
   }
 
