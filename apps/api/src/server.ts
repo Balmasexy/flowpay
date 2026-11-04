@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -143,6 +143,53 @@ const server = createServer(async (req, res) => {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay customer overview request failed:", error instanceof Error ? error.message : "unknown overview error");
       send(res, 503, { error: "OVERVIEW_SERVICE_UNAVAILABLE" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/customer/activity") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "ACTIVITY_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id
+           FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const parsedLimit = Number(new URL(req.url ?? "/", "http://localhost").searchParams.get("limit") ?? "50");
+      const limit = Number.isInteger(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 50;
+      const result = await pool.query(
+        `SELECT t.id, t.transaction_type, t.description, t.status, t.created_at, t.posted_at,
+                e.currency, SUM(e.amount_minor)::text AS customer_ledger_amount_minor,
+                COUNT(e.id)::int AS customer_entry_count
+           FROM public.fp_ledger_transactions AS t
+           JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
+           JOIN public.fp_accounts AS a ON a.id = e.account_id
+          WHERE a.user_id = $1 AND a.account_type = 'customer'
+            AND t.status IN ('posted', 'reversed')
+          GROUP BY t.id, e.currency
+          ORDER BY COALESCE(t.posted_at, t.created_at) DESC, t.id
+          LIMIT $2`, [identity.rows[0].id, limit]);
+      send(res, 200, {
+        transactions: result.rows.map(row => ({
+          id: row.id, type: row.transaction_type, description: row.description ?? "",
+          status: row.status, createdAt: row.created_at, postedAt: row.posted_at,
+          currency: String(row.currency).trim(),
+          customerLedgerAmountMinor: row.customer_ledger_amount_minor,
+          customerEntryCount: row.customer_entry_count
+        })),
+        limit, directionAvailable: false,
+        directionNote: "Incoming/outgoing direction is not inferred until the ledger sign convention is configured."
+      });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay customer activity request failed:", error instanceof Error ? error.message : "unknown activity error");
+      send(res, 503, { error: "ACTIVITY_SERVICE_UNAVAILABLE" });
     }
     return;
   }
