@@ -18,6 +18,7 @@ import SavingsPage from "./SavingsPage";
 import SpendSavePage from "./SpendSavePage";
 import FlowPaySearch from "./FlowPaySearch";
 import HelpSupport from "./HelpSupport";
+import MorePage from "./MorePage";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -231,7 +232,8 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/money-received") return <MoneyReceived token={token}/>;
   if (path === "/money-sent") return <MoneySent token={token}/>;
   if (path === "/account-number") return <CustomerAccountDetails token={token}/>;
-  if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/invitations" || path === "/more") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
+  if (path === "/more") return <MorePage go={go}/>;
+  if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/invitations") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
   if (path === "/profile") return <CustomerProfile go={go} user={user} onPhotoChange={onPhotoChange}/>;
   if (path === "/documents") return <section className="fp-panel fp-detail-panel"><h2>Documents & statements</h2><p className="fp-muted">Your verification and account documents will be available here after secure document storage is connected.</p><div className="fp-doc-list">{["Government ID (NIN / Driver’s Licence / Passport)","BVN verification receipt","Proof of address","Customer account-opening form","Terms and conditions acceptance","Privacy notice acknowledgement","Monthly account statement","Transaction receipt"].map(d=><div key={d}><FileText size={19}/><span>{d}<small>Not uploaded / not generated</small></span><b>Pending</b></div>)}</div>{unavailable}</section>;
   if (path === "/transfers") return <TransfersPage token={token}/>;
