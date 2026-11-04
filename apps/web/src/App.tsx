@@ -111,14 +111,11 @@ export default function App() {
             {sidebarCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}
             <span>{sidebarCollapsed ? "Expand" : "Collapse"}</span>
           </button>
-          <div className="fp-sidebar-section"><span>YOUR FINANCES</span>
-            {routes.filter(r => r.group === "main").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
-          </div>
-          <div className="fp-sidebar-section"><span>PAYMENTS & SERVICES</span>
-            {routes.filter(r => r.group === "services").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
-          </div>
-          <div className="fp-sidebar-section"><span>ACCOUNT</span>
-            {routes.filter(r => r.group === "account").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+          <div className="fp-sidebar-scroll">
+            {(["main","services","account"] as const).map(group => <div className="fp-sidebar-section" key={group}>
+              <span>{group === "main" ? "YOUR FINANCES" : group === "services" ? "PAYMENTS & SERVICES" : "ACCOUNT"}</span>
+              {routes.filter(r => r.group === group).map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} aria-current={active.path === target ? "page" : undefined} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+            </div>)}
           </div>
           <div className="fp-sidebar-foot"><ShieldCheck size={17}/><span>Secure customer access</span></div>
         </aside>
