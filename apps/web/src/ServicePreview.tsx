@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, Cable, CheckCircle2, Phone, ShieldCheck, Wifi, Zap } from "lucide-react";
 
-type ServicePath = "/airtime" | "/data" | "/bills" | "/cable-tv" | "/tv";
 const networks = ["MTN", "Airtel", "Glo", "9mobile"];
 const electricityProviders = ["IKEDC", "EKEDC", "AEDC", "IBEDC", "KEDCO", "PHED", "Jos Electricity", "KAEDCO"];
 const tvProviders = ["DStv", "GOtv", "StarTimes"];
@@ -30,10 +29,13 @@ export default function ServicePreview({ path }: { path: string }) {
     ? phoneValid && amountValid && (!isData || plan.trim().length > 0)
     : Boolean(provider) && referenceValid && amountValid;
 
-  const detail = useMemo(() => {
-    if (isAirtime || isData) return { provider: network, recipient: phone.trim(), service: isAirtime ? "Airtime top-up" : "Data bundle", plan: plan.trim() };
-    return { provider, recipient: customerRef.trim(), service: isCable ? "TV subscription" : "Electricity bill", meterType: isCable ? undefined : meterType };
-  }, [isAirtime, isData, isCable, network, phone, plan, provider, customerRef, meterType]);
+  const detail = useMemo(() => ({
+    provider: isAirtime || isData ? network : provider,
+    recipient: isAirtime || isData ? phone.trim() : customerRef.trim(),
+    service: isAirtime ? "Airtime top-up" : isData ? "Data bundle" : isCable ? "TV subscription" : "Electricity bill",
+    plan: isData ? plan.trim() : "",
+    meterType: !isAirtime && !isData && !isCable ? meterType : ""
+  }), [isAirtime, isData, isCable, network, phone, plan, provider, customerRef, meterType]);
 
   function preview() {
     setError("");
