@@ -6,14 +6,18 @@ on:
       - security/fix-nonmajor-web-dependencies
     paths:
       - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - ".github/workflows/security-lock-refresh.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   refresh-lockfile:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - name: Checkout security branch
         uses: actions/checkout@v4
@@ -39,3 +43,50 @@ jobs:
           git add apps/web/package-lock.json
           git commit -m "chore(security): refresh web dependency lockfile"
           git push origin HEAD:security/fix-nonmajor-web-dependencies
+
+  verify-security-updates:
+    needs: refresh-lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout updated security branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/fix-nonmajor-web-dependencies
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+      - name: Install API dependencies
+        run: npm ci --prefix apps/api
+      - name: Type-check API
+        run: npm run typecheck --prefix apps/api
+      - name: Install web dependencies
+        run: npm ci --prefix apps/web
+      - name: Audit web dependencies and verify targeted fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/flowpay-web-audit.json"
+          npm audit --prefix apps/web --json > "$report" || true
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const audit = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-web-audit.json", "utf8"));
+            const counts = audit.metadata?.vulnerabilities ?? {};
+            const vulns = audit.vulnerabilities ?? {};
+            console.log("Web dependency audit:", JSON.stringify(counts));
+            for (const name of ["zod", "@react-email/render", "@react-email/components", "html-to-text", "deepmerge"]) {
+              if (vulns[name]) throw new Error("Targeted dependency remains vulnerable: " + name);
+            }
+          '
+      - name: Build web app
+        run: npm run build --prefix apps/web
+        env:
+          VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
