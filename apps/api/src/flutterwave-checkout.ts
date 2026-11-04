@@ -288,6 +288,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
       return true;
     }
 
+    const amountAsNaira = `${BigInt(amountMinor) / 100n}.${(BigInt(amountMinor) % 100n).toString().padStart(2, "0")}`;
     let providerResponse: Response;
     let providerBody: unknown;
     try {
@@ -300,7 +301,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
         },
         body: JSON.stringify({
           tx_ref: providerReference,
-          amount: (amountMinor / 100).toFixed(2),
+          amount: amountAsNaira,
           currency: "NGN",
           redirect_url: redirectUrl,
           customer: { email, name: fullName },
@@ -331,6 +332,14 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
         && url.pathname.startsWith("/v3/hosted/pay/");
     } catch {
       safeCheckoutUrl = false;
+    }
+
+    if (providerResponse.status >= 500) {
+      // A provider-side server error can still follow session creation. Keep
+      // the pending row for reconciliation instead of labelling it failed.
+      console.error("FlowPay Flutterwave checkout outcome is uncertain:", providerResponse.status);
+      send(res, 502, { error: "FLUTTERWAVE_CHECKOUT_OUTCOME_UNCONFIRMED", transactionId, status: "pending" });
+      return true;
     }
 
     if (!providerResponse.ok || body.status !== "success" || !safeCheckoutUrl) {
