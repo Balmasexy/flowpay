@@ -150,42 +150,52 @@
 }
 
 
-/* Sidebar interaction hardening: keep the fold control reachable and scroll nav independently. */
+/* Dedicated desktop sidebar scroll region; collapse control and footer stay reachable. */
 @media (min-width: 761px) {
   .fp-sidebar {
     display: flex;
     flex-direction: column;
+    height: calc(100vh - 106px);
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    gap: 10px;
+  }
+  .fp-sidebar-toggle {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 40px;
+    min-height: 40px;
+    margin: 0;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .fp-sidebar-scroll {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
     overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
     scrollbar-width: thin;
     scrollbar-color: #62645d #191a19;
     -webkit-overflow-scrolling: touch;
   }
-  .fp-sidebar-toggle {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    flex: 0 0 auto;
-    min-height: 38px;
-    cursor: pointer;
-    pointer-events: auto;
-    background: #242522;
-  }
-  .fp-sidebar-section {
+  .fp-sidebar-scroll > .fp-sidebar-section {
     flex: 0 0 auto;
     min-height: max-content;
   }
-  .fp-sidebar-section > button {
+  .fp-sidebar-scroll .fp-sidebar-section > button {
     flex: 0 0 auto;
-    min-height: 38px;
-    cursor: pointer;
-    pointer-events: auto;
+    min-height: 40px;
   }
   .fp-sidebar-foot {
     flex: 0 0 auto;
+    margin-top: 0;
   }
   .fp-sidebar-collapsed .fp-sidebar {
-    overflow-y: auto;
+    overflow: hidden;
   }
 }
