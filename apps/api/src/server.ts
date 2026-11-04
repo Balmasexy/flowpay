@@ -161,13 +161,13 @@ const server = createServer(async (req, res) => {
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
       const result = await pool.query(
-        `SELECT d.transaction_id, d.provider, d.provider_tx_ref, d.amount_minor::text AS amount_minor,
+        `SELECT d.transaction_id, d.provider_tx_ref, d.amount_minor::text AS amount_minor,
                 d.currency, d.status, d.created_at, d.verified_at
            FROM public.fp_flutterwave_deposits AS d
           WHERE d.user_id = $1 AND d.status = 'posted'
           ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [identity.rows[0].id]);
       send(res, 200, { deposits: result.rows.map(row => ({
-        id: row.transaction_id, provider: row.provider, reference: row.provider_tx_ref,
+        id: row.transaction_id, provider: "Flutterwave", reference: row.provider_tx_ref,
         amountMinor: row.amount_minor, currency: String(row.currency).trim(),
         status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
       })), environment: "test", livePaymentsEnabled: false });
