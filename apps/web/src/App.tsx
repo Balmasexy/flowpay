@@ -90,13 +90,13 @@ export default function App() {
       <div className="fp-layout">
         <main className="fp-main">
           <div className="fp-page-heading">
-            <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/" ? "Good day" : active.label}</h1>
-              <p>{path === "/" ? "Your money, services and account—all in one place." : pageDescription(path)}</p>
+            <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : active.label}</h1>
+              <p>{path === "/dashboard" ? "Your money, services and account—all in one place." : pageDescription(path)}</p>
             </div>
-            {path === "/" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
+            {path === "/dashboard" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
           </div>
 
-          {path === "/" ? (
+          {path === "/dashboard" ? (
             <>
               <section className="fp-balance">
                 <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
