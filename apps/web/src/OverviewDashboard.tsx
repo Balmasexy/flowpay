@@ -12,7 +12,7 @@ type ActivityItem = {
 type Overview = {
   accounts: AccountSummary[];
   recentActivity: ActivityItem[];
-  balance: { available: false; reason: string };
+  balance: { available: true; balances: { currency: string; amountMinor: string }[] } | { available: false; reason: string };
   paymentsEnabled: false;
   generatedAt: string;
 };
@@ -75,8 +75,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   return <>
     <section className="fp-balance">
       <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
-      <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>
-      <small>Live ledger balance display is not yet enabled. FlowPay will not show an estimated or sample amount.</small>
+      {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.length ? overview.balance.balances.map(item => <strong key={item.currency}>{new Intl.NumberFormat(undefined, { style: "currency", currency: item.currency }).format(Number(item.amountMinor) / 100)}</strong>) : <strong>—</strong>}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
+      <small>{overview?.balance.available ? "Confirmed zero balance: no posted ledger entries are recorded for your active customer accounts." : "A verified balance will appear when the ledger posting and account-side sign convention can be safely confirmed. No estimated or sample amount is shown."}</small>
       <div className="fp-balance-actions">
         <button onClick={() => go("/transfers")}><ArrowDownLeft size={17}/> Add money</button>
         <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>

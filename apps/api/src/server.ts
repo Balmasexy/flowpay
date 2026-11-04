@@ -93,7 +93,7 @@ const server = createServer(async (req, res) => {
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
       const userId = identity.rows[0].id;
-      const [accounts, recentActivity] = await Promise.all([
+      const [accounts, recentActivity, balanceRows] = await Promise.all([
         pool.query(
           `SELECT currency, status, COUNT(*)::int AS account_count
              FROM public.fp_accounts
@@ -109,8 +109,22 @@ const server = createServer(async (req, res) => {
               AND t.status IN ('posted', 'reversed')
             GROUP BY t.id
             ORDER BY COALESCE(t.posted_at, t.created_at) DESC
-            LIMIT 5`, [userId])
+            LIMIT 5`, [userId]),
+        pool.query(
+          `SELECT a.currency, COUNT(t.id)::int AS posted_entry_count
+             FROM public.fp_accounts AS a
+             LEFT JOIN public.fp_ledger_entries AS e ON e.account_id = a.id
+             LEFT JOIN public.fp_ledger_transactions AS t
+               ON t.id = e.transaction_id AND t.status = 'posted'
+            WHERE a.user_id = $1 AND a.account_type = 'customer' AND a.status = 'active'
+            GROUP BY a.currency
+            ORDER BY a.currency`, [userId])
       ]);
+      // A zero balance is safe to present only when there are no posted ledger
+      // entries at all. Non-zero ledgers remain hidden until their sign convention
+      // is explicitly defined and verified.
+      const hasPostedEntries = balanceRows.rows.some(row => Number(row.posted_entry_count) > 0);
+      const zeroBalances = balanceRows.rows.map(row => ({ currency: row.currency, amountMinor: "0" }));
       send(res, 200, {
         overview: {
           accounts: accounts.rows.map(row => ({ currency: row.currency, status: row.status, count: row.account_count })),
@@ -118,7 +132,9 @@ const server = createServer(async (req, res) => {
             id: row.id, type: row.transaction_type, description: row.description ?? "",
             status: row.status, createdAt: row.created_at, postedAt: row.posted_at
           })),
-          balance: { available: false, reason: "LEDGER_BALANCE_PRESENTATION_NOT_CONFIGURED" },
+          balance: hasPostedEntries
+            ? { available: false, reason: "LEDGER_SIGN_CONVENTION_NOT_CONFIGURED" }
+            : { available: true, balances: zeroBalances },
           paymentsEnabled: false,
           generatedAt: new Date().toISOString()
         }
