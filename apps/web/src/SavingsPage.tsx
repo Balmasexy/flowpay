@@ -15,7 +15,7 @@ export default function SavingsPage({ mode }: Props) {
 
   const isValidAmount = (value: string) => {
     const trimmed = value.trim();
-    if (!/^(?:\\d+)(?:\\.\\d{1,2})?$/.test(trimmed)) return false;
+    if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(trimmed)) return false;
     const amount = Number(trimmed);
     return Number.isFinite(amount) && amount > 0 && amount <= Number.MAX_SAFE_INTEGER;
   };
