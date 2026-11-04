@@ -11,7 +11,7 @@ export default function BettingPreview() {
   const amountValue = Number(amount);
   const valid = operator.trim().length >= 2 &&
     /^[A-Za-z0-9@._-]{3,50}$/.test(accountId.trim()) &&
-    amount.trim() !== "" && Number.isFinite(amountValue) && amountValue > 0;
+    /^\\d+(?:\\.\\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0;
 
   const summary = useMemo(() => ({
     operator: operator.trim(),
