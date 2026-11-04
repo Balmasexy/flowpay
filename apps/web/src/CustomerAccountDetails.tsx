@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { Building2, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
@@ -9,18 +9,6 @@ type AccountDetails = {
 };
 
 export default function CustomerAccountDetails({ token, go }: { token: string; go?: (path: string) => void }) {
-  const [copied, setCopied] = useState("");
-
-  const copyValue = async (label: string, value: string | null | undefined) => {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(label);
-      window.setTimeout(() => setCopied(current => current === label ? "" : current), 2200);
-    } catch {
-      setCopied("Copy unavailable — select the value manually");
-    }
-  };
   const [data, setData] = useState<AccountDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
