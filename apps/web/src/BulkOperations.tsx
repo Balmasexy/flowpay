@@ -8,20 +8,30 @@ const LIMIT_ROWS = 5000;
 
 function parseCsv(input: string): string[][] {
   const rows: string[][] = [];
-  let row: string[] = [], cell = "", quoted = false;
+  let row: string[] = [], cell = "", quoted = false, closedQuote = false;
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (input[i + 1] === '"') { cell += '"'; i++; }
+        else { quoted = false; closedQuote = true; }
+      } else cell += ch;
+      continue;
+    }
     if (ch === '"') {
-      if (quoted && input[i + 1] === '"') { cell += '"'; i++; }
-      else quoted = !quoted;
-    } else if (ch === "," && !quoted) {
-      row.push(cell.trim()); cell = "";
-    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (cell.length || closedQuote) throw new Error("CSV contains a quote in an invalid position.");
+      quoted = true;
+    } else if (ch === "," ) {
+      row.push(cell.trim()); cell = ""; closedQuote = false;
+    } else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && input[i + 1] === "\n") i++;
-      row.push(cell.trim()); cell = "";
+      row.push(cell.trim()); cell = ""; closedQuote = false;
       if (row.some(value => value.length)) rows.push(row);
       row = [];
-    } else cell += ch;
+    } else {
+      if (closedQuote && ch.trim()) throw new Error("CSV contains characters after a closing quote.");
+      cell += ch;
+    }
   }
   if (quoted) throw new Error("CSV contains an unclosed quoted field.");
   row.push(cell.trim());
@@ -34,11 +44,11 @@ function validate(mode: Mode, headers: string[], values: string[], seen: Set<str
   const get = (name: string) => values[headers.indexOf(name)]?.trim() ?? "";
   if (mode === "payments") {
     const name = get("recipient_name"), account = get("account_number"), bank = get("bank_code");
-    const amount = Number(get("amount")), reference = get("reference");
+    const amountText = get("amount"), amount = Number(amountText), reference = get("reference");
     if (!name) errors.push("Recipient name is required");
     if (!/^\d{10}$/.test(account)) errors.push("Account number must be 10 digits");
     if (!/^\d{3}$/.test(bank)) errors.push("Bank code must be 3 digits");
-    if (!get("amount") || !Number.isFinite(amount) || amount <= 0 || amount > 100000000) errors.push("Amount must be between ₦0.01 and ₦100,000,000");
+    if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,2})?$/.test(amountText) || !Number.isFinite(amount) || amount <= 0 || amount > 100000000) errors.push("Amount must be between ₦0.01 and ₦100,000,000 with no more than 2 decimal places");
     if (!/^[A-Za-z0-9_-]{4,40}$/.test(reference)) errors.push("Reference must be 4–40 letters, numbers, _ or -");
     const key = reference.toLowerCase();
     if (key && seen.has(key)) errors.push("Duplicate payment reference");
@@ -67,7 +77,11 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
   const expected = mode === "payments" ? paymentHeaders : verificationHeaders;
   const validCount = rows.filter(row => row.errors.length === 0).length;
   const invalidCount = rows.length - validCount;
-  const total = useMemo(() => mode === "payments" ? rows.reduce((sum, row) => row.errors.length ? sum : sum + Number(row.values[3] || 0), 0) : 0, [mode, rows]);
+  const totalMinor = useMemo(() => mode === "payments" ? rows.reduce((sum, row) => {
+    if (row.errors.length) return sum;
+    const [whole, fraction = ""] = row.values[3].split(".");
+    return sum + Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  }, 0) : 0, [mode, rows]);
 
   async function loadFile(file?: File) {
     setError(""); setNotice(""); setReviewed(false); setRows([]); setFileName("");
@@ -78,16 +92,16 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
       const parsed = parseCsv(await file.text());
       if (parsed.length < 2) throw new Error("The CSV must contain a header and at least one data row.");
       if (parsed.length - 1 > LIMIT_ROWS) throw new Error(`Maximum ${LIMIT_ROWS.toLocaleString()} rows per batch.`);
-      const headers = parsed[0].map(value => value.trim().toLowerCase());
+      const headers = parsed[0].map((value, index) => (index === 0 ? value.replace(/^\\uFEFF/, "") : value).trim().toLowerCase());
       if (new Set(headers).size !== headers.length) throw new Error("The CSV contains duplicate column headings.");
       const missing = expected.filter(header => !headers.includes(header));
       if (missing.length) throw new Error(`Missing required columns: ${missing.join(", ")}`);
       const seen = new Set<string>();
-      const nextRows = parsed.slice(1).map((values, index) => ({
-        line: index + 2,
-        values: expected.map(header => values[headers.indexOf(header)] ?? ""),
-        errors: validate(mode, headers, values, seen)
-      }));
+      const nextRows = parsed.slice(1).map((values, index) => {
+        const errors = values.length !== headers.length ? [`Expected ${headers.length} columns but found ${values.length}`] : [];
+        errors.push(...validate(mode, headers, values, seen));
+        return { line: index + 2, values: expected.map(header => values[headers.indexOf(header)] ?? ""), errors };
+      });
       setRows(nextRows); setFileName(file.name);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to read this CSV file.");
@@ -129,7 +143,7 @@ export default function BulkOperations({ mode }: { mode: Mode }) {
         <div><small>Records</small><b>{rows.length.toLocaleString()}</b></div>
         <div><small>Valid rows</small><b className="is-valid">{validCount.toLocaleString()}</b></div>
         <div><small>Rows with errors</small><b className={invalidCount ? "is-invalid" : ""}>{invalidCount.toLocaleString()}</b></div>
-        {mode === "payments" && <div><small>Valid total</small><b>₦{total.toLocaleString("en-NG",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>}
+        {mode === "payments" && <div><small>Valid total</small><b>₦{(totalMinor / 100).toLocaleString("en-NG",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></div>}
       </div>
       <div className="fp-bulk-review-head"><div><b>3. Review records</b><small>Showing up to 100 rows. Correct errors in your CSV and re-upload.</small></div><button type="button" className="fp-outline" onClick={reset}><RefreshCw size={15}/> Clear batch</button></div>
       <div className="fp-bulk-table-wrap"><table className="fp-bulk-table"><thead><tr><th>CSV row</th>{expected.map(h=><th key={h}>{h.replaceAll("_"," ")}</th>)}<th>Validation</th></tr></thead>
