@@ -38,6 +38,16 @@ Review apps/api/migrations/011_face_verification.sql before applying it to the F
 
 Raw selfie/liveness frames are transmitted to Smile ID and are not persisted in FlowPay database tables or application logs. The database stores only result metadata and the consent timestamp.
 
+## Android APK camera permission
+
+The native Capacitor Android project is not tracked in this repository, so check the local Android manifest before rebuilding the APK. In the existing `android/app/src/main/AndroidManifest.xml`, add this inside the `<manifest>` element and before `<application>` if it is not already present:
+
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+```
+
+The standard Capacitor Android WebChromeClient handles WebView video-capture permission requests and asks Android for CAMERA permission. Keep that standard permission bridge; do not replace it with a custom WebChromeClient that grants requests without the Android runtime permission. Test the Android permission prompt and capture on the actual installed APK. This video-only flow does not request microphone access.
+
 ## Remaining rollout gates
 
 - Confirm SmartSelfie Registration is enabled on the Smile ID sandbox partner account.
