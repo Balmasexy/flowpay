@@ -12,16 +12,40 @@ type Card = {
   createdAt: string;
 };
 
+const CARD_STATUSES = new Set<Card["status"]>(["pending", "active", "frozen", "blocked", "closed", "failed"]);
+
+function parseCards(value: unknown): Card[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): Card[] => {
+    if (!item || typeof item !== "object") return [];
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.id !== "string" || !raw.id.trim()) return [];
+    const month = typeof raw.expiryMonth === "number" && Number.isInteger(raw.expiryMonth) && raw.expiryMonth >= 1 && raw.expiryMonth <= 12 ? raw.expiryMonth : null;
+    const year = typeof raw.expiryYear === "number" && Number.isInteger(raw.expiryYear) && raw.expiryYear >= 2000 && raw.expiryYear <= 2200 ? raw.expiryYear : null;
+    return [{
+      id: raw.id,
+      provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider : "Card provider",
+      type: raw.type === "physical" ? "physical" : "virtual",
+      status: typeof raw.status === "string" && CARD_STATUSES.has(raw.status as Card["status"]) ? raw.status as Card["status"] : "pending",
+      last4: typeof raw.last4 === "string" && /^\\d{4}$/.test(raw.last4) ? raw.last4 : null,
+      expiryMonth: month,
+      expiryYear: year,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : ""
+    }];
+  });
+}
+
 export default function CustomerCards({ token }: { token: string }) {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
 
   useEffect(() => {
     let active = true;
     if (!token || !apiBase) {
+      setCards([]);
       setError("Your authenticated cards service is not configured.");
       setLoading(false);
       return () => { active = false; };
@@ -32,12 +56,23 @@ export default function CustomerCards({ token }: { token: string }) {
       method: "GET", credentials: "omit",
       headers: { Authorization: "Bearer " + token }
     }).then(async response => {
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to load cards.");
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Unable to load cards.";
+        throw new Error(message);
+      }
       return data;
-    }).then(data => { if (active) setCards(Array.isArray(data.cards) ? data.cards : []); })
-      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Unable to load cards."); })
-      .finally(() => { if (active) setLoading(false); });
+    }).then(data => {
+      if (active) {
+        const payload = data && typeof data === "object" && "cards" in data ? data.cards : [];
+        setCards(parseCards(payload));
+      }
+    }).catch(reason => {
+      if (active) {
+        setCards([]);
+        setError(reason instanceof Error ? reason.message : "Unable to load cards.");
+      }
+    }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, apiBase, refresh]);
 
@@ -55,7 +90,7 @@ export default function CustomerCards({ token }: { token: string }) {
         <CreditCard size={20}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{card.type === "virtual" ? "Virtual card" : "Physical card"}{card.last4 ? " •••• " + card.last4 : ""}</b>
-          <small>{card.provider.replaceAll("_"," ")}{card.expiryMonth && card.expiryYear ? " · Expires " + String(card.expiryMonth).padStart(2,"0") + "/" + card.expiryYear : ""}</small>
+          <small>{card.provider.replace(/_/g," ")}{card.expiryMonth && card.expiryYear ? " · Expires " + String(card.expiryMonth).padStart(2,"0") + "/" + card.expiryYear : ""}</small>
         </div>
         <span>{card.status}</span>
       </div>)}
