@@ -103,6 +103,35 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix apps/web
 
+      - name: Capture web dependency audit report
+        id: web-audit
+        shell: bash
+        run: |
+          set -uo pipefail
+          report="$RUNNER_TEMP/flowpay-web-npm-audit.json"
+          npm audit --prefix apps/web --json > "$report" || true
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const report = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-web-npm-audit.json", "utf8"));
+            const vulnerabilities = Object.entries(report.vulnerabilities ?? {}).map(([name, item]) => ({
+              name,
+              severity: item.severity,
+              direct: item.isDirect,
+              range: item.range,
+              fixAvailable: item.fixAvailable
+            }));
+            console.log(JSON.stringify({ metadata: report.metadata?.vulnerabilities ?? null, vulnerabilities }, null, 2));
+          '
+
+      - name: Upload web dependency audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpay-web-npm-audit
+          path: ${{ runner.temp }}/flowpay-web-npm-audit.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Build web app
         run: npm run build --prefix apps/web
         env:
