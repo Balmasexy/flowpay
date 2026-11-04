@@ -23,6 +23,7 @@ export default function HelpSupport({ go }: Props) {
   const [reference, setReference] = useState("");
   const [details, setDetails] = useState("");
   const [showDraft, setShowDraft] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? topics.filter(t => (t.title + " " + t.category + " " + t.keywords + " " + t.detail).toLowerCase().includes(q)) : topics;
@@ -49,15 +50,25 @@ export default function HelpSupport({ go }: Props) {
     <section className="fp-panel fp-detail-panel">
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}><MessageSquareText size={20}/><div><h2 style={{ margin: 0 }}>Prepare a support request</h2><p className="fp-muted" style={{ margin: "5px 0 0" }}>Create a copyable draft with the details support may need.</p></div></div>
       <div className="fp-preview-warning" style={{ marginTop: 15 }}><ShieldAlert size={17}/> Support submission is not connected yet. This form does not send or save a request and does not create a ticket.</div>
-      <label style={{ display: "grid", gap: 7, marginTop: 16 }}>Issue type<select value={category} onChange={e => setCategory(e.target.value)} style={field}><option>Transaction issue</option><option>Account access</option><option>Profile or photo</option><option>Card issue</option><option>Airtime, data or bill</option><option>Security concern</option><option>Other</option></select></label>
-      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Transaction or reference ID (optional)<input value={reference} onChange={e => setReference(e.target.value)} maxLength={100} placeholder="Enter a reference only if relevant" style={field}/></label>
-      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Describe the issue<textarea value={details} onChange={e => { setDetails(e.target.value); setShowDraft(false); }} maxLength={2000} rows={5} placeholder="Tell us what happened, when it happened, and what you expected..." style={{ ...field, resize: "vertical" }}/></label>
+      <label style={{ display: "grid", gap: 7, marginTop: 16 }}>Issue type<select value={category} onChange={e => { setCategory(e.target.value); setShowDraft(false); setCopyStatus(""); }} style={field}><option>Transaction issue</option><option>Account access</option><option>Profile or photo</option><option>Card issue</option><option>Airtime, data or bill</option><option>Security concern</option><option>Other</option></select></label>
+      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Transaction or reference ID (optional)<input value={reference} onChange={e => { setReference(e.target.value); setShowDraft(false); setCopyStatus(""); }} maxLength={100} placeholder="Enter a reference only if relevant" style={field}/></label>
+      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Describe the issue<textarea value={details} onChange={e => { setDetails(e.target.value); setShowDraft(false); setCopyStatus(""); }} maxLength={2000} rows={5} placeholder="Tell us what happened, when it happened, and what you expected..." style={{ ...field, resize: "vertical" }}/></label>
       <p className="fp-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>Never include your password, PIN, OTP, recovery code, full card number, CVV, BVN or NIN.</p>
-      <button type="button" className="fp-primary" disabled={!details.trim()} onClick={() => setShowDraft(true)} style={{ opacity: details.trim() ? 1 : .55 }}>Prepare draft</button>
+      <button type="button" className="fp-primary" disabled={!details.trim()} onClick={() => { setShowDraft(true); setCopyStatus(""); }} style={{ opacity: details.trim() ? 1 : .55 }}>Prepare draft</button>
       {showDraft && <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid var(--fp-border, #d8dee8)" }}>
         <b>Support request draft — not submitted</b>
         <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit", lineHeight: 1.55, margin: "10px 0" }}>{`Issue type: ${category}\nReference: ${reference.trim() || "Not provided"}\n\nDetails:\n${details.trim()}`}</pre>
-        <button type="button" style={button} onClick={() => { const text = `Issue type: ${category}\nReference: ${reference.trim() || "Not provided"}\n\nDetails:\n${details.trim()}`; void navigator.clipboard?.writeText(text); }}>Copy draft</button>
+        <button type="button" style={button} onClick={async () => {
+          const text = `Issue type: ${category}\nReference: ${reference.trim() || "Not provided"}\n\nDetails:\n${details.trim()}`;
+          try {
+            if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+            await navigator.clipboard.writeText(text);
+            setCopyStatus("Draft copied to clipboard.");
+          } catch {
+            setCopyStatus("Could not access the clipboard. Select and copy the draft text above.");
+          }
+        }}>Copy draft</button>
+        {copyStatus && <small role="status" className="fp-muted" style={{ display: "block", marginTop: 8 }}>{copyStatus}</small>}
         <small className="fp-muted" style={{ display: "block", marginTop: 8 }}>Copy this text and share it only through an official FlowPay support channel when one is provided.</small>
       </div>}
     </section>
