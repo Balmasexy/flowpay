@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { jwtVerify, type JWTVerifyGetKey } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
   pool: Pool | null;
-  jwks: JWTVerifyGetKey | null;
+  jwks: ReturnType<typeof createRemoteJWKSet> | null;
   issuer?: string;
   audience?: string;
 };
