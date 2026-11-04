@@ -216,10 +216,10 @@ export default function FaceVerification({ token }: Props) {
       </button>
     </div>}
 
-    {cameraOpen && <div style={{ marginTop: 18, border: "1px solid var(--fp-border, #d8dee8)", borderRadius: 14, padding: 12 }}>
+    <div style={{ display: cameraOpen ? "block" : "none", marginTop: 18, border: "1px solid var(--fp-border, #d8dee8)", borderRadius: 14, padding: 12 }}>
       <div ref={cameraMount}/>
-      <button type="button" className="fp-outline" onClick={stopCamera} disabled={submitting} style={{ marginTop: 12 }}>Cancel camera</button>
-    </div>}
+      {cameraOpen && <button type="button" className="fp-outline" onClick={stopCamera} disabled={submitting} style={{ marginTop: 12 }}>Cancel camera</button>}
+    </div>
 
     {submitting && <p className="fp-muted" style={{ marginTop: 14 }}>Submitting securely. Do not close this page until the submission finishes.</p>}
     <div className="fp-preview-warning" style={{ marginTop: 18 }}>
