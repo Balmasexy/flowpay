@@ -9,7 +9,7 @@ type StatusResponse = {
   status?: VerificationStatus;
   resultText?: string | null;
   resultCode?: string | null;
-  checks?: { liveness?: string | null; selfie?: string | null; selfieProvided?: string | null; humanReviewLiveness?: string | null };
+  checks?: { liveness?: string | null; selfie?: string | null; selfieProvided?: string | null; registerSelfie?: string | null; humanReviewLiveness?: string | null; humanReviewSelfie?: string | null };
   updatedAt?: string | null;
   verifiedAt?: string | null;
 };
@@ -192,7 +192,7 @@ export default function FaceVerification({ token }: Props) {
     </div>
 
     {status.checks && (status.checks.liveness || status.checks.selfie || status.checks.selfieProvided) && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 12 }}>
-      {[["Liveness", status.checks.liveness], ["Selfie check", status.checks.selfie], ["Selfie received", status.checks.selfieProvided], ["Human liveness review", status.checks.humanReviewLiveness]].filter((item) => item[1]).map(([label, value]) =>
+      {[["Liveness", status.checks.liveness], ["Selfie check", status.checks.selfie], ["Selfie received", status.checks.selfieProvided], ["Registration", status.checks.registerSelfie], ["Human liveness review", status.checks.humanReviewLiveness], ["Human selfie review", status.checks.humanReviewSelfie]].filter((item) => item[1]).map(([label, value]) =>
         <div key={label} style={{ border: "1px solid var(--fp-border, #d8dee8)", borderRadius: 10, padding: 11 }}>
           <small className="fp-muted">{label}</small><div style={{ fontWeight: 650, marginTop: 5 }}>{value}</div>
         </div>
