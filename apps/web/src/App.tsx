@@ -9,6 +9,7 @@ import CustomerActivity from "./CustomerActivity";
 import CustomerCards from "./CustomerCards";
 import MoneyReceived from "./MoneyReceived";
 import MoneySent from "./MoneySent";
+import SecurityCenter from "./SecurityCenter";
 import OverviewDashboard from "./OverviewDashboard";
 import { authClient, authConfigured } from "./auth-client";
 import {
@@ -248,7 +249,7 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/cards") return <CustomerCards token={token}/>;
   if (path === "/activity") return <CustomerActivity token={token}/>;
   if (path === "/savings") return <section className="fp-panel fp-detail-panel"><h2>Savings</h2><div className="fp-feature-list">{["Savings goals","Recurring savings","Fixed savings","Savings withdrawals","Interest and statements"].map(x=><div key={x}><Wallet size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
-  if (path === "/security") return <section className="fp-panel fp-detail-panel"><h2>Security centre</h2><div className="fp-feature-list">{["Change password","Passkey / device biometrics","Two-step verification","Trusted devices and sessions","Transaction PIN","Account recovery and lock"].map(x=><div key={x}><LockKeyhole size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
+  if (path === "/security") return <SecurityCenter token={token}/>;
   if (path === "/support") return <section className="fp-panel fp-detail-panel"><h2>Help & support</h2><div className="fp-feature-list">{["Report a failed transaction","Account access and recovery","Card support","Airtime and bill-payment support","Complaints and dispute tracking","Frequently asked questions"].map(x=><div key={x}><CircleHelp size={18}/>{x}<span>Help</span></div>)}</div>{unavailable}</section>;
   return <section className="fp-panel fp-detail-panel"><h2>Page not found</h2><button className="fp-primary" onClick={()=>go("/")}>Return to home</button></section>;
 }
