@@ -174,7 +174,7 @@ export default function App() {
       </div>
 
       <nav className="fp-bottom-nav" aria-label="Main navigation">
-        {[routes[0], routes[4], routes[8], routes[9], routes[19]].map(({path: target,label,icon: Icon}) =>
+        {[routes[0], routes[4], routes[7], routes[8], routes[15]].map(({path: target,label,icon: Icon}) =>
           <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}>
             <Icon size={19}/><span>{label === "Transaction history" ? "History" : label === "My profile" ? "Profile" : label}</span>
           </button>)}
