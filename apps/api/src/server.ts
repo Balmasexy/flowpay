@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/balance", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -53,6 +53,75 @@ const server = createServer(async (req, res) => {
     } catch (error) {
       console.error("FlowPay readiness database check failed:", error instanceof Error ? error.message : "unknown database error");
       send(res, 503, { service: "flowpay-api", status: "not_ready", database: "unavailable", payments: "disabled" });
+    }
+    return;
+  }
+
+
+  if (req.method === "GET" && pathname === "/customer/balance") {
+    if (!pool || !jwks || !issuer || !audience) {
+      send(res, 503, { error: "CUSTOMER_BALANCE_AUTH_NOT_CONFIGURED" }); return;
+    }
+    const authorization = req.headers.authorization;
+    const match = authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, {
+        algorithms: ["EdDSA"],
+        issuer,
+        audience
+      });
+      if (typeof payload.sub !== "string" || !payload.sub) {
+        send(res, 401, { error: "INVALID_SESSION" }); return;
+      }
+      const customer = await pool.query<{ id: string }>(
+        `SELECT app_user.id
+           FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user
+             ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1
+            AND auth_user."emailVerified" = true
+            AND COALESCE(auth_user.banned, false) = false
+            AND app_user.status = 'active'
+            AND app_user.role = 'customer'
+          LIMIT 1`,
+        [payload.sub]
+      );
+      if (customer.rowCount !== 1) {
+        send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return;
+      }
+      const balances = await pool.query<{ currency: string; balance_minor: string; account_status: string }>(
+        `SELECT a.currency,
+                a.status AS account_status,
+                COALESCE(SUM(CASE WHEN t.status = 'posted' THEN e.amount_minor ELSE 0 END), 0)::text AS balance_minor
+           FROM public.fp_accounts AS a
+           LEFT JOIN public.fp_ledger_entries AS e ON e.account_id = a.id
+           LEFT JOIN public.fp_ledger_transactions AS t ON t.id = e.transaction_id
+          WHERE a.user_id = $1
+            AND a.account_type = 'customer'
+            AND a.status IN ('active', 'frozen')
+          GROUP BY a.currency, a.status
+          ORDER BY a.currency`,
+        [customer.rows[0].id]
+      );
+      if (balances.rowCount === 0) {
+        send(res, 404, { error: "CUSTOMER_WALLET_NOT_FOUND" }); return;
+      }
+      send(res, 200, {
+        accounts: balances.rows.map((row) => ({
+          currency: row.currency.trim(),
+          accountStatus: row.account_status,
+          balanceMinor: row.balance_minor
+        })),
+        source: "posted_ledger",
+        asOf: new Date().toISOString()
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "JWTExpired" || error.name === "JWSSignatureVerificationFailed" || error.name === "JWTClaimValidationFailed" || error.name === "JWSInvalid" || error.name === "JWTInvalid")) {
+        send(res, 401, { error: "INVALID_SESSION" }); return;
+      }
+      console.error("FlowPay customer balance request failed:", error instanceof Error ? error.message : "unknown error");
+      send(res, 503, { error: "CUSTOMER_BALANCE_UNAVAILABLE" });
     }
     return;
   }
