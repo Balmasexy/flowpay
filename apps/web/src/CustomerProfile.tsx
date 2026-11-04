@@ -95,11 +95,6 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   const visiblePhoto=photoChanged?photoDataUrl:(profile.photoUrl??user.image??null);
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
     <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details and profile photo securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
-    <article className="fp-profile-card" aria-label="FlowPay customer profile card">
-      <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span><span className="fp-profile-card-label">CUSTOMER PROFILE</span></div>
-      <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{visiblePhoto?<img src={visiblePhoto} alt="Customer profile" referrerPolicy="no-referrer"/>:<span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{profile.email||user.email||"Email address not provided"}</span></div></div>
-      <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span><b>Customer profile</b></div>
-    </article>
     {loading&&<p className="fp-muted" role="status">Loading saved profile…</p>}
     {error&&<div className="fp-preview-warning" role="alert">{error}</div>}
     {notice&&<div className="fp-profile-success" role="status">{notice}</div>}
