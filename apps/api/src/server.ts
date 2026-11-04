@@ -294,6 +294,57 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/customer/security") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "SECURITY_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const userId = identity.rows[0].id;
+      const [passkeys, events] = await Promise.all([
+        pool.query(
+          `SELECT name, device_type, backed_up, created_at, last_used_at
+             FROM public.fp_passkeys
+            WHERE user_id = $1 AND revoked_at IS NULL
+            ORDER BY created_at DESC LIMIT 25`, [userId]),
+        pool.query(
+          `SELECT event_type, outcome, created_at
+             FROM public.fp_security_audit_events
+            WHERE user_id = $1
+            ORDER BY created_at DESC LIMIT 20`, [userId])
+      ]);
+      send(res, 200, {
+        passkeys: passkeys.rows.map(row => ({
+          name: row.name, deviceType: row.device_type, backedUp: row.backed_up,
+          createdAt: row.created_at, lastUsedAt: row.last_used_at
+        })),
+        recentEvents: events.rows.map(row => ({
+          type: row.event_type, outcome: row.outcome, createdAt: row.created_at
+        })),
+        capabilities: {
+          passkeyRegistrationEnabled: false,
+          passwordChangeEnabled: false,
+          twoStepVerificationEnabled: false,
+          sessionRevocationEnabled: false,
+          transactionPinEnabled: false
+        },
+        message: "This page shows recorded security data only. Enrollment and account-security changes remain disabled until their verified flows are implemented."
+      });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay customer security request failed:", error instanceof Error ? error.message : "unknown security error");
+      send(res, 503, { error: "SECURITY_SERVICE_UNAVAILABLE" });
+    }
+    return;
+  }
+
   if ((req.method === "GET" || req.method === "PATCH") && pathname === "/customer/profile") {
     if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "PROFILE_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
