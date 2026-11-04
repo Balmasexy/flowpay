@@ -153,14 +153,14 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
     <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details and profile photo securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
     <article className="fp-profile-card" aria-label="FlowPay customer profile card">
-      <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span><span className="fp-profile-card-label">CUSTOMER PROFILE</span></div>
+      <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span></div>
       <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{visiblePhoto?<img src={visiblePhoto} alt="Customer profile" referrerPolicy="no-referrer"/>:<span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{profile.email||user.email||"Email address not provided"}</span></div></div>
       <div className="fp-profile-card-photo-actions">
         <button type="button" className="fp-outline" onClick={()=>uploadInput.current?.click()} disabled={photoBusy||saving}><ImagePlus size={15}/> Upload photo</button>
         <button type="button" className="fp-outline" onClick={startCamera} disabled={photoBusy||saving}><Camera size={15}/> Take photo</button>
         {visiblePhoto&&<button type="button" className="fp-outline" onClick={()=>{setPhotoDataUrl(null);setPhotoChanged(true);setNotice("Photo removal selected. Tap Save profile to confirm.");}} disabled={saving}><Trash2 size={15}/> Remove</button>}
       </div>
-      <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span><b>Customer profile</b></div>
+      <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span></div>
     </article>
     <input ref={uploadInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto}/>
     <input ref={cameraInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={choosePhoto}/>
