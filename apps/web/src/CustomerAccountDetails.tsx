@@ -8,6 +8,37 @@ type AccountDetails = {
   message: string;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function parseAccountDetails(value: unknown): AccountDetails | null {
+  const body = asRecord(value);
+  const virtual = asRecord(body?.virtualBankAccount);
+  if (!body || !virtual || !Array.isArray(body.walletAccounts) || typeof virtual.assigned !== "boolean") return null;
+  const optionalText = (item: unknown, max: number): string | null => typeof item === "string" && item.trim() ? item.trim().slice(0, max) : null;
+  const walletAccounts: WalletAccount[] = [];
+  for (const raw of body.walletAccounts) {
+    const row = asRecord(raw);
+    if (!row || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency) || typeof row.status !== "string" || typeof row.createdAt !== "string") return null;
+    walletAccounts.push({ currency: row.currency, status: row.status.slice(0, 30), createdAt: row.createdAt });
+  }
+  const accountNumber = optionalText(virtual.accountNumber, 40);
+  const bankName = optionalText(virtual.bankName, 100);
+  const accountName = optionalText(virtual.accountName, 120);
+  if (virtual.assigned && (!accountNumber || !bankName || !accountName)) return null;
+  return {
+    walletAccounts,
+    virtualBankAccount: { assigned: virtual.assigned, accountNumber, bankName, accountName },
+    message: typeof body.message === "string" ? body.message.slice(0, 300) : "Account information is read-only.",
+  };
+}
+
+function dateLabel(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleDateString();
+}
+
 export default function CustomerAccountDetails({ token, go }: { token: string; go?: (path: string) => void }) {
   const [copied, setCopied] = useState("");
   const copyValue = async (label: string, value: string | null) => {
@@ -34,9 +65,12 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       const response = await fetch(apiBase + "/customer/account-details", {
         method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
       });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : body.error || "Unable to load account details.");
-      setData(body as AccountDetails);
+      const body: unknown = await response.json().catch(() => null);
+      const errorBody = asRecord(body);
+      if (!response.ok) throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : typeof errorBody?.error === "string" ? errorBody.error.slice(0, 200) : "Unable to load account details.");
+      const parsed = parseAccountDetails(body);
+      if (!parsed) throw new Error("The account service returned incomplete or invalid account details.");
+      setData(parsed);
     } catch (cause) {
       setData(null); setError(cause instanceof Error ? cause.message : "Unable to load account details.");
     } finally { setLoading(false); }
@@ -57,7 +91,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       <h3 className="fp-account-section-title"><Wallet size={17}/> FlowPay wallet accounts</h3>
       {data?.walletAccounts.length ? <div className="fp-detail-list">
         {data.walletAccounts.map((account, index) => <div key={account.currency + "-" + index}>
-          <span>{account.currency} wallet · {new Date(account.createdAt).toLocaleDateString()}</span>
+          <span>{account.currency} wallet · {dateLabel(account.createdAt)}</span>
           <b>{account.status === "active" ? "Active" : account.status}</b>
         </div>)}
       </div> : <div className="fp-empty"><Wallet size={22}/><b>No wallet account is linked</b><span>Contact FlowPay support if you believe this is incorrect.</span></div>}
