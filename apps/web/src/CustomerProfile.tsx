@@ -10,7 +10,7 @@ type Profile = {
   updatedAt: string | null;
 };
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 
 export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null}}) {
   const [profile,setProfile]=useState<Profile>({fullName:user.name ?? "",email:user.email ?? "",phoneNumber:"",residentialAddress:"",updatedAt:null});
@@ -43,7 +43,7 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   }
 
   const displayName=profile.fullName?.trim()||user.name?.trim()||"FlowPay customer";
-  const initials=displayName.split(/\\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"F";
+  const initials=displayName.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"F";
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
     <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
     <article className="fp-profile-card" aria-label="FlowPay customer profile card">
