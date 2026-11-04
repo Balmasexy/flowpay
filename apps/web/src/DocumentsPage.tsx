@@ -15,8 +15,29 @@ type Transaction = {
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function parseTransaction(value: unknown): Transaction | null {
+  const row = asRecord(value);
+  if (!row || typeof row.id !== "string" || !row.id.trim() || typeof row.type !== "string" || typeof row.status !== "string" || !["posted", "reversed"].includes(row.status) || typeof row.createdAt !== "string" || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency)) return null;
+  if (typeof row.customerLedgerAmountMinor !== "string" && typeof row.customerLedgerAmountMinor !== "number") return null;
+  const amount = String(row.customerLedgerAmountMinor);
+  if (!/^-?\\d+$/.test(amount) || !Number.isSafeInteger(Number(amount)) || !Number.isSafeInteger(row.customerEntryCount) || (row.customerEntryCount as number) < 0) return null;
+  return {
+    id: row.id.slice(0, 128), type: row.type.slice(0, 60),
+    description: typeof row.description === "string" ? row.description.slice(0, 240) : "",
+    status: row.status as Transaction["status"], createdAt: row.createdAt,
+    postedAt: typeof row.postedAt === "string" ? row.postedAt : null,
+    currency: row.currency, customerLedgerAmountMinor: amount,
+    customerEntryCount: row.customerEntryCount as number,
+  };
+}
+
 function csvCell(value: unknown) {
-  const text = String(value ?? "");
+  let text = String(value ?? "");
+  if (/^[\\s\\u0000-\\u001f]*[=+@]/.test(text) || /^[\\s\\u0000-\\u001f]*-/.test(text)) text = "'" + text;
   return '"' + text.replace(/"/g, '""') + '"';
 }
 
@@ -29,6 +50,7 @@ export default function DocumentsPage({ token, go }: { token: string; go: (path:
   useEffect(() => {
     let active = true;
     if (!token || !API_BASE) {
+      setItems([]);
       setError("Your authenticated FlowPay activity service is not configured.");
       setLoading(false);
       return () => { active = false; };
@@ -40,13 +62,15 @@ export default function DocumentsPage({ token, go }: { token: string; go: (path:
       credentials: "omit",
       headers: { Authorization: "Bearer " + token }
     }).then(async response => {
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to load verified account activity.");
-      return data;
-    }).then(data => {
-      if (active) setItems(Array.isArray(data.transactions) ? data.transactions : []);
+      const data: unknown = await response.json().catch(() => null);
+      const body = asRecord(data);
+      if (!response.ok) throw new Error(typeof body?.error === "string" ? body.error.slice(0, 200) : "Unable to load verified account activity.");
+      if (!Array.isArray(body?.transactions)) throw new Error("The activity service returned an invalid response.");
+      return body.transactions;
+    }).then(transactions => {
+      if (active) setItems(transactions.map(parseTransaction).filter((item): item is Transaction => item !== null));
     }).catch(reason => {
-      if (active) setError(reason instanceof Error ? reason.message : "Unable to load verified account activity.");
+      if (active) { setItems([]); setError(reason instanceof Error ? reason.message : "Unable to load verified account activity."); }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, refresh]);
