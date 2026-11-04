@@ -36,12 +36,7 @@ FlowPay should consider equivalent customer needs, but implement each only after
 
 ## Current backend API coverage
 
-The current API implementation exposes only:
-- `GET /`
-- `GET /health`
-- `GET /ready`
-
-It does not currently expose customer authentication, profile, document upload, account balance, ledger history, transfers, card issuing, airtime/data vending, bill payments, savings, security settings, notifications, or support endpoints. Therefore the web routes in this release are navigation and product-surface work only. They must not imply that any money movement or provider purchase is operational.
+The current API exposes health/readiness, protected customer profile reads/updates, and a protected customer overview read endpoint. The overview endpoint returns the authenticated customer's own account currency/status summary and the five latest posted or reversed ledger transactions. It deliberately does not calculate or present an available balance because the account-side sign convention and balance presentation contract have not yet been established. Transfers, card issuing, airtime/data vending, bill payments, savings, document storage, security settings, notifications, and support workflows remain unconnected. The web dashboard must not imply that any money movement or provider purchase is operational.
 
 ## Required backend delivery sequence
 
