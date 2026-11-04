@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -143,6 +143,39 @@ const server = createServer(async (req, res) => {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay customer overview request failed:", error instanceof Error ? error.message : "unknown overview error");
       send(res, 503, { error: "OVERVIEW_SERVICE_UNAVAILABLE" });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/customer/cards") {
+    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "CARDS_SERVICE_NOT_CONFIGURED" }); return; }
+    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
+    try {
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      const identity = await pool.query(
+        `SELECT app_user.id
+           FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      const result = await pool.query(
+        `SELECT id, provider, card_type, status, last4, expiry_month, expiry_year, created_at, updated_at
+           FROM public.fp_cards
+          WHERE user_id = $1
+          ORDER BY created_at DESC`, [identity.rows[0].id]);
+      send(res, 200, { cards: result.rows.map(row => ({
+        id: row.id, provider: row.provider, type: row.card_type, status: row.status,
+        last4: row.last4 ? String(row.last4).trim() : null,
+        expiryMonth: row.expiry_month, expiryYear: row.expiry_year,
+        createdAt: row.created_at, updatedAt: row.updated_at
+      })), actionsEnabled: false });
+    } catch (error) {
+      if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
+      console.error("FlowPay customer cards request failed:", error instanceof Error ? error.message : "unknown cards error");
+      send(res, 503, { error: "CARDS_SERVICE_UNAVAILABLE" });
     }
     return;
   }
