@@ -124,18 +124,18 @@ const server = createServer(async (req, res) => {
         photoMime = photoMatch[1];
       }
       const saved = await pool.query(
-        \`INSERT INTO public.fp_customer_profiles (user_id, phone_number, residential_address, photo_data, photo_mime_type, updated_at)
+        `INSERT INTO public.fp_customer_profiles (user_id, phone_number, residential_address, photo_data, photo_mime_type, updated_at)
          VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), $4, $5, NOW())
          ON CONFLICT (user_id) DO UPDATE SET phone_number = EXCLUDED.phone_number,
            residential_address = EXCLUDED.residential_address,
            photo_data = CASE WHEN $6 THEN EXCLUDED.photo_data ELSE public.fp_customer_profiles.photo_data END,
            photo_mime_type = CASE WHEN $6 THEN EXCLUDED.photo_mime_type ELSE public.fp_customer_profiles.photo_mime_type END,
            updated_at = NOW()
-         RETURNING phone_number, residential_address, updated_at, encode(photo_data, 'base64') AS photo_base64, photo_mime_type\`,
+         RETURNING phone_number, residential_address, updated_at, encode(photo_data, 'base64') AS photo_base64, photo_mime_type`,
         [userId, phone, address, photoData, photoMime, photoProvided]);
       send(res, 200, { saved: true, profile: { fullName: identity.rows[0].name ?? "", email: identity.rows[0].email ?? "",
         phoneNumber: saved.rows[0].phone_number ?? "", residentialAddress: saved.rows[0].residential_address ?? "",
-        photoUrl: saved.rows[0].photo_base64 && saved.rows[0].photo_mime_type ? \`data:\${saved.rows[0].photo_mime_type};base64,\${saved.rows[0].photo_base64}\` : null,
+        photoUrl: saved.rows[0].photo_base64 && saved.rows[0].photo_mime_type ? `data:${saved.rows[0].photo_mime_type};base64,${saved.rows[0].photo_base64}` : null,
         updatedAt: saved.rows[0].updated_at } });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
