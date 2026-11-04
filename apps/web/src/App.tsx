@@ -131,8 +131,8 @@ export default function App() {
             <>
               <section className="fp-balance">
                 <div className="fp-balance-top"><span>Available balance</span><Wallet size={20}/></div>
-                <strong>₦ — —</strong>
-                <small>Balance will appear when your secure account is connected.</small>
+                <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>
+                <small>Your authenticated ledger balance is not connected yet. No estimated or sample amount is shown.</small>
                 <div className="fp-balance-actions">
                   <button onClick={() => go("/transfers")}> <ArrowDownLeft size={17}/> Add money</button>
                   <button onClick={() => go("/transfers")}><ArrowUpRight size={17}/> Send money</button>
