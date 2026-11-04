@@ -40,7 +40,7 @@ export default function LoginPage() {
       setMessage("Enter your email address first.");
       return;
     }
-    if (!/^\\d{4,10}$/.test(code.trim())) {
+    if (!/^\d{4,10}$/.test(code.trim())) {
       setMessage("Enter the numeric verification code from your email.");
       return;
     }
