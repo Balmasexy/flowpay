@@ -16,6 +16,8 @@ const entries = [
   { label: "Data", path: "/data", description: "Prepare a data-plan preview", terms: "internet bundle" },
   { label: "Bill Payments", path: "/bills", description: "Prepare a utility-bill preview", terms: "electricity utility meter" },
   { label: "Cable TV", path: "/cable-tv", description: "Prepare a cable subscription preview", terms: "dstv gotv startimes" },
+  { label: "TV", path: "/tv", description: "Open TV subscription services", terms: "television subscription decoder dstv gotv startimes" },
+  { label: "Betting", path: "/betting", description: "Prepare a betting funding preview", terms: "betting gaming account operator funding" },
   { label: "Savings", path: "/savings", description: "Plan a savings goal", terms: "piggy bank goal" },
   { label: "Fixed Savings", path: "/fixed-savings", description: "Plan a possible fixed-savings term", terms: "lock maturity term" },
   { label: "Spend & Save", path: "/spend-save", description: "Plan monthly spending and savings", terms: "budget income expenses" },
@@ -23,6 +25,7 @@ const entries = [
   { label: "View Account Number", path: "/account-number", description: "Check verified account assignment status", terms: "bank nuban virtual account" },
   { label: "Documents", path: "/documents", description: "View required account documents", terms: "nin bvn identity statement" },
   { label: "Invitations", path: "/invitations", description: "Referral services availability", terms: "invite referral friends" },
+  { label: "More", path: "/more", description: "Open additional customer services and account shortcuts", terms: "more services shortcuts" },
   { label: "Help & Support", path: "/support", description: "Find account help topics", terms: "complaint failed payment dispute" },
 ];
 export default function FlowPaySearch({ go }: Props) {
