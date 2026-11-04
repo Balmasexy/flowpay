@@ -3,13 +3,13 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lu
 import { authClient, authConfigured } from "./auth-client";
 
 export default function LoginPage() {
-  const [email,setEmail] = useState("");
-  const [password,setPassword] = useState("");
-  const [show,setShow] = useState(false);
-  const [busy,setBusy] = useState(false);
-  const [message,setMessage] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
 
-  async function resendVerification() {t<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     if (!authConfigured) {
@@ -37,8 +37,8 @@ export default function LoginPage() {
       <div className="fp-login-aside"><a className="fp-public-brand" href="/"><span className="fp-public-logo">F</span>Flow<span>Pay</span></a><div><span>WELCOME BACK</span><h1>Your financial life,<br/><em>in one place.</em></h1><p>Sign in to access your FlowPay account, services and security settings.</p></div><div className="fp-login-assurance"><ShieldCheck size={18}/> Your account access is protected.</div></div>
       <div className="fp-login-form-wrap"><div className="fp-login-icon"><LockKeyhole size={23}/></div><span className="fp-login-eyebrow">FLOWPAY ACCOUNT</span><h2>Log in</h2><p className="fp-login-subtitle">Enter your account details to continue.</p>
         <form onSubmit={submit}>
-          <label htmlFor="fp-login-email">Email address</label><input id="fp-login-email" type="email" autoComplete="username" required placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} />
-          <label htmlFor="fp-login-password">Password</label><div className="fp-password-field"><input id="fp-login-password" type={show?"text":"password"} autoComplete="current-password" required placeholder="Enter your password" value={password} onChange={e=>setPassword(e.target.value)}/><button type="button" onClick={()=>setShow(!show)} aria-label={show?"Hide password":"Show password"}>{show?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
+          <label htmlFor="fp-login-email">Email address</label><input id="fp-login-email" type="email" autoComplete="username" required placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+          <label htmlFor="fp-login-password">Password</label><div className="fp-password-field"><input id="fp-login-password" type={show ? "text" : "password"} autoComplete="current-password" required placeholder="Enter your password" value={password} onChange={e => setPassword(e.target.value)}/><button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}>{show ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div>
           {message && <div className="fp-login-notice" role="alert"><ShieldCheck size={17}/><span>{message}</span></div>}
           {!authConfigured && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>Authentication is not configured on this deployment. No credentials will be sent.</span></div>}
           <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Signing in…" : "Sign in"} <ArrowRight size={16}/></button>
