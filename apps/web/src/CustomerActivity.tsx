@@ -48,7 +48,7 @@ export default function CustomerActivity({ token }: { token: string }) {
   const formatAmount = (minor: string, currency: string) => {
     const value = Number(minor);
     if (!Number.isFinite(value)) return "Unavailable";
-    return new Intl.NumberFormat("en-NG", { style: "currency", currency, minimumFractionDigits: 2 }).format(Math.abs(value) / 100);
+    return new Intl.NumberFormat("en-NG", { style: "currency", currency, minimumFractionDigits: 2 }).format(value / 100);
   };
 
   return <section className="fp-panel fp-detail-panel">
