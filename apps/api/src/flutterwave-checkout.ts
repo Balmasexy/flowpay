@@ -211,7 +211,14 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     let existingCheckoutUrl: string | null = null;
     let wasCreated = false;
 
-    const client = await pool.connect();
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      console.error("FlowPay could not connect to the database for a Flutterwave deposit:", error instanceof Error ? error.message : "database connection failed");
+      send(res, 503, { error: "DEPOSIT_DATABASE_UNAVAILABLE" });
+      return true;
+    }
     try {
       await client.query("BEGIN");
       const accounts = await client.query<{ id: string }>(
