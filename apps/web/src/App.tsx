@@ -52,8 +52,6 @@ const routes: Route[] = [
   { path: "/support", label: "Help & support", icon: CircleHelp, group: "account" },
 ];
 
-const providers = ["MTN", "Airtel", "Glo", "9mobile"];
-
 
 function routeFor(path: string) {
   return routes.find((r) => r.path === path) ?? routes[0];
