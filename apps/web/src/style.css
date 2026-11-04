@@ -199,3 +199,37 @@
     overflow: hidden;
   }
 }
+
+
+/* Collapsed desktop navigation: hide the entire sidebar and leave only a three-dot reopen control. */
+@media (min-width: 761px) {
+  .fp-sidebar-collapsed .fp-sidebar {
+    display: none !important;
+  }
+  .fp-sidebar-collapsed .fp-main {
+    margin-left: 0 !important;
+  }
+  .fp-sidebar-reopen {
+    position: fixed;
+    left: 24px;
+    top: 88px;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid #383936;
+    border-radius: 11px;
+    background: #191a19;
+    color: #ff9a50;
+    box-shadow: 0 5px 18px #0002;
+  }
+  .fp-sidebar-reopen:hover {
+    background: #292a28;
+    color: #fff;
+  }
+}
+@media (max-width: 760px) {
+  .fp-sidebar-reopen { display: none; }
+}
