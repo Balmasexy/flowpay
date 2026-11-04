@@ -103,7 +103,7 @@ function actionText(actions: Record<string, unknown>, name: string): string | nu
   return typeof value === "string" ? value.trim().slice(0, 40) : null;
 }
 
-function deriveVerificationStatus(resultCode: string, actions: Record<string, unknown>) {
+export function deriveVerificationStatus(resultCode: string, actions: Record<string, unknown>) {
   const liveness = actionText(actions, "Liveness_Check");
   const selfie = actionText(actions, "Selfie_Check");
   const provided = actionText(actions, "Selfie_Provided");
