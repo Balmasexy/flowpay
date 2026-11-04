@@ -20,6 +20,7 @@ type DepositRow = {
   id: string;
   checkout_url: string | null;
   status: "pending" | "posted" | "failed";
+  amount_minor: string;
 };
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -258,7 +259,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
         wasCreated = true;
       } else {
         const existing = await client.query<DepositRow>(
-          `SELECT t.id, d.checkout_url, d.status
+          `SELECT t.id, d.checkout_url, d.status, d.amount_minor::text AS amount_minor
              FROM public.fp_ledger_transactions AS t
              LEFT JOIN public.fp_flutterwave_deposits AS d ON d.transaction_id = t.id
             WHERE t.idempotency_key = $1
@@ -270,6 +271,11 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
         }
         transactionId = existing.rows[0].id;
         existingCheckoutUrl = existing.rows[0].checkout_url;
+        if (Number(existing.rows[0].amount_minor) !== amountMinor) {
+          await client.query("ROLLBACK");
+          send(res, 409, { error: "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_AMOUNT" });
+          return true;
+        }
         if (existing.rows[0].status !== "pending" || !existingCheckoutUrl) {
           await client.query("ROLLBACK");
           send(res, 409, { error: "DEPOSIT_REQUEST_ALREADY_PROCESSING_OR_FINAL" });
