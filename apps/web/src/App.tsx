@@ -52,6 +52,8 @@ const services = [
   { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Pay TV subscriptions" },
   { label: "Savings", path: "/savings", icon: Wallet, detail: "Savings tools and goals" },
   { label: "History", path: "/activity", icon: Clock3, detail: "Track every transaction" },
+  { label: "Bulk Payments", path: "/bulk-payments", icon: Wallet, detail: "Prepare and validate payment batches" },
+  { label: "Bulk Verification", path: "/bulk-verification", icon: ShieldCheck, detail: "Validate customer records in batches" },
 ];
 
 function routeFor(path: string) {
