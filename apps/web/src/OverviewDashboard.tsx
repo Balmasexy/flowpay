@@ -12,7 +12,7 @@ type ActivityItem = {
 type Overview = {
   accounts: AccountSummary[];
   recentActivity: ActivityItem[];
-  transactionSummary: { postedCount: number; reversedCount: number };
+  transactionSummary: { postedCount: number; reversedCount: number } | null;
   balance: { available: true; balances: { currency: string; amountMinor: string }[] } | { available: false; reason: string };
   paymentsEnabled: false;
   generatedAt: string;
@@ -39,10 +39,18 @@ function parseOverview(value: unknown): Overview | null {
   const root = asRecord(value);
   const body = asRecord(root?.overview);
   const balance = asRecord(body?.balance);
-  const transactionSummary = asRecord(body?.transactionSummary);
-  if (!body || !balance || !transactionSummary || !Array.isArray(body.accounts) || !Array.isArray(body.recentActivity)) return null;
-  if (!Number.isSafeInteger(transactionSummary.postedCount) || (transactionSummary.postedCount as number) < 0 ||
-      !Number.isSafeInteger(transactionSummary.reversedCount) || (transactionSummary.reversedCount as number) < 0) return null;
+  if (!body || !balance || !Array.isArray(body.accounts) || !Array.isArray(body.recentActivity)) return null;
+  let parsedTransactionSummary: { postedCount: number; reversedCount: number } | null = null;
+  if (body.transactionSummary !== undefined) {
+    const transactionSummary = asRecord(body.transactionSummary);
+    if (!transactionSummary ||
+        !Number.isSafeInteger(transactionSummary.postedCount) || (transactionSummary.postedCount as number) < 0 ||
+        !Number.isSafeInteger(transactionSummary.reversedCount) || (transactionSummary.reversedCount as number) < 0) return null;
+    parsedTransactionSummary = {
+      postedCount: transactionSummary.postedCount as number,
+      reversedCount: transactionSummary.reversedCount as number,
+    };
+  }
   if (body.paymentsEnabled !== false || typeof body.generatedAt !== "string") return null;
   const accounts: AccountSummary[] = [];
   for (const raw of body.accounts) {
@@ -71,10 +79,10 @@ function parseOverview(value: unknown): Overview | null {
       if (!/^-?\\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
       balances.push({ currency: row.currency, amountMinor });
     }
-    return { accounts, recentActivity, transactionSummary: { postedCount: transactionSummary.postedCount as number, reversedCount: transactionSummary.reversedCount as number }, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
   }
   if (balance.available === false && typeof balance.reason === "string") {
-    return { accounts, recentActivity, transactionSummary: { postedCount: transactionSummary.postedCount as number, reversedCount: transactionSummary.reversedCount as number }, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
   }
   return null;
 }
@@ -132,8 +140,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const accountCount = overview?.accounts.reduce((total, account) => total + account.count, 0) ?? 0;
   const activeAccountCount = overview?.accounts.filter(account => account.status === "active").reduce((total, account) => total + account.count, 0) ?? 0;
   const currencies = [...new Set(overview?.accounts.filter(account => account.status === "active").map(account => account.currency) ?? [])];
-  const postedCount = overview?.transactionSummary.postedCount ?? 0;
-  const reversedCount = overview?.transactionSummary.reversedCount ?? 0;
+  const postedCount = overview?.transactionSummary?.postedCount ?? 0;
+  const reversedCount = overview?.transactionSummary?.reversedCount ?? 0;
   const transactionCount = postedCount + reversedCount;
 
   return <>
@@ -159,13 +167,13 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       </article>
       <article className="fp-overview-card fp-transaction-summary-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Activity size={19}/></span><span>Ledger activity summary</span></div>
-        {loading ? <p className="fp-overview-muted">Loading posted and reversed transaction totals…</p> : error ? <p className="fp-overview-muted">Transaction totals are temporarily unavailable.</p> : <>
+        {loading ? <p className="fp-overview-muted">Loading posted and reversed transaction totals…</p> : error ? <p className="fp-overview-muted">Transaction totals are temporarily unavailable.</p> : overview?.transactionSummary ? <>
           <div className="fp-overview-stat-row">
             <div><strong>{postedCount.toLocaleString("en-NG")}</strong><span>Posted transactions</span></div>
             <div><strong>{reversedCount.toLocaleString("en-NG")}</strong><span>Reversed transactions</span></div>
           </div>
           <div className="fp-overview-currencies"><span>Total recorded ledger transactions</span><b>{transactionCount.toLocaleString("en-NG")}</b></div>
-        </>}
+        </> : <p className="fp-overview-muted">Transaction totals are not available from the current API version. Refresh to try again.</p>}
         <button className="fp-overview-link" onClick={() => go("/activity")}>Open transaction history <ChevronRight size={15}/></button>
       </article>
       <article className="fp-overview-card fp-account-safety-card">
