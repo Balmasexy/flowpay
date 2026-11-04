@@ -3,7 +3,6 @@ import AdminPage from "./AdminPage";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
-import BulkOperations from "./BulkOperations";
 import CustomerProfile from "./CustomerProfile";
 import OverviewDashboard from "./OverviewDashboard";
 import { authClient, authConfigured } from "./auth-client";
@@ -22,8 +21,6 @@ const routes: Route[] = [
   { path: "/money-received", label: "Money Received", icon: ArrowDownLeft, group: "main" },
   { path: "/money-sent", label: "Money Sent", icon: ArrowUpRight, group: "main" },
   { path: "/transfers", label: "Transfers", icon: ArrowLeftRight, group: "main" },
-  { path: "/bulk-payments", label: "Bulk Payments", icon: Wallet, group: "main" },
-  { path: "/bulk-verification", label: "Bulk Verification", icon: ShieldCheck, group: "main" },
   { path: "/cards", label: "Cards", icon: CreditCard, group: "main" },
   { path: "/activity", label: "Activity", icon: Activity, group: "main" },
   { path: "/security", label: "Security", icon: LockKeyhole, group: "main" },
@@ -172,7 +169,7 @@ export default function App() {
               <button className="fp-primary" disabled>Continue (not active)</button>
             </section>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} onPhotoChange={setProfilePhoto}/>
+            <RouteContent path={path} go={go} user={authSession.data.user} onPhotoChange={setProfilePhoto}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
