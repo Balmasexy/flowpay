@@ -9,6 +9,30 @@ export default function LoginPage() {
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState("");
 
+  async function resendVerification() {
+    setMessage("");
+    if (!email.trim()) {
+      setMessage("Enter your email address first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await authClient.sendVerificationEmail({
+        email: email.trim(),
+        callbackURL: window.location.origin + "/login"
+      });
+      if (result.error) {
+        setMessage(result.error.message || "Unable to request a verification email. Please try again.");
+        return;
+      }
+      setMessage("If this account needs verification, a new verification code has been requested. Check your inbox and spam folder.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to request a verification email.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -42,6 +66,7 @@ export default function LoginPage() {
           {message && <div className="fp-login-notice" role="alert"><ShieldCheck size={17}/><span>{message}</span></div>}
           {!authConfigured && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>Authentication is not configured on this deployment. No credentials will be sent.</span></div>}
           <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Signing in…" : "Sign in"} <ArrowRight size={16}/></button>
+          <button className="fp-login-submit" type="button" onClick={resendVerification} disabled={busy || !authConfigured}>Resend verification code</button>
         </form>
         <p className="fp-login-help">New to FlowPay? <a href="/signup">Create an account</a></p>
         <p className="fp-login-help">Need help accessing your account? <a href="mailto:support@flowpay.ng">Contact support</a></p>
