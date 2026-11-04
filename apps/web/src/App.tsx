@@ -7,6 +7,7 @@ import SignupPage from "./SignupPage";
 import CustomerProfile from "./CustomerProfile";
 import CustomerActivity from "./CustomerActivity";
 import CustomerCards from "./CustomerCards";
+import MoneyReceived from "./MoneyReceived";
 import OverviewDashboard from "./OverviewDashboard";
 import { authClient, authConfigured } from "./auth-client";
 import {
@@ -236,7 +237,8 @@ function pageDescription(path: string) {
 function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};token:string;onPhotoChange:(photo:string|null)=>void}) {
   const unavailable = <div className="fp-preview-warning"><ShieldCheck size={17}/> This service is not connected to a verified FlowPay API yet. No real transaction or account change can be made here.</div>;
   if (path === "/search") return <section className="fp-panel fp-detail-panel"><h2>Search FlowPay</h2><p className="fp-muted">Search across your account, verified transactions and services.</p><input aria-label="Search FlowPay" placeholder="Search transactions or services" disabled/>{unavailable}</section>;
-  if (path === "/money-received" || path === "/money-sent") return <section className="fp-panel fp-detail-panel"><h2>{path === "/money-received" ? "Money Received" : "Money Sent"}</h2><p className="fp-muted">Only transactions confirmed by the FlowPay ledger will appear here.</p><div className="fp-empty"><Activity size={24}/><b>No verified transactions available</b><span>No sample or fabricated transaction records are displayed.</span></div>{unavailable}</section>;
+  if (path === "/money-received") return <MoneyReceived token={token}/>;
+  if (path === "/money-sent") return <section className="fp-panel fp-detail-panel"><h2>Money Sent</h2><p className="fp-muted">Only completed transfers recorded in the customer ledger will appear here.</p><div className="fp-empty"><Activity size={24}/><b>No verified outgoing transfers available</b><span>Outgoing transfers remain simulation-only. This page will show them after a verified customer transfer record exists.</span></div>{unavailable}</section>;
   if (path === "/account-number") return <section className="fp-panel fp-detail-panel"><h2>View Account Number</h2><p className="fp-muted">Your assigned FlowPay account number and provider assignment will appear here once the account profile is provisioned.</p><div className="fp-detail-list"><div><span>Account number</span><b>Not yet assigned</b></div><div><span>Bank / provider</span><b>Not yet assigned</b></div><div><span>Account name</span><b>Not yet linked</b></div></div>{unavailable}</section>;
   if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/fixed-savings" || path === "/spend-save" || path === "/invitations" || path === "/more") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
   if (path === "/profile") return <CustomerProfile go={go} user={user} onPhotoChange={onPhotoChange}/>;
