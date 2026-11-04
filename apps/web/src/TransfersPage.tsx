@@ -5,6 +5,24 @@ type WalletAccount = { currency: string; status: string; createdAt: string };
 type TransferRecord = { id: string; type: string; status: string; createdAt: string; destinationAccountMasked: string };
 type Preview = { destination: string; amount: string; currency: string };
 
+function isWalletAccount(value: unknown): value is WalletAccount {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.currency === "string" && /^[A-Z]{3}$/.test(item.currency)
+    && typeof item.status === "string" && item.status.length <= 40
+    && typeof item.createdAt === "string" && Number.isFinite(Date.parse(item.createdAt));
+}
+
+function isTransferRecord(value: unknown): value is TransferRecord {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === "string" && item.id.length > 0 && item.id.length <= 160
+    && typeof item.type === "string" && item.type.length <= 80
+    && typeof item.status === "string" && item.status.length <= 40
+    && typeof item.createdAt === "string" && Number.isFinite(Date.parse(item.createdAt))
+    && typeof item.destinationAccountMasked === "string" && item.destinationAccountMasked.length <= 80;
+}
+
 export default function TransfersPage({ token }: { token: string }) {
   const [wallets, setWallets] = useState<WalletAccount[]>([]);
   const [history, setHistory] = useState<TransferRecord[]>([]);
@@ -19,7 +37,7 @@ export default function TransfersPage({ token }: { token: string }) {
     if (!token || token.split(".").length !== 3) {
       setError("Your secure session is not ready. Sign in again and retry."); setLoading(false); return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
     if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
     setLoading(true); setError("");
     try {
@@ -31,13 +49,19 @@ export default function TransfersPage({ token }: { token: string }) {
       const [accountBody, historyBody] = await Promise.all([
         accountResponse.json().catch(() => ({})), historyResponse.json().catch(() => ({}))
       ]);
-      if (!accountResponse.ok) throw new Error(accountBody.error || "Unable to load your wallet accounts.");
-      if (!historyResponse.ok) throw new Error(historyBody.error || "Unable to load transfer history.");
-      const accountList = Array.isArray(accountBody.walletAccounts) ? accountBody.walletAccounts : [];
+      if (!accountResponse.ok) throw new Error(typeof accountBody.error === "string" ? accountBody.error : "Unable to load your wallet accounts.");
+      if (!historyResponse.ok) throw new Error(typeof historyBody.error === "string" ? historyBody.error : "Unable to load transfer history.");
+      const accountList = Array.isArray(accountBody.walletAccounts) ? accountBody.walletAccounts.filter(isWalletAccount) : [];
+      const transferList = Array.isArray(historyBody.transfers) ? historyBody.transfers.filter(isTransferRecord) : [];
       setWallets(accountList);
-      setHistory(Array.isArray(historyBody.transfers) ? historyBody.transfers : []);
-      if (accountList.some((a: WalletAccount) => a.currency === "NGN")) setCurrency("NGN");
+      setHistory(transferList);
+      if (accountList.some(a => a.currency === "NGN")) setCurrency("NGN");
       else if (accountList[0]?.currency) setCurrency(accountList[0].currency);
+      else setCurrency("NGN");
+      if ((Array.isArray(accountBody.walletAccounts) && accountList.length !== accountBody.walletAccounts.length)
+        || (Array.isArray(historyBody.transfers) && transferList.length !== historyBody.transfers.length)) {
+        setError("Some transfer records could not be displayed because their data was incomplete.");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load transfer information.");
     } finally { setLoading(false); }
@@ -47,10 +71,16 @@ export default function TransfersPage({ token }: { token: string }) {
 
   const makePreview = () => {
     setPreview(null);
-    const cleanDestination = destination.replace(/\s+/g, "");
-    const numericAmount = Number(amount);
-    if (!/^\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number to preview. This does not verify the bank account."); return; }
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) { setError("Enter an amount greater than zero."); return; }
+    const cleanDestination = destination.replace(/\\s+/g, "");
+    const cleanAmount = amount.trim();
+    const numericAmount = Number(cleanAmount);
+    if (!/^\\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number to preview. This does not verify the bank account."); return; }
+    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setError("Enter a valid amount greater than zero, using up to two decimal places."); return;
+    }
+    if (!wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")) {
+      setError("An active source wallet in the selected currency is required."); return;
+    }
     setError("");
     setPreview({ destination: cleanDestination, amount: numericAmount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), currency });
   };
@@ -66,16 +96,16 @@ export default function TransfersPage({ token }: { token: string }) {
       </div>
       <h3 className="fp-account-section-title"><Wallet size={17}/> Prepare a transfer preview</h3>
       <label htmlFor="fp-transfer-currency">Source wallet currency</label>
-      <select id="fp-transfer-currency" value={currency} onChange={e => { setCurrency(e.target.value); setPreview(null); }}>
+      <select id="fp-transfer-currency" value={currency} onChange={e => { setCurrency(e.target.value); setPreview(null); setError(""); }}>
         {Array.from(new Set(wallets.map(w => w.currency))).map(code => <option key={code} value={code}>{code}</option>)}
         {!wallets.length && <option value="NGN">NGN</option>}
       </select>
       <label htmlFor="fp-transfer-destination">Destination account number</label>
-      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\D/g, "").slice(0, 10)); setPreview(null); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
+      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\\D/g, "").slice(0, 10)); setPreview(null); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
       <label htmlFor="fp-transfer-amount">Amount</label>
-      <input id="fp-transfer-amount" value={amount} onChange={e => { setAmount(e.target.value); setPreview(null); }} inputMode="decimal" placeholder="0.00"/>
+      <input id="fp-transfer-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount((decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole).slice(0, 15)); setPreview(null); setError(""); }} inputMode="decimal" placeholder="0.00" maxLength={15}/>
       {error && <div className="fp-preview-warning" role="alert">{error}</div>}
-      <button className="fp-outline" type="button" onClick={makePreview} disabled={loading || !wallets.some(w => w.currency === currency && w.status === "active")}>Preview only</button>
+      <button className="fp-outline" type="button" onClick={makePreview} disabled={loading || !wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")}>Preview only</button>
       {preview && <div className="fp-preview-warning" role="status">
         <b>Local preview only — not submitted</b>
         <div>Destination: ••••{preview.destination.slice(-4)}</div>
