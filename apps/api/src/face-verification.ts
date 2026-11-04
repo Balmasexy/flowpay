@@ -113,6 +113,10 @@ export function deriveVerificationStatus(resultCode: string, actions: Record<str
 
   const livenessPassed = liveness === "Passed" || (liveness === "Under Review" && humanLiveness === "Passed");
   const selfiePassed = selfie === "Passed" || (selfie === "Under Review" && humanSelfie === "Passed");
+  const unresolvedHumanReview =
+    [humanLiveness, humanSelfie].some(value => value === "Under Review" || value === "Unable To Determine") ||
+    (liveness === "Under Review" && humanLiveness !== "Passed") ||
+    (selfie === "Under Review" && humanSelfie !== "Passed");
 
   // Any explicit failed check is a failed identity result.
   if (
@@ -125,12 +129,7 @@ export function deriveVerificationStatus(resultCode: string, actions: Record<str
   if (
     ["0844", "0846"].includes(resultCode) ||
     register === "Provisionally Approved" ||
-    (!livenessPassed && [humanLiveness, liveness].some(value =>
-      value === "Under Review" || value === "Unable To Determine"
-    )) ||
-    (!selfiePassed && [humanSelfie, selfie].some(value =>
-      value === "Under Review" || value === "Unable To Determine"
-    ))
+    unresolvedHumanReview
   ) return "under_review";
 
   // Human review may resolve an inconclusive machine check. It must explicitly
