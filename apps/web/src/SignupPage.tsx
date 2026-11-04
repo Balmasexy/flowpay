@@ -63,7 +63,7 @@ export default function SignupPage() {
     event.preventDefault();
     setMessage("");
     setError("");
-    if (!/^\\d{4,10}$/.test(code.trim())) {
+    if (!/^\d{4,10}$/.test(code.trim())) {
       setError("Enter the numeric verification code from your email.");
       return;
     }
@@ -77,13 +77,9 @@ export default function SignupPage() {
         setError(result.error.message || "That verification code could not be confirmed.");
         return;
       }
-      if (result.data?.session) {
-        window.location.assign("/dashboard");
-        return;
-      }
-      setStep("signup");
       setCode("");
-      setMessage("Email verified successfully. You can now sign in.");
+      setMessage("Email verified successfully. Please sign in to continue.");
+      window.location.assign("/login");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to verify this email. Please try again.");
     } finally {
