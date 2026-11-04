@@ -318,3 +318,36 @@
 .fp-camera-dialog-actions{display:flex;justify-content:flex-end;gap:9px}
 .fp-camera-dialog-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px}
 @media(max-width:520px){.fp-camera-backdrop{padding:10px}.fp-camera-dialog{padding:13px}.fp-camera-preview{min-height:200px;max-height:55vh}.fp-camera-dialog-actions button{flex:1}}
+
+
+/* Customer overview dashboard cards */
+.fp-overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:15px}
+.fp-overview-card{min-width:0;padding:17px 18px;border:1px solid var(--border);border-radius:14px;background:#fff;display:flex;flex-direction:column;gap:12px}
+.fp-overview-card-heading{display:flex;align-items:center;gap:9px;color:#62635d;font-size:11px;font-weight:700}
+.fp-overview-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#fff2e7;color:var(--orange)}
+.fp-overview-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fp-overview-stat-row>div{display:grid;gap:3px}
+.fp-overview-stat-row strong{font:800 25px Manrope,sans-serif;color:#242520}
+.fp-overview-stat-row span,.fp-overview-currencies>span{font-size:9px;color:#8a8b84}
+.fp-overview-currencies{display:grid;gap:4px;padding-top:9px;border-top:1px solid #efefec}
+.fp-overview-currencies b{font-size:11px;color:#484941}
+.fp-overview-muted{margin:0;color:#858780;font-size:10px;line-height:1.6;min-height:32px}
+.fp-overview-service-status{font:800 16px Manrope,sans-serif;color:#282923}
+.fp-overview-link{display:flex;align-items:center;gap:3px;align-self:flex-start;margin-top:auto;padding:4px 0;border:0;background:none;color:#bd5d10;font-size:10px;font-weight:700}
+.fp-overview-activity{margin-bottom:24px}
+.fp-overview-state{display:flex;align-items:center;justify-content:center;gap:10px;min-height:90px;padding:18px;border:1px solid var(--border);border-radius:12px;background:#fff;color:#858780;font-size:11px}
+.fp-overview-state svg{color:var(--orange)}
+.fp-overview-error{flex-wrap:wrap;color:#9d3c32}
+.fp-overview-error button{padding:7px 10px;border:1px solid #f0c5bb;border-radius:8px;background:#fff7f4;color:#9d3c32;font-size:10px}
+.fp-overview-activity-list{overflow:hidden;border:1px solid var(--border);border-radius:12px;background:#fff}
+.fp-overview-activity-item{display:flex;align-items:center;gap:11px;min-width:0;padding:12px 14px;border-bottom:1px solid #efefec}
+.fp-overview-activity-item:last-child{border-bottom:0}
+.fp-overview-activity-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:#fff2e7;color:var(--orange)}
+.fp-overview-activity-copy{display:grid;gap:4px;flex:1;min-width:0}
+.fp-overview-activity-copy b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#363730;font-size:11px}
+.fp-overview-activity-copy small{color:#8a8b84;font-size:9px}
+.fp-overview-activity-status{padding:5px 8px;border-radius:20px;background:#edf8f0;color:#287347;font-size:9px;font-weight:700}
+.fp-overview-activity-status.reversed{background:#fff3e8;color:#9a571d}
+.fp-overview-footnote{margin:9px 2px 0;color:#92938d;font-size:9px;line-height:1.5}
+.fp-network.selected{border-color:var(--orange);background:#fff4eb;color:#bd5b0b}
+@media(max-width:760px){.fp-overview-grid{grid-template-columns:1fr;gap:9px}.fp-overview-card{padding:15px}.fp-overview-activity-item{gap:8px;padding:11px 10px}.fp-overview-activity-copy small{font-size:8px}.fp-overview-activity-status{font-size:8px;padding:4px 6px}}
