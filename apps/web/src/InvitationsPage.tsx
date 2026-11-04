@@ -12,26 +12,35 @@ export default function InvitationsPage() {
   const inviteText = "Join me on FlowPay to explore convenient account and payment services: " + FLOWPAY_URL;
 
   async function copyInvite() {
+    let copied = false;
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(inviteText);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = inviteText;
-        textarea.setAttribute("readonly", "");
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
+        copied = true;
+      }
+    } catch {
+      // Continue to the legacy copy fallback when clipboard permission is denied.
+    }
+
+    if (!copied) {
+      const textarea = document.createElement("textarea");
+      textarea.value = inviteText;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      try {
         document.body.appendChild(textarea);
         textarea.select();
-        const copied = document.execCommand("copy");
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      } finally {
         textarea.remove();
-        if (!copied) throw new Error("Clipboard copy is unavailable");
       }
-      setCopyState("copied");
-      window.setTimeout(() => setCopyState("idle"), 2500);
-    } catch {
-      setCopyState("error");
     }
+
+    setCopyState(copied ? "copied" : "error");
+    if (copied) window.setTimeout(() => setCopyState("idle"), 2500);
   }
 
   async function shareInvite() {
