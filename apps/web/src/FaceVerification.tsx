@@ -145,6 +145,10 @@ export default function FaceVerification({ token }: Props) {
       await customElements.whenDefined("selfie-capture-screens");
       const host = cameraMount.current;
       if (!host) throw new Error("Camera panel is not available.");
+      // Give the Web Component a real viewport before connectedCallback starts
+      // MediaPipe and WebRTC; React will keep these dimensions while cameraOpen.
+      host.style.height = "min(76vh, 760px)";
+      host.style.minHeight = "620px";
       host.replaceChildren();
       const element = document.createElement("selfie-capture-screens");
       element.setAttribute("use-strict-mode", "true");
