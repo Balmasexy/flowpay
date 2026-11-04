@@ -59,6 +59,7 @@ function routeFor(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const authSession = authClient.useSession();
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
@@ -74,6 +75,7 @@ export default function App() {
   const go = (next: string) => {
     if (next !== window.location.pathname) window.history.pushState({}, "", next);
     setPath(next);
+    setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: "auto" });
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv", "/tv"].includes(path);
@@ -174,11 +176,23 @@ export default function App() {
       </div>
 
       <nav className="fp-bottom-nav" aria-label="Main navigation">
-        {[routes[0], routes[4], routes[7], routes[8], routes[15]].map(({path: target,label,icon: Icon}) =>
+        {[routes[0], routes[4], routes[7], routes[8]].map(({path: target,label,icon: Icon}) =>
           <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}>
-            <Icon size={19}/><span>{label === "Transaction history" ? "History" : label === "My profile" ? "Profile" : label}</span>
+            <Icon size={19}/><span>{label}</span>
           </button>)}
+        <button className={mobileMenuOpen ? "active" : ""} aria-expanded={mobileMenuOpen} aria-controls="fp-mobile-all-menu" onClick={() => setMobileMenuOpen(v => !v)}>
+          <ChevronRight size={19}/><span>All services</span>
+        </button>
       </nav>
+      {mobileMenuOpen && <div className="fp-mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
+        <section id="fp-mobile-all-menu" className="fp-mobile-menu" aria-label="All FlowPay navigation" onClick={e => e.stopPropagation()}>
+          <div className="fp-mobile-menu-head"><div><b>All FlowPay services</b><small>Every account section and service</small></div><button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">×</button></div>
+          {(["main","services","account"] as const).map(group => <div className="fp-mobile-menu-group" key={group}>
+            <span>{group === "main" ? "YOUR FINANCES" : group === "services" ? "PAYMENTS & SERVICES" : "ACCOUNT"}</span>
+            {routes.filter(r => r.group === group).map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={18}/><span>{label}</span><ChevronRight size={15}/></button>)}
+          </div>)}
+        </section>
+      </div>}
 
     </div>
   );
