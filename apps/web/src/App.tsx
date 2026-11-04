@@ -70,6 +70,30 @@ export default function App() {
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
   const [amount, setAmount] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const token = authSession.data?.session?.token;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) {
+      setProfilePhoto(null);
+      return () => { active = false; };
+    }
+    fetch(apiBase + "/customer/profile", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Authorization: "Bearer " + token }
+    }).then(async response => {
+      if (!response.ok) throw new Error("Unable to load customer profile photo");
+      return response.json();
+    }).then(data => {
+      if (active) setProfilePhoto(typeof data.profile?.photoUrl === "string" ? data.profile.photoUrl : null);
+    }).catch(() => {
+      if (active) setProfilePhoto(null);
+    });
+    return () => { active = false; };
+  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -106,7 +130,7 @@ export default function App() {
         </button>
         <div className="fp-header-actions">
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
-          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile"><UserRound size={19}/></button>
+          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile">{profilePhoto || authSession.data.user.image ? <img src={profilePhoto || authSession.data.user.image || ""} alt="" referrerPolicy="no-referrer"/> : <UserRound size={19}/>}</button>
           <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
         </div>
       </header>
@@ -181,7 +205,7 @@ export default function App() {
               <button className="fp-primary" disabled>Continue (not active)</button>
             </section>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} onPhotoChange={setProfilePhoto}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
@@ -240,13 +264,13 @@ function pageDescription(path: string) {
   return descriptions[path] ?? "Manage your FlowPay account.";
 }
 
-function RouteContent({path,go,user}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null}}) {
+function RouteContent({path,go,user,onPhotoChange}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};onPhotoChange:(photo:string|null)=>void}) {
   const unavailable = <div className="fp-preview-warning"><ShieldCheck size={17}/> This service is not connected to a verified FlowPay API yet. No real transaction or account change can be made here.</div>;
   if (path === "/search") return <section className="fp-panel fp-detail-panel"><h2>Search FlowPay</h2><p className="fp-muted">Search across your account, verified transactions and services.</p><input aria-label="Search FlowPay" placeholder="Search transactions or services" disabled/>{unavailable}</section>;
   if (path === "/money-received" || path === "/money-sent") return <section className="fp-panel fp-detail-panel"><h2>{path === "/money-received" ? "Money Received" : "Money Sent"}</h2><p className="fp-muted">Only transactions confirmed by the FlowPay ledger will appear here.</p><div className="fp-empty"><Activity size={24}/><b>No verified transactions available</b><span>No sample or fabricated transaction records are displayed.</span></div>{unavailable}</section>;
   if (path === "/account-number") return <section className="fp-panel fp-detail-panel"><h2>View Account Number</h2><p className="fp-muted">Your assigned FlowPay account number and provider assignment will appear here once the account profile is provisioned.</p><div className="fp-detail-list"><div><span>Account number</span><b>Not yet assigned</b></div><div><span>Bank / provider</span><b>Not yet assigned</b></div><div><span>Account name</span><b>Not yet linked</b></div></div>{unavailable}</section>;
   if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/fixed-savings" || path === "/spend-save" || path === "/invitations" || path === "/more") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
-  if (path === "/profile") return <CustomerProfile go={go} user={user}/>;
+  if (path === "/profile") return <CustomerProfile go={go} user={user} onPhotoChange={onPhotoChange}/>;
   if (path === "/documents") return <section className="fp-panel fp-detail-panel"><h2>Documents & statements</h2><p className="fp-muted">Your verification and account documents will be available here after secure document storage is connected.</p><div className="fp-doc-list">{["Government ID (NIN / Driver’s Licence / Passport)","BVN verification receipt","Proof of address","Customer account-opening form","Terms and conditions acceptance","Privacy notice acknowledgement","Monthly account statement","Transaction receipt"].map(d=><div key={d}><FileText size={19}/><span>{d}<small>Not uploaded / not generated</small></span><b>Pending</b></div>)}</div>{unavailable}</section>;
   if (path === "/transfers") return <section className="fp-panel fp-detail-panel"><h2>Transfers</h2><p className="fp-muted">Bank and FlowPay wallet transfers.</p><div className="fp-feature-list">{["Transfer to FlowPay","Transfer to other Nigerian banks","Beneficiary management","Transfer limits and fees","Transfer receipt and status"].map(x=><div key={x}><ArrowLeftRight size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
   if (path === "/cards") return <section className="fp-panel fp-detail-panel"><h2>Cards</h2><div className="fp-feature-list">{["Virtual card application","Physical card request and delivery","View card details securely","Freeze / unfreeze card","Change card PIN","Set spending limits"].map(x=><div key={x}><CreditCard size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
