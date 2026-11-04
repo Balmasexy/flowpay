@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createFaceVerificationHandler } from "./face-verification.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -20,6 +21,7 @@ const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
+const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -34,13 +36,14 @@ const server = createServer(async (req, res) => {
   if (origin && allowedOrigins.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET, PATCH, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (await faceVerificationHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/face-verification/status"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/face-verification/status", "/face-verification/callback", "/customer/face-verification"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -56,27 +59,6 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
-
-  if (req.method === "GET" && pathname === "/face-verification/status") {
-    const sandboxSelected = process.env.SMILE_ID_ENVIRONMENT === "sandbox";
-    const callbackUrl = process.env.SMILE_ID_CALLBACK_URL?.trim() ?? "";
-    const configured = sandboxSelected
-      && Boolean(process.env.SMILE_ID_PARTNER_ID?.trim())
-      && Boolean(process.env.SMILE_ID_API_KEY?.trim())
-      && callbackUrl.startsWith("https://");
-    send(res, 200, {
-      provider: "smile_id",
-      environment: "sandbox",
-      configured,
-      productionEnabled: false,
-      verificationEnabled: false,
-      message: configured
-        ? "Sandbox credentials detected. Face verification submission remains disabled until the signed SDK flow and verified callback handler are deployed."
-        : "Sandbox setup is incomplete. Configure the Smile ID sandbox environment variables on the API service.",
-    });
-    return;
-  }
-
 
   if (req.method === "GET" && pathname === "/customer/overview") {
     if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "OVERVIEW_SERVICE_NOT_CONFIGURED" }); return; }
