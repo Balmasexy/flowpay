@@ -26,7 +26,7 @@ export default function ServicePreview({ path }: { path: string }) {
   const referenceValid = /^[A-Za-z0-9-]{5,30}$/.test(customerRef.trim());
   const phoneValid = /^(?:0[0-9]{10}|\+?234[0-9]{10})$/.test(phone.replace(/[\s-]/g, ""));
   const amountValue = Number(amount);
-  const amountValid = amount.trim() !== "" && Number.isFinite(amountValue) && amountValue > 0;
+  const amountValid = /^\\d+(?:\\.\\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0;
   const valid = isAirtime || isData
     ? phoneValid && amountValid && (!isData || plan.trim().length > 0)
     : Boolean(provider) && referenceValid && amountValid;
@@ -71,7 +71,7 @@ export default function ServicePreview({ path }: { path: string }) {
       </select>
       {!isTelevision && <>
         <label htmlFor="service-meter-type">Meter type</label>
-        <select id="service-meter-type" value={meterType} onChange={e => setMeterType(e.target.value)}><option>Prepaid</option><option>Postpaid</option></select>
+        <select id="service-meter-type" value={meterType} onChange={e => { setMeterType(e.target.value); setReview(false); }}><option>Prepaid</option><option>Postpaid</option></select>
       </>}
       <label htmlFor="service-customer-ref">{referenceLabel}</label>
       <input id="service-customer-ref" value={customerRef} onChange={e => { setCustomerRef(e.target.value); setReview(false); }} autoComplete="off" placeholder="Enter customer reference"/>
