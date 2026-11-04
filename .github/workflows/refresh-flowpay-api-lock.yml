@@ -1,0 +1,38 @@
+name: Refresh FlowPay API lockfile
+
+on:
+  push:
+    branches:
+      - feat/face-liveness-smileid-sandbox
+    paths:
+      - "apps/api/package.json"
+      - ".github/workflows/refresh-flowpay-api-lock.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/face-liveness-smileid-sandbox
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Refresh API lockfile without running install scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --prefix apps/api
+      - name: Commit updated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- apps/api/package-lock.json; then
+            echo "Lockfile already matches package.json"
+            exit 0
+          fi
+          git add apps/api/package-lock.json
+          git commit -m "chore(api): lock Smile ID server SDK"
+          git push origin HEAD:feat/face-liveness-smileid-sandbox
