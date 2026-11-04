@@ -5,74 +5,11 @@ import { authClient, authConfigured } from "./auth-client";
 export default function LoginPage() {
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
-  const [code,setCode] = useState("");
   const [show,setShow] = useState(false);
   const [busy,setBusy] = useState(false);
   const [message,setMessage] = useState("");
 
-  async function resendVerification() {
-    setMessage("");
-    if (!email.trim()) {
-      setMessage("Enter your email address first.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const result = await authClient.sendVerificationEmail({
-        email: email.trim(),
-        callbackURL: window.location.origin + "/login"
-      });
-      if (result.error) {
-        setMessage(result.error.message || "Unable to request a verification email. Please try again.");
-        return;
-      }
-      setMessage("If this account needs verification, a new verification code has been requested. Check your inbox and spam folder.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to request a verification email.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function verifyCode() {
-    setMessage("");
-    if (!email.trim()) {
-      setMessage("Enter your email address first.");
-      return;
-    }
-    if (!/^\d{4,10}$/.test(code.trim())) {
-      setMessage("Enter the numeric verification code from your email.");
-      return;
-    }
-    if (!authConfigured) {
-      setMessage("Email verification is not configured on this deployment yet.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const verification = await authClient.emailOtp.verifyEmail({
-        email: email.trim(),
-        otp: code.trim()
-      });
-      if (verification.error) {
-        setMessage(verification.error.message || "That verification code could not be confirmed.");
-        return;
-      }
-      setCode("");
-      const signIn = await authClient.signIn.email({ email: email.trim(), password });
-      if (signIn.error) {
-        setMessage("Email verified successfully. Now enter your password and select Sign in.");
-        return;
-      }
-      window.location.assign("/dashboard");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to verify this email. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function resendVerification() {t<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     if (!authConfigured) {
@@ -102,12 +39,9 @@ export default function LoginPage() {
         <form onSubmit={submit}>
           <label htmlFor="fp-login-email">Email address</label><input id="fp-login-email" type="email" autoComplete="username" required placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} />
           <label htmlFor="fp-login-password">Password</label><div className="fp-password-field"><input id="fp-login-password" type={show?"text":"password"} autoComplete="current-password" required placeholder="Enter your password" value={password} onChange={e=>setPassword(e.target.value)}/><button type="button" onClick={()=>setShow(!show)} aria-label={show?"Hide password":"Show password"}>{show?<EyeOff size={17}/>:<Eye size={17}/>}</button></div>
-          <label htmlFor="fp-login-verification-code">Email verification code</label><input id="fp-login-verification-code" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4,10}" maxLength={10} placeholder="Paste code from your email (if requested)" value={code} onChange={e=>setCode(e.target.value.replace(/[^0-9]/g, ""))}/>
-          <button className="fp-login-submit" type="button" onClick={verifyCode} disabled={busy || !authConfigured || !code.trim()}>Verify code and continue</button>
           {message && <div className="fp-login-notice" role="alert"><ShieldCheck size={17}/><span>{message}</span></div>}
           {!authConfigured && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>Authentication is not configured on this deployment. No credentials will be sent.</span></div>}
           <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Signing in…" : "Sign in"} <ArrowRight size={16}/></button>
-          <button className="fp-login-submit" type="button" onClick={resendVerification} disabled={busy || !authConfigured}>Resend verification code</button>
         </form>
         <p className="fp-login-help">New to FlowPay? <a href="/signup">Create an account</a></p>
         <p className="fp-login-help">Need help accessing your account? <a href="mailto:support@flowpay.ng">Contact support</a></p>
