@@ -20,5 +20,9 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0"
+  },
+  "overrides": {
+    "zod": "4.6.7",
+    "@react-email/render": "2.2.0"
   }
 }
