@@ -148,3 +148,44 @@
 @media(max-width:760px){
   .fp-sidebar-toggle{display:none}
 }
+
+
+/* Sidebar interaction hardening: keep the fold control reachable and scroll nav independently. */
+@media (min-width: 761px) {
+  .fp-sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #62645d #191a19;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fp-sidebar-toggle {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex: 0 0 auto;
+    min-height: 38px;
+    cursor: pointer;
+    pointer-events: auto;
+    background: #242522;
+  }
+  .fp-sidebar-section {
+    flex: 0 0 auto;
+    min-height: max-content;
+  }
+  .fp-sidebar-section > button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .fp-sidebar-foot {
+    flex: 0 0 auto;
+  }
+  .fp-sidebar-collapsed .fp-sidebar {
+    overflow-y: auto;
+  }
+}
