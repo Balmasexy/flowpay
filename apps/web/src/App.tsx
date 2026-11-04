@@ -6,26 +6,38 @@ import SignupPage from "./SignupPage";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
-  ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Home,
-  LockKeyhole, Phone, ShieldCheck, UserRound, Wallet, Wifi, Zap
+  ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Gift, Home,
+  LockKeyhole, Phone, Search, ShieldCheck, Smartphone, UserRound, Wallet, Wifi, Zap
 } from "lucide-react";
 
 type Route = {
   path: string; label: string; icon: typeof Home; group: "main" | "services" | "account";
 };
 const routes: Route[] = [
-  { path: "/dashboard", label: "Home", icon: Home, group: "main" },
+  { path: "/dashboard", label: "Overview", icon: Home, group: "main" },
+  { path: "/search", label: "Search", icon: Search, group: "main" },
+  { path: "/money-received", label: "Money Received", icon: ArrowDownLeft, group: "main" },
+  { path: "/money-sent", label: "Money Sent", icon: ArrowUpRight, group: "main" },
   { path: "/transfers", label: "Transfers", icon: ArrowLeftRight, group: "main" },
+  { path: "/bulk-payments", label: "Bulk Payments", icon: Wallet, group: "main" },
+  { path: "/bulk-verification", label: "Bulk Verification", icon: ShieldCheck, group: "main" },
   { path: "/cards", label: "Cards", icon: CreditCard, group: "main" },
-  { path: "/activity", label: "Transaction history", icon: Activity, group: "main" },
+  { path: "/activity", label: "Activity", icon: Activity, group: "main" },
+  { path: "/security", label: "Security", icon: LockKeyhole, group: "main" },
   { path: "/airtime", label: "Airtime", icon: Phone, group: "services" },
   { path: "/data", label: "Data", icon: Wifi, group: "services" },
   { path: "/bills", label: "Bill payments", icon: Zap, group: "services" },
   { path: "/cable-tv", label: "Cable TV", icon: Cable, group: "services" },
   { path: "/savings", label: "Savings", icon: Wallet, group: "services" },
-  { path: "/profile", label: "My profile", icon: UserRound, group: "account" },
+  { path: "/profile", label: "Customer Profile", icon: UserRound, group: "account" },
+  { path: "/account-number", label: "View Account Number", icon: Smartphone, group: "account" },
   { path: "/documents", label: "Documents", icon: FileText, group: "account" },
-  { path: "/security", label: "Security", icon: LockKeyhole, group: "account" },
+  { path: "/betting", label: "Betting", icon: Gift, group: "services" },
+  { path: "/tv", label: "TV", icon: Cable, group: "services" },
+  { path: "/fixed-savings", label: "Fixed Savings", icon: Wallet, group: "services" },
+  { path: "/spend-save", label: "Spend & Save", icon: Wallet, group: "services" },
+  { path: "/invitations", label: "Invitations", icon: Gift, group: "services" },
+  { path: "/more", label: "More", icon: ChevronRight, group: "account" },
   { path: "/support", label: "Help & support", icon: CircleHelp, group: "account" },
 ];
 
@@ -64,7 +76,7 @@ export default function App() {
     setPath(next);
     window.scrollTo({ top: 0, behavior: "auto" });
   };
-  const servicePage = ["/airtime", "/data", "/bills", "/cable-tv"].includes(path);
+  const servicePage = ["/airtime", "/data", "/bills", "/cable-tv", "/tv"].includes(path);
 
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
@@ -88,6 +100,18 @@ export default function App() {
       </header>
 
       <div className="fp-layout">
+        <aside className="fp-sidebar" aria-label="Customer navigation">
+          <div className="fp-sidebar-section"><span>YOUR FINANCES</span>
+            {routes.filter(r => r.group === "main").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+          </div>
+          <div className="fp-sidebar-section"><span>PAYMENTS & SERVICES</span>
+            {routes.filter(r => r.group === "services").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+          </div>
+          <div className="fp-sidebar-section"><span>ACCOUNT</span>
+            {routes.filter(r => r.group === "account").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+          </div>
+          <div className="fp-sidebar-foot"><ShieldCheck size={17}/><span>Secure customer access</span></div>
+        </aside>
         <main className="fp-main">
           <div className="fp-page-heading">
             <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : active.label}</h1>
@@ -150,7 +174,7 @@ export default function App() {
       </div>
 
       <nav className="fp-bottom-nav" aria-label="Main navigation">
-        {[routes[0], routes[1], routes[2], routes[3], routes[9]].map(({path: target,label,icon: Icon}) =>
+        {[routes[0], routes[4], routes[8], routes[9], routes[19]].map(({path: target,label,icon: Icon}) =>
           <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}>
             <Icon size={19}/><span>{label === "Transaction history" ? "History" : label === "My profile" ? "Profile" : label}</span>
           </button>)}
@@ -162,6 +186,18 @@ export default function App() {
 
 function pageDescription(path: string) {
   const descriptions: Record<string,string> = {
+    "/search":"Search your FlowPay account and available services.",
+    "/money-received":"Review incoming money and verified credits.",
+    "/money-sent":"Review outgoing money and verified debits.",
+    "/bulk-payments":"Bulk payment tools are restricted until approved business services are connected.",
+    "/bulk-verification":"Customer verification tools require approved verification services.",
+    "/account-number":"View your assigned FlowPay account number and bank assignment.",
+    "/betting":"Betting account funding is unavailable until a verified provider is connected.",
+    "/tv":"Manage supported TV subscriptions.",
+    "/fixed-savings":"Explore fixed savings options.",
+    "/spend-save":"Manage spend-and-save goals.",
+    "/invitations":"Invite people to FlowPay when referral services are available.",
+    "/more":"More FlowPay account services.",
     "/transfers":"Send money and manage transfer requests.",
     "/cards":"Manage your virtual and physical card services.",
     "/activity":"Search and review your account transaction history.",
@@ -180,6 +216,10 @@ function pageDescription(path: string) {
 
 function RouteContent({path,go}:{path:string;go:(path:string)=>void}) {
   const unavailable = <div className="fp-preview-warning"><ShieldCheck size={17}/> This service is not connected to a verified FlowPay API yet. No real transaction or account change can be made here.</div>;
+  if (path === "/search") return <section className="fp-panel fp-detail-panel"><h2>Search FlowPay</h2><p className="fp-muted">Search across your account, verified transactions and services.</p><input aria-label="Search FlowPay" placeholder="Search transactions or services" disabled/>{unavailable}</section>;
+  if (path === "/money-received" || path === "/money-sent") return <section className="fp-panel fp-detail-panel"><h2>{path === "/money-received" ? "Money Received" : "Money Sent"}</h2><p className="fp-muted">Only transactions confirmed by the FlowPay ledger will appear here.</p><div className="fp-empty"><Activity size={24}/><b>No verified transactions available</b><span>No sample or fabricated transaction records are displayed.</span></div>{unavailable}</section>;
+  if (path === "/account-number") return <section className="fp-panel fp-detail-panel"><h2>View Account Number</h2><p className="fp-muted">Your assigned FlowPay account number and provider assignment will appear here once the account profile is provisioned.</p><div className="fp-detail-list"><div><span>Account number</span><b>Not yet assigned</b></div><div><span>Bank / provider</span><b>Not yet assigned</b></div><div><span>Account name</span><b>Not yet linked</b></div></div>{unavailable}</section>;
+  if (path === "/bulk-payments" || path === "/bulk-verification" || path === "/betting" || path === "/fixed-savings" || path === "/spend-save" || path === "/invitations" || path === "/more") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
   if (path === "/profile") return <section className="fp-panel fp-detail-panel"><div className="fp-profile-hero"><div className="fp-profile-avatar"><UserRound size={30}/></div><div><h2>Customer profile</h2><p>Personal and account information</p></div></div><div className="fp-detail-list">{["Full name","Email address","Phone number","FlowPay account number","Account tier","Account status","Residential address"].map(k=><div key={k}><span>{k}</span><b>Not yet linked</b></div>)}</div><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button>{unavailable}</section>;
   if (path === "/documents") return <section className="fp-panel fp-detail-panel"><h2>Documents & statements</h2><p className="fp-muted">Your verification and account documents will be available here after secure document storage is connected.</p><div className="fp-doc-list">{["Government ID (NIN / Driver’s Licence / Passport)","BVN verification receipt","Proof of address","Customer account-opening form","Terms and conditions acceptance","Privacy notice acknowledgement","Monthly account statement","Transaction receipt"].map(d=><div key={d}><FileText size={19}/><span>{d}<small>Not uploaded / not generated</small></span><b>Pending</b></div>)}</div>{unavailable}</section>;
   if (path === "/transfers") return <section className="fp-panel fp-detail-panel"><h2>Transfers</h2><p className="fp-muted">Bank and FlowPay wallet transfers.</p><div className="fp-feature-list">{["Transfer to FlowPay","Transfer to other Nigerian banks","Beneficiary management","Transfer limits and fees","Transfer receipt and status"].map(x=><div key={x}><ArrowLeftRight size={18}/>{x}<span>Coming soon</span></div>)}</div>{unavailable}</section>;
