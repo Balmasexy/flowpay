@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/face-verification/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -54,6 +54,26 @@ const server = createServer(async (req, res) => {
       console.error("FlowPay readiness database check failed:", error instanceof Error ? error.message : "unknown database error");
       send(res, 503, { service: "flowpay-api", status: "not_ready", database: "unavailable", payments: "disabled" });
     }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/face-verification/status") {
+    const sandboxSelected = process.env.SMILE_ID_ENVIRONMENT === "sandbox";
+    const callbackUrl = process.env.SMILE_ID_CALLBACK_URL?.trim() ?? "";
+    const configured = sandboxSelected
+      && Boolean(process.env.SMILE_ID_PARTNER_ID?.trim())
+      && Boolean(process.env.SMILE_ID_API_KEY?.trim())
+      && callbackUrl.startsWith("https://");
+    send(res, 200, {
+      provider: "smile_id",
+      environment: "sandbox",
+      configured,
+      productionEnabled: false,
+      verificationEnabled: false,
+      message: configured
+        ? "Sandbox credentials detected. Face verification submission remains disabled until the signed SDK flow and verified callback handler are deployed."
+        : "Sandbox setup is incomplete. Configure the Smile ID sandbox environment variables on the API service.",
+    });
     return;
   }
 

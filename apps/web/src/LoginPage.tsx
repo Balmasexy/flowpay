@@ -43,6 +43,7 @@ export default function LoginPage() {
           {!authConfigured && <div className="fp-login-notice" role="status"><ShieldCheck size={17}/><span>Authentication is not configured on this deployment. No credentials will be sent.</span></div>}
           <button className="fp-login-submit" type="submit" disabled={busy || !authConfigured}>{busy ? "Signing in…" : "Sign in"} <ArrowRight size={16}/></button>
         </form>
+        <p className="fp-login-help">New to FlowPay? <a href="/signup">Create an account</a></p>
         <p className="fp-login-help">Need help accessing your account? <a href="mailto:support@flowpay.ng">Contact support</a></p>
       </div>
     </section>
