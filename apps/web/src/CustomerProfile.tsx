@@ -95,24 +95,23 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   const visiblePhoto=photoChanged?photoDataUrl:(profile.photoUrl??user.image??null);
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
     <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details and profile photo securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
+    <article className="fp-profile-card" aria-label="FlowPay customer profile card">
+      <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span><span className="fp-profile-card-label">CUSTOMER PROFILE</span></div>
+      <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{visiblePhoto?<img src={visiblePhoto} alt="Customer profile" referrerPolicy="no-referrer"/>:<span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{profile.email||user.email||"Email address not provided"}</span></div></div>
+      <div className="fp-profile-card-photo-actions">
+        <button type="button" className="fp-outline" onClick={()=>uploadInput.current?.click()} disabled={photoBusy||saving}><ImagePlus size={15}/> Upload photo</button>
+        <button type="button" className="fp-outline" onClick={()=>cameraInput.current?.click()} disabled={photoBusy||saving}><Camera size={15}/> Take photo</button>
+        {visiblePhoto&&<button type="button" className="fp-outline" onClick={()=>{setPhotoDataUrl(null);setPhotoChanged(true);setNotice("Photo removal selected. Tap Save profile to confirm.");}} disabled={saving}><Trash2 size={15}/> Remove</button>}
+      </div>
+      <div className="fp-profile-card-bottom"><span>FLOWPAY ACCOUNT</span><b>Customer profile</b></div>
+    </article>
+    <input ref={uploadInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto}/>
+    <input ref={cameraInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={choosePhoto}/>
+    {photoChanged&&<p className="fp-muted" role="status">Photo change not saved yet. Select Save profile to confirm.</p>}
     {loading&&<p className="fp-muted" role="status">Loading saved profile…</p>}
     {error&&<div className="fp-preview-warning" role="alert">{error}</div>}
     {notice&&<div className="fp-profile-success" role="status">{notice}</div>}
     <form className="fp-profile-edit-form" onSubmit={save}>
-      <div className="fp-profile-section-title"><h3>Profile photo</h3><span>JPG, PNG or WebP · up to 3 MB</span></div>
-      <div className="fp-profile-photo-editor">
-        <div className="fp-profile-photo-preview">{visiblePhoto?<img src={visiblePhoto} alt="Profile photo preview"/>:<span>{initials}</span>}</div>
-        <div className="fp-profile-photo-controls">
-          <div className="fp-profile-photo-buttons">
-            <button type="button" className="fp-outline" onClick={()=>uploadInput.current?.click()} disabled={photoBusy||saving}><ImagePlus size={16}/> Upload photo</button>
-            <button type="button" className="fp-outline" onClick={()=>cameraInput.current?.click()} disabled={photoBusy||saving}><Camera size={16}/> Take photo</button>
-            {visiblePhoto&&<button type="button" className="fp-outline" onClick={()=>{setPhotoDataUrl(null);setPhotoChanged(true);setNotice("Photo removal selected. Tap Save profile to confirm.");}} disabled={saving}><Trash2 size={16}/> Remove</button>}
-          </div>
-          <small>{photoBusy?"Reading photo…":photoChanged?"Photo change not saved yet.":"Your photo is private and visible only in your signed-in profile."}</small>
-        </div>
-      </div>
-      <input ref={uploadInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={choosePhoto}/>
-      <input ref={cameraInput} className="fp-profile-file-input" type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={choosePhoto}/>
       <div className="fp-profile-section-title"><h3>Personal information</h3><span>Verified identity details are read-only</span></div>
       <label htmlFor="fp-profile-name">Full name</label><input id="fp-profile-name" value={displayName} readOnly/>
       <label htmlFor="fp-profile-email">Email address</label><input id="fp-profile-email" type="email" value={profile.email||user.email||""} readOnly/>
