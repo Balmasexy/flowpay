@@ -7,7 +7,7 @@ import BulkOperations from "./BulkOperations";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
-  ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Gift, Home,
+  ChevronLeft, ChevronRight, CircleHelp, Clock3, CreditCard, FileText, Gift, Home,
   LockKeyhole, Phone, Search, ShieldCheck, Smartphone, UserRound, Wallet, Wifi, Zap
 } from "lucide-react";
 
@@ -63,6 +63,7 @@ function routeFor(path: string) {
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const authSession = authClient.useSession();
   const [network, setNetwork] = useState("Airtel");
   const [phone, setPhone] = useState("");
@@ -104,16 +105,20 @@ export default function App() {
         </div>
       </header>
 
-      <div className="fp-layout">
+      <div className={`fp-layout${sidebarCollapsed ? " fp-sidebar-collapsed" : ""}`}>
         <aside className="fp-sidebar" aria-label="Customer navigation">
+          <button className="fp-sidebar-toggle" type="button" onClick={() => setSidebarCollapsed(value => !value)} aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            {sidebarCollapsed ? <ChevronRight size={18}/> : <ChevronLeft size={18}/>}
+            <span>{sidebarCollapsed ? "Expand" : "Collapse"}</span>
+          </button>
           <div className="fp-sidebar-section"><span>YOUR FINANCES</span>
-            {routes.filter(r => r.group === "main").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+            {routes.filter(r => r.group === "main").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
           </div>
           <div className="fp-sidebar-section"><span>PAYMENTS & SERVICES</span>
-            {routes.filter(r => r.group === "services").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+            {routes.filter(r => r.group === "services").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
           </div>
           <div className="fp-sidebar-section"><span>ACCOUNT</span>
-            {routes.filter(r => r.group === "account").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
+            {routes.filter(r => r.group === "account").map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={17}/><span>{label}</span></button>)}
           </div>
           <div className="fp-sidebar-foot"><ShieldCheck size={17}/><span>Secure customer access</span></div>
         </aside>
@@ -180,7 +185,7 @@ export default function App() {
 
       <nav className="fp-bottom-nav" aria-label="Main navigation">
         {[routes[0], routes[4], routes[7], routes[8]].map(({path: target,label,icon: Icon}) =>
-          <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}>
+          <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}>
             <Icon size={19}/><span>{label}</span>
           </button>)}
         <button className={mobileMenuOpen ? "active" : ""} aria-expanded={mobileMenuOpen} aria-controls="fp-mobile-all-menu" onClick={() => setMobileMenuOpen(v => !v)}>
@@ -192,7 +197,7 @@ export default function App() {
           <div className="fp-mobile-menu-head"><div><b>All FlowPay services</b><small>Every account section and service</small></div><button onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">×</button></div>
           {(["main","services","account"] as const).map(group => <div className="fp-mobile-menu-group" key={group}>
             <span>{group === "main" ? "YOUR FINANCES" : group === "services" ? "PAYMENTS & SERVICES" : "ACCOUNT"}</span>
-            {routes.filter(r => r.group === group).map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} onClick={() => go(target)}><Icon size={18}/><span>{label}</span><ChevronRight size={15}/></button>)}
+            {routes.filter(r => r.group === group).map(({path: target,label,icon: Icon}) => <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}><Icon size={18}/><span>{label}</span><ChevronRight size={15}/></button>)}
           </div>)}
         </section>
       </div>}
