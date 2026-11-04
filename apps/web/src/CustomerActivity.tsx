@@ -13,6 +13,32 @@ type Transaction = {
   customerEntryCount: number;
 };
 
+const VALID_STATUSES = new Set<Transaction["status"]>(["posted", "reversed"]);
+
+function parseTransactions(value: unknown): Transaction[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): Transaction[] => {
+    if (!item || typeof item !== "object") return [];
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.id !== "string" || !raw.id.trim()) return [];
+    const amount = typeof raw.customerLedgerAmountMinor === "string" || typeof raw.customerLedgerAmountMinor === "number"
+      ? String(raw.customerLedgerAmountMinor) : "";
+    const entryCount = typeof raw.customerEntryCount === "number" && Number.isInteger(raw.customerEntryCount) && raw.customerEntryCount >= 0
+      ? raw.customerEntryCount : 0;
+    return [{
+      id: raw.id,
+      type: typeof raw.type === "string" && raw.type.trim() ? raw.type : "transaction",
+      description: typeof raw.description === "string" ? raw.description : "",
+      status: typeof raw.status === "string" && VALID_STATUSES.has(raw.status as Transaction["status"]) ? raw.status as Transaction["status"] : "posted",
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+      postedAt: typeof raw.postedAt === "string" ? raw.postedAt : null,
+      currency: typeof raw.currency === "string" && /^[A-Z]{3}$/.test(raw.currency) ? raw.currency : "NGN",
+      customerLedgerAmountMinor: amount,
+      customerEntryCount: entryCount
+    }];
+  });
+}
+
 export default function CustomerActivity({ token }: { token: string }) {
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +49,7 @@ export default function CustomerActivity({ token }: { token: string }) {
   useEffect(() => {
     let active = true;
     if (!token || !apiBase) {
+      setItems([]);
       setError("Your authenticated activity service is not configured.");
       setLoading(false);
       return () => { active = false; };
@@ -34,21 +61,40 @@ export default function CustomerActivity({ token }: { token: string }) {
       credentials: "omit",
       headers: { Authorization: "Bearer " + token }
     }).then(async response => {
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || "Unable to load transaction activity.");
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Unable to load transaction activity.";
+        throw new Error(message);
+      }
       return data;
     }).then(data => {
-      if (active) setItems(Array.isArray(data.transactions) ? data.transactions : []);
+      if (active) {
+        const payload = data && typeof data === "object" && "transactions" in data ? data.transactions : [];
+        setItems(parseTransactions(payload));
+      }
     }).catch(reason => {
-      if (active) setError(reason instanceof Error ? reason.message : "Unable to load transaction activity.");
+      if (active) {
+        setItems([]);
+        setError(reason instanceof Error ? reason.message : "Unable to load transaction activity.");
+      }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, apiBase, refresh]);
 
   const formatAmount = (minor: string, currency: string) => {
     const value = Number(minor);
-    if (!Number.isFinite(value)) return "Unavailable";
-    return new Intl.NumberFormat("en-NG", { style: "currency", currency, minimumFractionDigits: 2 }).format(value / 100);
+    if (!minor || !Number.isFinite(value)) return "Unavailable";
+    try {
+      return new Intl.NumberFormat("en-NG", { style: "currency", currency, minimumFractionDigits: 2 }).format(value / 100);
+    } catch {
+      return "Unavailable";
+    }
+  };
+
+  const formatDate = (value: string) => {
+    if (!value) return "Date unavailable";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
   };
 
   return <section className="fp-panel fp-detail-panel">
@@ -64,8 +110,8 @@ export default function CustomerActivity({ token }: { token: string }) {
       {items.map(item => <div key={item.id} style={{alignItems:"flex-start",gap:12}}>
         <Activity size={18}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
-          <b>{item.description || item.type.replaceAll("_"," ")}</b>
-          <small>{item.type.replaceAll("_"," ")} · {new Date(item.postedAt || item.createdAt).toLocaleString()}</small>
+          <b>{item.description || item.type.replace(/_/g," ")}</b>
+          <small>{item.type.replace(/_/g," ")} · {formatDate(item.postedAt || item.createdAt)}</small>
           <small>{item.customerEntryCount} customer ledger {item.customerEntryCount === 1 ? "entry" : "entries"}</small>
         </div>
         <div style={{textAlign:"right",display:"grid",gap:4}}>
