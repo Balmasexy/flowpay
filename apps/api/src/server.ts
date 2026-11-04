@@ -296,7 +296,7 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && pathname === "/customer/account-details") {
     if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "ACCOUNT_DETAILS_SERVICE_NOT_CONFIGURED" }); return; }
-    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
       const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
