@@ -234,7 +234,7 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/search") return <FlowPaySearch go={go}/>;
   if (path === "/money-received") return <MoneyReceived token={token}/>;
   if (path === "/money-sent") return <MoneySent token={token}/>;
-  if (path === "/account-number") return <CustomerAccountDetails token={token}/>;
+  if (path === "/account-number") return <CustomerAccountDetails token={token} go={go}/>;
   if (path === "/more") return <MorePage go={go}/>;
   if (path === "/invitations") return <InvitationsPage/>;
   if (path === "/betting") return <BettingPreview/>;
