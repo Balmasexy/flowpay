@@ -90,7 +90,7 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
 
   const displayName=profile.fullName?.trim()||user.name?.trim()||"FlowPay customer";
   const initials=displayName.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"F";
-  const visiblePhoto=photoDataUrl??user.image??null;
+  const visiblePhoto=photoChanged?photoDataUrl:(profile.photoUrl??user.image??null);
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
     <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details and profile photo securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
     <article className="fp-profile-card" aria-label="FlowPay customer profile card">
