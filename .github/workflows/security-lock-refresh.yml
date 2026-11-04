@@ -1,0 +1,41 @@
+name: Refresh FlowPay web security lockfile
+
+on:
+  push:
+    branches:
+      - security/fix-nonmajor-web-dependencies
+    paths:
+      - "apps/web/package.json"
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/fix-nonmajor-web-dependencies
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Regenerate npm lockfile without running package scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --prefix apps/web
+      - name: Commit updated lockfile when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps/web/package-lock.json; then
+            echo "Lockfile already matches package.json"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json
+          git commit -m "chore(security): refresh web dependency lockfile"
+          git push origin HEAD:security/fix-nonmajor-web-dependencies
