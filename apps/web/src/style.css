@@ -298,3 +298,11 @@
 .fp-profile-photo-controls small{color:#a7aaa2;font-size:10px;line-height:1.5}
 .fp-profile-file-input{display:none}
 @media(max-width:520px){.fp-profile-photo-editor{align-items:flex-start}.fp-profile-photo-preview{flex-basis:62px;width:62px;height:62px}.fp-profile-photo-buttons{display:grid;grid-template-columns:1fr 1fr}.fp-profile-photo-buttons .fp-outline{justify-content:center}.fp-profile-photo-buttons .fp-outline:last-child:nth-child(3){grid-column:1/-1}}
+
+
+/* Keep photo actions inside the original FlowPay customer profile card. */
+.fp-profile-card-photo-actions{position:relative;z-index:1;display:flex;flex-wrap:wrap;gap:8px;margin-top:-12px}
+.fp-profile-card-photo-actions .fp-outline{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:7px 10px;border-color:#ffffff38;background:#ffffff0b;color:#f4f5f2;font-size:10px}
+.fp-profile-card-photo-actions .fp-outline:hover{border-color:#ff9a50;background:#ff7a1820}
+.fp-profile-card-photo-actions .fp-outline:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:520px){.fp-profile-card-photo-actions{display:grid;grid-template-columns:1fr 1fr}.fp-profile-card-photo-actions .fp-outline:last-child:nth-child(3){grid-column:1/-1}}
