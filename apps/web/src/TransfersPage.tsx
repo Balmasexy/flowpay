@@ -51,8 +51,8 @@ export default function TransfersPage({ token }: { token: string }) {
       ]);
       if (!accountResponse.ok) throw new Error(typeof accountBody.error === "string" ? accountBody.error : "Unable to load your wallet accounts.");
       if (!historyResponse.ok) throw new Error(typeof historyBody.error === "string" ? historyBody.error : "Unable to load transfer history.");
-      const accountList = Array.isArray(accountBody.walletAccounts) ? accountBody.walletAccounts.filter(isWalletAccount) : [];
-      const transferList = Array.isArray(historyBody.transfers) ? historyBody.transfers.filter(isTransferRecord) : [];
+      const accountList: WalletAccount[] = Array.isArray(accountBody.walletAccounts) ? (accountBody.walletAccounts as unknown[]).filter(isWalletAccount) : [];
+      const transferList: TransferRecord[] = Array.isArray(historyBody.transfers) ? (historyBody.transfers as unknown[]).filter(isTransferRecord) : [];
       setWallets(accountList);
       setHistory(transferList);
       if (accountList.some(a => a.currency === "NGN")) setCurrency("NGN");
