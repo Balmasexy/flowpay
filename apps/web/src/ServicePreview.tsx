@@ -8,8 +8,10 @@ const tvProviders = ["DStv", "GOtv", "StarTimes"];
 export default function ServicePreview({ path }: { path: string }) {
   const isAirtime = path === "/airtime";
   const isData = path === "/data";
-  const isCable = path === "/cable-tv" || path === "/tv";
-  const title = isAirtime ? "Airtime" : isData ? "Data" : isCable ? "Cable TV" : "Bill payments";
+  const isCable = path === "/cable-tv";
+  const isTv = path === "/tv";
+  const isTelevision = isCable || isTv;
+  const title = isAirtime ? "Airtime" : isData ? "Data" : isCable ? "Cable TV" : isTv ? "TV subscriptions" : "Bill payments";
   const [network, setNetwork] = useState("MTN");
   const [provider, setProvider] = useState("");
   const [phone, setPhone] = useState("");
@@ -20,7 +22,7 @@ export default function ServicePreview({ path }: { path: string }) {
   const [review, setReview] = useState(false);
   const [error, setError] = useState("");
 
-  const referenceLabel = isCable ? "Smartcard / IUC number" : "Meter / customer account number";
+  const referenceLabel = isTelevision ? "Smartcard / IUC number" : "Meter / customer account number";
   const referenceValid = /^[A-Za-z0-9-]{5,30}$/.test(customerRef.trim());
   const phoneValid = /^(?:0[0-9]{10}|\+?234[0-9]{10})$/.test(phone.replace(/[\s-]/g, ""));
   const amountValue = Number(amount);
@@ -32,10 +34,10 @@ export default function ServicePreview({ path }: { path: string }) {
   const detail = useMemo(() => ({
     provider: isAirtime || isData ? network : provider,
     recipient: isAirtime || isData ? phone.trim() : customerRef.trim(),
-    service: isAirtime ? "Airtime top-up" : isData ? "Data bundle" : isCable ? "TV subscription" : "Electricity bill",
+    service: isAirtime ? "Airtime top-up" : isData ? "Data bundle" : isTelevision ? "TV subscription" : "Electricity bill",
     plan: isData ? plan.trim() : "",
-    meterType: !isAirtime && !isData && !isCable ? meterType : ""
-  }), [isAirtime, isData, isCable, network, phone, plan, provider, customerRef, meterType]);
+    meterType: !isAirtime && !isData && !isTelevision ? meterType : ""
+  }), [isAirtime, isData, isTelevision, network, phone, plan, provider, customerRef, meterType]);
 
   function preview() {
     setError("");
@@ -65,9 +67,9 @@ export default function ServicePreview({ path }: { path: string }) {
       <label htmlFor="service-provider">Service provider</label>
       <select id="service-provider" value={provider} onChange={e => { setProvider(e.target.value); setReview(false); }}>
         <option value="">Select provider</option>
-        {(isCable ? tvProviders : electricityProviders).map(item => <option key={item} value={item}>{item}</option>)}
+        {(isTelevision ? tvProviders : electricityProviders).map(item => <option key={item} value={item}>{item}</option>)}
       </select>
-      {!isCable && <>
+      {!isTelevision && <>
         <label htmlFor="service-meter-type">Meter type</label>
         <select id="service-meter-type" value={meterType} onChange={e => setMeterType(e.target.value)}><option>Prepaid</option><option>Postpaid</option></select>
       </>}
