@@ -17,7 +17,7 @@ export default function CustomerAccountDetails({ token }: { token: string }) {
     if (!token || token.split(".").length !== 3) {
       setData(null); setError("Your secure session is not ready. Sign in again and retry."); setLoading(false); return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setData(null); setError("FlowPay API address is not configured."); setLoading(false); return; }
     setLoading(true); setError("");
     try {
