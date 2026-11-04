@@ -51,7 +51,7 @@ export default function ServicePreview({ path }: { path: string }) {
     setReview(true);
   }
 
-  const Icon = isAirtime ? Phone : isData ? Wifi : isCable ? Cable : Zap;
+  const Icon = isAirtime ? Phone : isData ? Wifi : isTelevision ? Cable : Zap;
   return <section className="fp-panel fp-form-panel">
     <div className="fp-form-icon"><Icon/></div>
     <h2>{title}</h2>
