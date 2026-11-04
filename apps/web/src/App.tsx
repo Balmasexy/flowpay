@@ -10,6 +10,7 @@ import CustomerCards from "./CustomerCards";
 import MoneyReceived from "./MoneyReceived";
 import MoneySent from "./MoneySent";
 import SecurityCenter from "./SecurityCenter";
+import FaceVerification from "./FaceVerification";
 import CustomerAccountDetails from "./CustomerAccountDetails";
 import TransfersPage from "./TransfersPage";
 import OverviewDashboard from "./OverviewDashboard";
@@ -57,6 +58,7 @@ const routes: Route[] = [
   { path: "/spend-save", label: "Spend & Save", icon: Wallet, group: "services" },
   { path: "/invitations", label: "Invitations", icon: Gift, group: "services" },
   { path: "/more", label: "More", icon: ChevronRight, group: "account" },
+  { path: "/face-verification", label: "Face verification", icon: ShieldCheck, group: "account" },
   { path: "/support", label: "Help & support", icon: CircleHelp, group: "account" },
 ];
 
@@ -224,6 +226,7 @@ function pageDescription(path: string) {
     "/profile":"Review your personal and account information.",
     "/documents":"View verification documents and account statements.",
     "/security":"Manage sign-in and account security.",
+    "/face-verification":"Complete a secure live selfie and liveness verification with Smile ID sandbox.",
     "/support":"Get help with your FlowPay account."
   };
   return descriptions[path] ?? "Manage your FlowPay account.";
@@ -247,6 +250,7 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/fixed-savings") return <SavingsPage mode="fixed"/>;
   if (path === "/spend-save") return <SpendSavePage/>;
   if (path === "/security") return <SecurityCenter token={token}/>;
+  if (path === "/face-verification") return <FaceVerification token={token}/>;
   if (path === "/support") return <HelpSupport go={go}/>;
   return <section className="fp-panel fp-detail-panel"><h2>Page not found</h2><button className="fp-primary" onClick={()=>go("/")}>Return to home</button></section>;
 }

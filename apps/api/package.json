@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:face-verification": "tsx scripts/test-face-verification.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
     "pg": "^8.16.3",
-    "jose": "^6.1.0"
+    "jose": "^6.1.0",
+    "smile-identity-core": "3.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

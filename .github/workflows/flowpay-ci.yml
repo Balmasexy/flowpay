@@ -55,6 +55,9 @@ jobs:
       - name: Type-check API
         run: npm run typecheck --prefix apps/api
 
+      - name: Test Smile ID face and liveness result decisions
+        run: npm run test:face-verification --prefix apps/api
+
       - name: Smoke-test API health and safe readiness behavior
         shell: bash
         run: |
