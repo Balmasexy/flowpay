@@ -94,7 +94,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       </article>
       <article className="fp-overview-card fp-account-safety-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ShieldCheck size={19}/></span><span>Account services</span></div>
-        <strong className="fp-overview-service-status">Payments are protected</strong>
+        <strong className="fp-overview-service-status">Payments are currently disabled</strong>
         <p className="fp-overview-muted">Transfers and provider payments remain unavailable until secure verification, ledger posting and reconciliation are enabled.</p>
         <button className="fp-overview-link" onClick={() => go("/security")}>Security centre <ChevronRight size={15}/></button>
       </article>
