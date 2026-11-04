@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import AdminPage from "./AdminPage";
 import LandingPage from "./LandingPage";
 import LoginPage from "./LoginPage";
+import SignupPage from "./SignupPage";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -67,6 +68,7 @@ export default function App() {
 
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
+  if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
   if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
   if (!authConfigured) return <LoginPage />;
   if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
