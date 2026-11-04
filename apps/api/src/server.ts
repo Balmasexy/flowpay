@@ -80,7 +80,7 @@ const server = createServer(async (req, res) => {
 
   if ((req.method === "GET" || req.method === "PATCH") && pathname === "/customer/profile") {
     if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "PROFILE_SERVICE_NOT_CONFIGURED" }); return; }
-    const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
       const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
@@ -110,7 +110,7 @@ const server = createServer(async (req, res) => {
       if (Object.keys(input).some(key => !["phoneNumber", "residentialAddress"].includes(key))) { send(res, 400, { error: "UNSUPPORTED_PROFILE_FIELD" }); return; }
       const phone = typeof input.phoneNumber === "string" ? input.phoneNumber.trim() : "";
       const address = typeof input.residentialAddress === "string" ? input.residentialAddress.trim() : "";
-      if (phone.length > 24 || (phone && !/^\\+?[0-9][0-9 ()-]{6,22}$/.test(phone))) { send(res, 400, { error: "INVALID_PHONE_NUMBER" }); return; }
+      if (phone.length > 24 || (phone && !/^\+?[0-9][0-9 ()-]{6,22}$/.test(phone))) { send(res, 400, { error: "INVALID_PHONE_NUMBER" }); return; }
       if (address.length > 500) { send(res, 400, { error: "ADDRESS_TOO_LONG" }); return; }
       const saved = await pool.query(
         `INSERT INTO public.fp_customer_profiles (user_id, phone_number, residential_address, updated_at)
