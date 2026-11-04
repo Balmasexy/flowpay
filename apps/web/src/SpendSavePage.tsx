@@ -10,14 +10,26 @@ export default function SpendSavePage() {
   const [spending, setSpending] = useState("");
   const [saving, setSaving] = useState("");
 
-  const result = useMemo(() => {
-    const values = [income, spending, saving].map(v => v.trim() === "" ? NaN : Number(v));
-    if (values.some(v => !Number.isFinite(v) || v < 0) || values[0] <= 0) return null;
-    return { remaining: values[0] - values[1] - values[2], total: values[1] + values[2] };
-  }, [income, spending, saving]);
+  const validAmount = (value: string, allowZero = false) => {
+    const trimmed = value.trim();
+    if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(trimmed)) return false;
+    const amount = Number(trimmed);
+    return Number.isFinite(amount) && (allowZero ? amount >= 0 : amount > 0) &&
+      amount <= Number.MAX_SAFE_INTEGER;
+  };
 
-  const ready = income.trim() !== "" && spending.trim() !== "" && saving.trim() !== "" &&
-    Number(income) > 0 && Number(spending) >= 0 && Number(saving) >= 0;
+  const ready = validAmount(income) && validAmount(spending, true) && validAmount(saving, true);
+
+  const result = useMemo(() => {
+    if (!ready) return null;
+    const monthlyIncome = Number(income);
+    const monthlySpending = Number(spending);
+    const monthlySaving = Number(saving);
+    const total = monthlySpending + monthlySaving;
+    const remaining = monthlyIncome - total;
+    if (!Number.isFinite(total) || !Number.isFinite(remaining)) return null;
+    return { remaining, total };
+  }, [income, spending, saving, ready]);
 
   return <div className="fp-detail-stack">
     <section className="fp-panel fp-detail-panel">
@@ -31,9 +43,12 @@ export default function SpendSavePage() {
       </div>
       <div className="fp-preview-warning"><ShieldCheck size={17}/> This is a private, on-screen planning calculator. It does not read or debit your FlowPay balance, create standing orders, or move money.</div>
       <div className="fp-form-grid">
-        <label className="fp-field"><span>Planned monthly income (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter income" value={income} onChange={e => setIncome(e.target.value)}/></label>
-        <label className="fp-field"><span>Planned monthly spending (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter spending budget" value={spending} onChange={e => setSpending(e.target.value)}/></label>
-        <label className="fp-field"><span>Planned monthly savings (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter savings target" value={saving} onChange={e => setSaving(e.target.value)}/></label>
+        <label className="fp-field"><span>Planned monthly income (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter income" value={income} onChange={e => setIncome(e.target.value)}/>
+          {income.trim() !== "" && !validAmount(income) && <small className="fp-error">Enter a positive amount with no more than 2 decimal places.</small>}</label>
+        <label className="fp-field"><span>Planned monthly spending (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter spending budget" value={spending} onChange={e => setSpending(e.target.value)}/>
+          {spending.trim() !== "" && !validAmount(spending, true) && <small className="fp-error">Enter zero or a positive amount with no more than 2 decimal places.</small>}</label>
+        <label className="fp-field"><span>Planned monthly savings (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter savings target" value={saving} onChange={e => setSaving(e.target.value)}/>
+          {saving.trim() !== "" && !validAmount(saving, true) && <small className="fp-error">Enter zero or a positive amount with no more than 2 decimal places.</small>}</label>
       </div>
       <div className="fp-savings-preview">
         <div className="fp-savings-preview-icon"><PiggyBank size={21}/></div>
