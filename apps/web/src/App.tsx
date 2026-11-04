@@ -230,7 +230,6 @@ function pageDescription(path: string) {
 }
 
 function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};token:string;onPhotoChange:(photo:string|null)=>void}) {
-  const unavailable = <div className="fp-preview-warning"><ShieldCheck size={17}/> This service is not connected to a verified FlowPay API yet. No real transaction or account change can be made here.</div>;
   if (path === "/search") return <FlowPaySearch go={go}/>;
   if (path === "/money-received") return <MoneyReceived token={token}/>;
   if (path === "/money-sent") return <MoneySent token={token}/>;
