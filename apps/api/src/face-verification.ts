@@ -111,6 +111,13 @@ export function deriveVerificationStatus(resultCode: string, actions: Record<str
   const humanLiveness = actionText(actions, "Human_Review_Liveness_Check");
   const humanSelfie = actionText(actions, "Human_Review_Selfie_Check");
 
+  const livenessPassed = liveness === "Passed" || (liveness === "Under Review" && humanLiveness === "Passed");
+  const selfiePassed = selfie === "Passed" || (selfie === "Under Review" && humanSelfie === "Passed");
+  const unresolvedHumanReview =
+    [humanLiveness, humanSelfie].some(value => value === "Under Review" || value === "Unable To Determine") ||
+    (liveness === "Under Review" && humanLiveness !== "Passed") ||
+    (selfie === "Under Review" && humanSelfie !== "Passed");
+
   // Any explicit failed check is a failed identity result.
   if (
     ["0841", "0941", "0942", "1241", "1242"].includes(resultCode) ||
@@ -122,17 +129,16 @@ export function deriveVerificationStatus(resultCode: string, actions: Record<str
   if (
     ["0844", "0846"].includes(resultCode) ||
     register === "Provisionally Approved" ||
-    [humanLiveness, humanSelfie, liveness, selfie].some(value =>
-      value === "Under Review" || value === "Unable To Determine"
-    )
+    unresolvedHumanReview
   ) return "under_review";
 
-  // The documented registration result and its registration action must both pass.
+  // Human review may resolve an inconclusive machine check. It must explicitly
+  // pass before it can satisfy the same required liveness/selfie gate.
   if (
     ["0840", "1240"].includes(resultCode) &&
     register === "Approved" &&
-    liveness === "Passed" &&
-    selfie === "Passed" &&
+    livenessPassed &&
+    selfiePassed &&
     provided === "Passed"
   ) return "verified";
 
