@@ -77,7 +77,7 @@ export default function App() {
   return (
     <div className="flowpay-app">
       <header className="fp-header">
-        <button className="fp-brand" onClick={() => go("/")} aria-label="FlowPay home">
+        <button className="fp-brand" onClick={() => go("/dashboard")} aria-label="FlowPay dashboard">
           <span className="fp-logo">F</span><span>flow<span>pay</span></span>
         </button>
         <div className="fp-header-actions">
