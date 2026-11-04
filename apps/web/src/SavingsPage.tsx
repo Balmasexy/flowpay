@@ -13,15 +13,21 @@ export default function SavingsPage({ mode }: Props) {
   const [contribution, setContribution] = useState("");
   const [term, setTerm] = useState("3");
 
-  const estimate = useMemo(() => {
-    const goal = Number(target);
-    const monthly = Number(contribution);
-    if (!Number.isFinite(goal) || !Number.isFinite(monthly) || goal <= 0 || monthly <= 0) return null;
-    return Math.ceil(goal / monthly);
-  }, [target, contribution]);
+  const isValidAmount = (value: string) => {
+    const trimmed = value.trim();
+    if (!/^(?:\\d+)(?:\\.\\d{1,2})?$/.test(trimmed)) return false;
+    const amount = Number(trimmed);
+    return Number.isFinite(amount) && amount > 0 && amount <= Number.MAX_SAFE_INTEGER;
+  };
 
-  const validTarget = target.trim() !== "" && Number(target) > 0;
-  const validContribution = contribution.trim() !== "" && Number(contribution) > 0;
+  const validTarget = isValidAmount(target);
+  const validContribution = isValidAmount(contribution);
+
+  const estimate = useMemo(() => {
+    if (!validTarget || !validContribution) return null;
+    const months = Math.ceil(Number(target) / Number(contribution));
+    return Number.isSafeInteger(months) ? months : null;
+  }, [target, contribution, validTarget, validContribution]);
 
   return (
     <div className="fp-detail-stack">
@@ -40,11 +46,13 @@ export default function SavingsPage({ mode }: Props) {
         <div className="fp-form-grid">
           <label className="fp-field">
             <span>{fixed ? "Planned principal (NGN)" : "Savings target (NGN)"}</span>
-            <input type="number" min="1" step="0.01" inputMode="decimal" placeholder="Enter amount" value={target} onChange={e => setTarget(e.target.value)}/>
+            <input type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="Enter amount" value={target} onChange={e => setTarget(e.target.value)}/>
+            {target.trim() !== "" && !validTarget && <small className="fp-error">Enter a positive amount with no more than 2 decimal places.</small>}
           </label>
           <label className="fp-field">
             <span>{fixed ? "Planned monthly contribution (NGN)" : "Monthly contribution (NGN)"}</span>
-            <input type="number" min="1" step="0.01" inputMode="decimal" placeholder="Enter amount" value={contribution} onChange={e => setContribution(e.target.value)}/>
+            <input type="number" min="0.01" step="0.01" inputMode="decimal" placeholder="Enter amount" value={contribution} onChange={e => setContribution(e.target.value)}/>
+            {contribution.trim() !== "" && !validContribution && <small className="fp-error">Enter a positive amount with no more than 2 decimal places.</small>}
           </label>
           {fixed && <label className="fp-field">
             <span>Possible saving period</span>
@@ -62,6 +70,7 @@ export default function SavingsPage({ mode }: Props) {
               <p>Monthly contribution: <strong>{money(Number(contribution))}</strong></p>
               {fixed && <p>Selected planning period: <strong>{term} months</strong></p>}
               {!fixed && estimate !== null && <p>Estimated time to reach target: <strong>{estimate} month{estimate === 1 ? "" : "s"}</strong></p>}
+              {!fixed && estimate === null && <p className="fp-muted">The estimate is too large to calculate safely. Review the amounts.</p>}
               <small>{fixed
                 ? "This is arithmetic for planning only. No interest, maturity value, or contractual return is available."
                 : "Estimate assumes the same contribution every month and excludes interest, fees, and missed contributions."}</small>
