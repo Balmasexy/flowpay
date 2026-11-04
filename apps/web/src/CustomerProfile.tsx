@@ -27,7 +27,15 @@ export default function CustomerProfile({go,user}:{go:(path:string)=>void;user:{
   const cameraInput=useRef<HTMLInputElement>(null);
 
   async function request(method:"GET"|"PATCH",body?:object) {
-    const token=await authClient.getJWTToken();
+    const tokenClient=authClient as typeof authClient & {
+      getJWTToken?:()=>Promise<string|null>;
+      getSession?:()=>Promise<{data?:{session?:{access_token?:string|null}}}>;
+    };
+    let token=await tokenClient.getJWTToken?.();
+    if(!token) {
+      const session=await tokenClient.getSession?.();
+      token=session?.data?.session?.access_token??null;
+    }
     if(!token) throw new Error("Your secure session token is unavailable. Please sign in again.");
     if(!API_BASE) throw new Error("FlowPay API address is missing from the web app configuration.");
     const response=await fetch(API_BASE+"/customer/profile",{method,credentials:"omit",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
