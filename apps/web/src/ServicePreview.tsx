@@ -26,7 +26,7 @@ export default function ServicePreview({ path }: { path: string }) {
   const referenceValid = /^[A-Za-z0-9-]{5,30}$/.test(customerRef.trim());
   const phoneValid = /^(?:0[0-9]{10}|\+?234[0-9]{10})$/.test(phone.replace(/[\s-]/g, ""));
   const amountValue = Number(amount);
-  const amountValid = /^\\d+(?:\\.\\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0;
+  const amountValid = /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0 && amountValue <= 100000000;
   const valid = isAirtime || isData
     ? phoneValid && amountValid && (!isData || plan.trim().length > 0)
     : Boolean(provider) && referenceValid && amountValid;
@@ -44,7 +44,7 @@ export default function ServicePreview({ path }: { path: string }) {
     setReview(false);
     if (!valid) {
       setError(isAirtime || isData
-        ? "Enter a valid Nigerian phone number and amount" + (isData ? ", and choose a data plan" : "")
+        ? "Enter a valid Nigerian phone number and an amount from ₦0.01 to ₦100,000,000" + (isData ? ", and choose a data plan" : "")
         : "Select a provider and enter a valid customer reference and amount");
       return;
     }
@@ -78,7 +78,7 @@ export default function ServicePreview({ path }: { path: string }) {
     </>}
 
     <label htmlFor="service-amount">Amount (NGN)</label>
-    <input id="service-amount" value={amount} onChange={e => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setReview(false); }} inputMode="decimal" placeholder="₦ 0.00"/>
+    <input id="service-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount(decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole); setReview(false); }} inputMode="decimal" maxLength={12} placeholder="₦ 0.00"/>
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/>{error}</div>}
     <button type="button" className="fp-primary" onClick={preview}>Review details</button>
     {review && <div className="fp-panel" style={{ marginTop: 8, padding: 16, boxShadow: "none" }}>
