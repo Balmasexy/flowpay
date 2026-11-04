@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:face-verification": "tsx scripts/test-face-verification.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
