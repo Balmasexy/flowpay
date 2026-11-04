@@ -45,18 +45,7 @@ const routes: Route[] = [
 ];
 
 const providers = ["MTN", "Airtel", "Glo", "9mobile"];
-const services = [
-  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Top up any Nigerian network" },
-  { label: "Data", path: "/data", icon: Wifi, detail: "Buy data bundles" },
-  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Send money to a bank" },
-  { label: "Cards", path: "/cards", icon: CreditCard, detail: "Manage virtual and physical cards" },
-  { label: "Electricity", path: "/bills", icon: Zap, detail: "Pay electricity bills" },
-  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Pay TV subscriptions" },
-  { label: "Savings", path: "/savings", icon: Wallet, detail: "Savings tools and goals" },
-  { label: "History", path: "/activity", icon: Clock3, detail: "Track every transaction" },
-  { label: "Bulk Payments", path: "/bulk-payments", icon: Wallet, detail: "Prepare and validate payment batches" },
-  { label: "Bulk Verification", path: "/bulk-verification", icon: ShieldCheck, detail: "Validate customer records in batches" },
-];
+
 
 function routeFor(path: string) {
   return routes.find((r) => r.path === path) ?? routes[0];
