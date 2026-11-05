@@ -1,8 +1,5 @@
 BEGIN;
 
--- Public FlowPay wallet account numbers are separate from ledger UUIDs and
--- from provider-issued virtual bank account numbers. A sequence guarantees
--- unique 12-digit numbers without relying on random collision retries.
 CREATE SEQUENCE IF NOT EXISTS public.fp_customer_account_number_seq
   AS BIGINT
   START WITH 100000000000
@@ -16,16 +13,12 @@ CREATE TABLE IF NOT EXISTS public.fp_customer_account_numbers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Existing customer accounts receive unique numbers. Non-customer users are
--- intentionally excluded. New customers receive a number on first account-
--- details request, using the same sequence.
 INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
 SELECT id, nextval('public.fp_customer_account_number_seq')::TEXT
   FROM public.fp_users
  WHERE role = 'customer'
 ON CONFLICT DO NOTHING;
 
--- Transaction PINs are salted scrypt hashes; no plaintext PIN is persisted.
 CREATE TABLE IF NOT EXISTS public.fp_transaction_pins (
   user_id UUID PRIMARY KEY REFERENCES public.fp_users(id) ON DELETE RESTRICT,
   pin_salt BYTEA NOT NULL CHECK (octet_length(pin_salt) = 16),
@@ -36,8 +29,6 @@ CREATE TABLE IF NOT EXISTS public.fp_transaction_pins (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Audit and history metadata for wallet-to-wallet transfers. The balanced
--- debit/credit itself remains in the immutable ledger entries.
 CREATE TABLE IF NOT EXISTS public.fp_internal_transfer_details (
   transaction_id UUID PRIMARY KEY REFERENCES public.fp_ledger_transactions(id) ON DELETE RESTRICT,
   sender_user_id UUID NOT NULL REFERENCES public.fp_users(id) ON DELETE RESTRICT,
