@@ -591,7 +591,7 @@ const server = createServer(async (req, res) => {
         send(res, 401, { error: "INVALID_SESSION" }); return;
       }
       const result = await pool.query(
-        `SELECT 1
+        `SELECT app_user.role
            FROM neon_auth."user" AS auth_user
            JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
           WHERE auth_user.id::text = $1
