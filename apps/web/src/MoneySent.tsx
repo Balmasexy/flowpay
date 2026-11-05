@@ -82,13 +82,13 @@ export default function MoneySent({ token }: { token: string }) {
 
   return <section className="fp-panel fp-detail-panel">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div><h2>Money Sent</h2><p className="fp-muted">Your recorded simulated transfer history.</p></div>
+      <div><h2>Transfer History</h2><p className="fp-muted">Review your outgoing FlowPay wallet transfers and legacy simulated transfer records.</p></div>
       <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15}/> Refresh</button>
     </div>
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> These records are simulation-only. No live bank transfer is initiated or confirmed by this page.</div>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> FlowPay wallet-to-wallet transfers are recorded in the balanced customer ledger. External bank payouts remain disabled until provider disbursement and reconciliation are configured.</div>
     {loading && <p className="fp-muted">Loading transfer records…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
-    {!loading && !error && items.length === 0 && <div className="fp-empty"><ArrowUpRight size={24}/><b>No simulated transfers recorded</b><span>Transfer records will appear here after a simulation is created and recorded in the ledger.</span></div>}
+    {!loading && !error && items.length === 0 && <div className="fp-empty"><ArrowUpRight size={24}/><b>No outgoing transfers recorded</b><span>Completed FlowPay wallet transfers will appear here after both ledger entries are posted.</span></div>}
     {!loading && !error && items.length > 0 && <div className="fp-feature-list">{items.map(item => <div key={item.id} style={{alignItems:"center",gap:12}}>
       <ArrowUpRight size={19}/><div style={{minWidth:0,flex:1,display:"grid",gap:4}}><b>{item.type.replace(/_/g," ")}</b><small>Destination account · {item.destinationAccountMasked}</small><small>{formatDate(item.createdAt)}</small></div><span>{item.status}</span>
     </div>)}</div>}
