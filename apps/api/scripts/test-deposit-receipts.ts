@@ -146,7 +146,7 @@ function authenticatedRequest(method: string, url: string, token: string, payloa
 }
 
 
-test("valid customer receives a short-lived, content-type-bound private R2 upload URL", async () => {
+test("valid customer receives a private FlowPay upload path without exposing R2 credentials or URLs", async () => {
   configuredStorage();
   const token = await signedCustomerToken();
   const queries: string[] = [];
@@ -168,7 +168,7 @@ test("valid customer receives a short-lived, content-type-bound private R2 uploa
             id: createdReceiptId, user_id: testUserId, amount_minor: "500000",
             currency: "NGN", reference_text: "bank-ref-12345", customer_note: null,
             object_key: objectKey, file_name: "bank-receipt.png",
-            content_type: "image/png", size_bytes: 1024, status: "pending_upload",
+            content_type: "image/png", size_bytes: 8, status: "pending_upload",
             created_at: new Date(), reviewed_at: null, review_note: null,
             review_bank_reference: null, ledger_transaction_id: null
           }]
@@ -191,23 +191,97 @@ test("valid customer receives a short-lived, content-type-bound private R2 uploa
     note: "Test transfer evidence",
     fileName: "bank-receipt.png",
     contentType: "image/png",
-    sizeBytes: 1024
+    sizeBytes: 8
   }), recorder.res);
 
   const result = recorder.result();
-  assert.equal(result.status, 201);
+  assert.equal(result.status, 201, JSON.stringify(result.body));
   assert.equal(result.body?.status, "pending_upload");
   assert.equal(result.body?.uploadMethod, "PUT");
-  const uploadUrl = new URL(String(result.body?.uploadUrl));
-  assert.equal(uploadUrl.protocol, "https:");
-  assert.equal(uploadUrl.hostname, "test-account.r2.cloudflarestorage.com");
-  assert.equal(uploadUrl.pathname, "/" + process.env.R2_BUCKET_NAME + "/" + objectKey);
-  assert.equal(uploadUrl.searchParams.get("X-Amz-Algorithm"), "AWS4-HMAC-SHA256");
-  assert.equal(uploadUrl.searchParams.get("X-Amz-Expires"), "300");
-  assert.equal(uploadUrl.searchParams.get("X-Amz-SignedHeaders"), "content-type;host");
-  assert.match(uploadUrl.searchParams.get("X-Amz-Signature") ?? "", /^[0-9a-f]{64}$/);
-  assert.deepEqual(result.body?.uploadHeaders, { "Content-Type": "image/png" });
+  assert.equal(result.body?.uploadPath, "/customer/deposit-receipts/" + createdReceiptId + "/file");
+  assert.equal(result.body?.uploadUrl, undefined);
+  assert.equal(result.body?.maxBytes, 5 * 1024 * 1024);
   assert.ok(queries.some(sql => sql.includes("INSERT INTO public.fp_deposit_receipts")));
+});
+
+test("valid customer uploads bytes through FlowPay API and the API forwards the signed request to private R2", async () => {
+  configuredStorage();
+  const token = await signedCustomerToken();
+  const receiptId = "00000000-0000-4000-8000-000000000105";
+  const objectKey = "receipts/" + testUserId + "/" + receiptId + ".png";
+  const pngBytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const queries: string[] = [];
+  const clientQueries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      clientQueries.push(sql);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rowCount: 0, rows: [] };
+      if (sql.includes("UPDATE public.fp_deposit_receipts")) return { rowCount: 1, rows: [{ id: receiptId }] };
+      if (sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")) return { rowCount: 1, rows: [] };
+      throw new Error("Unexpected client SQL: " + sql);
+    },
+    release: () => undefined
+  };
+  const pool = {
+    query: async (sql: string) => {
+      queries.push(sql);
+      if (sql.includes('FROM neon_auth."user"')) return { rowCount: 1, rows: [{ id: testUserId, role: "customer" }] };
+      if (sql.includes("FROM public.fp_deposit_receipts WHERE id=$1 AND user_id=$2")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: receiptId, user_id: testUserId, amount_minor: "500000", currency: "NGN",
+            reference_text: null, customer_note: null, object_key: objectKey,
+            file_name: "bank-receipt.png", content_type: "image/png", size_bytes: 8,
+            status: "pending_upload", created_at: new Date(), reviewed_at: null,
+            review_note: null, review_bank_reference: null, ledger_transaction_id: null
+          }]
+        };
+      }
+      throw new Error("Unexpected pool SQL: " + sql);
+    },
+    connect: async () => client
+  } as unknown as Pool;
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl = "";
+  let forwardedMethod = "";
+  let forwardedType = "";
+  let forwardedSize = 0;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    forwardedUrl = String(input);
+    forwardedMethod = init?.method ?? "GET";
+    forwardedType = new Headers(init?.headers).get("Content-Type") ?? "";
+    forwardedSize = init?.body instanceof Uint8Array ? init.body.byteLength : 0;
+    return new Response(null, { status: 200 });
+  };
+  try {
+    const handler = createDepositReceiptsHandler({
+      pool, jwks: localJwks, issuer: TEST_ISSUER, audience: TEST_AUDIENCE
+    });
+    const req = Object.assign(Readable.from([pngBytes]), {
+      method: "PUT",
+      url: "/customer/deposit-receipts/" + receiptId + "/file",
+      headers: { authorization: "Bearer " + token, "content-type": "image/png" }
+    }) as unknown as IncomingMessage;
+    const recorder = responseRecorder();
+    await handler(req, recorder.res);
+
+    assert.equal(recorder.result().status, 200, JSON.stringify(recorder.result().body));
+    assert.equal(recorder.result().body?.status, "pending_review");
+    assert.equal(forwardedMethod, "PUT");
+    assert.equal(forwardedType, "image/png");
+    assert.equal(forwardedSize, pngBytes.length);
+    const r2Url = new URL(forwardedUrl);
+    assert.equal(r2Url.hostname, "test-account.r2.cloudflarestorage.com");
+    assert.equal(r2Url.pathname, "/" + process.env.R2_BUCKET_NAME + "/" + objectKey);
+    assert.equal(r2Url.searchParams.get("X-Amz-Expires"), "120");
+    assert.match(r2Url.searchParams.get("X-Amz-Signature") ?? "", /^[0-9a-f]{64}$/);
+    assert.ok(queries.some(sql => sql.includes("FROM public.fp_deposit_receipts WHERE id=$1 AND user_id=$2")));
+    assert.ok(clientQueries.some(sql => sql.includes("UPDATE public.fp_deposit_receipts")));
+    assert.ok(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("customer submission rejects unsafe file types and oversized objects before creating a receipt", async () => {
