@@ -447,7 +447,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
                   u.email
              FROM public.fp_deposit_receipts r
              JOIN public.fp_users u ON u.id=r.user_id
-            WHERE r.status IN ('pending_upload','pending_review')
+            WHERE r.status = 'pending_review'
             ORDER BY r.created_at ASC LIMIT 100`
         );
         send(res, 200, { receipts: result.rows.map(row => ({
