@@ -349,7 +349,7 @@ const server = createServer(async (req, res) => {
         : { rows: [] as Array<Record<string, unknown>> };
       const virtualBankAccount = dedicatedAccountRows.rows[0];
       const virtualBankAccountAssigned = virtualBankAccount?.status === "assigned" &&
-        /^\\d{10}$/.test(String(virtualBankAccount.account_number ?? "")) &&
+        /^[0-9]{10}$/.test(String(virtualBankAccount.account_number ?? "")) &&
         typeof virtualBankAccount.bank_name === "string" &&
         typeof virtualBankAccount.account_name === "string";
       send(res, 200, {
