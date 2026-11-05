@@ -238,9 +238,24 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
       throw new Error("FLOWPAY_BANK_TRANSFER_NOT_FOUND");
     }
     const payout = locked.rows[0];
+    const verifiedRecipient = record(verified.recipient);
+    const verifiedRecipientDetails = record(verifiedRecipient.details);
+    const verifiedRecipientCode = typeof verifiedRecipient.recipient_code === "string"
+      ? verifiedRecipient.recipient_code : "";
+    const verifiedAccountNumber = typeof verifiedRecipientDetails.account_number === "string"
+      ? verifiedRecipientDetails.account_number : "";
+    const verifiedBankCode = typeof verifiedRecipientDetails.bank_code === "string"
+      ? verifiedRecipientDetails.bank_code : "";
     if (payout.amount_minor !== verifiedAmount || payout.currency.trim() !== verifiedCurrency) {
       await client.query("ROLLBACK");
       throw new Error("PAYSTACK_TRANSFER_AMOUNT_MISMATCH");
+    }
+    if (verifiedRecipientCode !== payout.recipient_code ||
+        !/^\\d{10}$/.test(verifiedAccountNumber) ||
+        verifiedBankCode !== payout.bank_code ||
+        beneficiaryFingerprint(secret, verifiedAccountNumber) !== payout.account_fingerprint) {
+      await client.query("ROLLBACK");
+      throw new Error("PAYSTACK_TRANSFER_RECIPIENT_MISMATCH");
     }
 
     const tx = await client.query<{ status: string }>(
