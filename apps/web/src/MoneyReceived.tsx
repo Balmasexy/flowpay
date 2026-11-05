@@ -89,6 +89,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [amount, setAmount] = useState("");
   const [depositing, setDepositing] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
+  const [paystackEnabled, setPaystackEnabled] = useState(false);
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
@@ -123,9 +124,11 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       })
       .then(data => {
         if (!active) return;
-        const deposits = data && typeof data === "object" && "deposits" in data
-          ? (data as { deposits?: unknown }).deposits
-          : null;
+        const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
+        const providerConfig = root.depositProviders && typeof root.depositProviders === "object"
+          ? root.depositProviders as Record<string, unknown> : {};
+        setPaystackEnabled(providerConfig.paystack === true);
+        const deposits = root.deposits;
         setItems(Array.isArray(deposits)
           ? deposits.map(parseDeposit).filter((item): item is Deposit => item !== null)
           : []);
@@ -133,6 +136,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       .catch(reason => {
         if (active) {
           setItems([]);
+          setPaystackEnabled(false);
           setError(reason instanceof Error ? reason.message : "Unable to load received payments.");
         }
       })
@@ -248,23 +252,29 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
 
     <div className="fp-preview-warning"><ShieldCheck size={17}/> Paystack is connected in test mode only. Deposits are credited only after the signed webhook and independent provider verification succeed. No live payment collection is enabled.</div>
 
-    <form onSubmit={startPaystackCheckout} style={{display:"grid",gap:12,border:"1px solid var(--fp-border, #d8dce3)",borderRadius:14,padding:16,margin:"16px 0"}}>
-      <div style={{display:"flex",alignItems:"center",gap:9}}><Wallet size={19}/><b>Add money with Paystack test checkout</b></div>
-      <label style={{display:"grid",gap:6,fontWeight:600}}>
-        Amount (NGN)
-        <input
-          type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Enter amount in naira"
-          value={amount} onChange={event => setAmount(event.target.value)}
-          disabled={depositing} required
-          style={{width:"100%",padding:"12px 13px",borderRadius:9,border:"1px solid var(--fp-border, #cbd1dc)",background:"var(--fp-input-bg, transparent)",color:"inherit",font:"inherit"}}
-        />
-      </label>
-      <small className="fp-muted">You will be redirected to Paystack's hosted checkout. Only a verified test-mode payment can be credited.</small>
-      {checkoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {checkoutError}</div>}
-      <button type="submit" className="fp-primary" disabled={depositing || !amount.trim()}>
-        {depositing ? "Connecting to Paystack…" : <>Continue to Paystack <ExternalLink size={16}/></>}
-      </button>
-    </form>
+    {paystackEnabled ? (
+      <form onSubmit={startPaystackCheckout} style={{display:"grid",gap:12,border:"1px solid var(--fp-border, #d8dce3)",borderRadius:14,padding:16,margin:"16px 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}><Wallet size={19}/><b>Add money with Paystack test checkout</b></div>
+        <label style={{display:"grid",gap:6,fontWeight:600}}>
+          Amount (NGN)
+          <input
+            type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Enter amount in naira"
+            value={amount} onChange={event => setAmount(event.target.value)}
+            disabled={depositing} required
+            style={{width:"100%",padding:"12px 13px",borderRadius:9,border:"1px solid var(--fp-border, #cbd1dc)",background:"var(--fp-input-bg, transparent)",color:"inherit",font:"inherit"}}
+          />
+        </label>
+        <small className="fp-muted">You will be redirected to Paystack's hosted checkout. Only a verified test-mode payment can be credited.</small>
+        {checkoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {checkoutError}</div>}
+        <button type="submit" className="fp-primary" disabled={depositing || !amount.trim()}>
+          {depositing ? "Connecting to Paystack…" : <>Continue to Paystack <ExternalLink size={16}/></>}
+        </button>
+      </form>
+    ) : (
+      <div className="fp-preview-warning" role="status">
+        <AlertCircle size={17}/> Paystack checkout is temporarily unavailable until the test credentials, deposit database migration, and Paystack clearing account are configured on the FlowPay backend.
+      </div>
+    )}
 
     {loading && <p className="fp-muted">Loading deposits…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
