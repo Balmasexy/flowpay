@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.fp_deposit_receipts (
   review_note TEXT CHECK (review_note IS NULL OR length(review_note) <= 500),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reviewed_at TIMESTAMPTZ,
-  CONSTRAINT fp_deposit_receipts_file_size_check
+  CONSTRAINT fp_deposit_receipts_data_length_check
     CHECK (octet_length(file_data) = file_size),
   CONSTRAINT fp_deposit_receipts_review_state_check
     CHECK (
