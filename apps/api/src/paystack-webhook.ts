@@ -1,3 +1,4 @@
+import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
@@ -105,6 +106,11 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       event = parsed as Record<string, unknown>;
     } catch {
       send(res, 400, { error: "INVALID_JSON" });
+      return true;
+    }
+    if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
+      const result = await processPaystackTransferWebhook(pool, secret, event);
+      send(res, result.status, result.body);
       return true;
     }
     if (event.event !== "charge.success") {
