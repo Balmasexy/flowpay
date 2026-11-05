@@ -27,26 +27,11 @@ Set these variables on the FlowPay **backend** Render service:
 
 The service constructs `https://<account-id>.r2.cloudflarestorage.com` when `R2_ENDPOINT` is omitted. Use the account's S3-compatible endpoint only. Keep the bucket private.
 
-## 3. Configure bucket CORS
+## 3. Browser and bucket access
 
-Configure the bucket CORS policy to allow only the FlowPay web origin and the methods/headers needed for direct uploads. Example:
+The web app uploads through the authenticated FlowPay API, not directly from the browser to R2. This lets the API enforce the 5 MB body limit and inspect the file signature before storing it. No browser-to-R2 CORS rule is needed.
 
-```json
-[
-  {
-    "AllowedOrigins": [
-      "https://flowpay-web-jx7i.onrender.com"
-    ],
-    "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
-```
-
-Add a development origin only when needed and remove it before production. Do not use `*` for allowed origins. R2 presigned links expire quickly (upload: 5 minutes; view: 2–3 minutes).
-
+Keep the R2 bucket private. Do not enable an `r2.dev` public URL or attach a public custom domain. The API uses signed S3-compatible requests for writes and short-lived presigned GET URLs for private receipt viewing. The FlowPay API's CORS allowlist must include the deployed web origin; the API allows authenticated `PUT` requests from its configured origins.
 ## 4. Apply the database migration
 
 After review and when the correct target database is confirmed, apply:
@@ -63,7 +48,7 @@ A designated, already verified administrator must be granted `role='super_admin'
 
 1. Customer enters the NGN amount, optional bank reference/note, and uploads a JPG, PNG, WEBP, or PDF receipt (up to 5 MB).
 2. The API creates a user-owned pending receipt record and returns a short-lived PUT URL for a server-generated object key.
-3. The API confirms the uploaded object's size and MIME metadata, downloads it privately, checks the file signature, stores a SHA-256 digest and moves it to `pending_review`.
+3. The customer sends the file to the authenticated FlowPay API. The API enforces the 5 MB byte limit, checks the claimed MIME type against the actual file signature, uploads it to the private R2 bucket, stores a SHA-256 digest and moves it to `pending_review`.
 4. An authenticated `super_admin` reviews it under `/admin`, compares the exact amount/reference against the receiving bank/provider statement, and enters the bank transaction reference.
 5. Approval is allowed only when the reviewer explicitly attests that the funds were independently received. The server posts one balanced, idempotent ledger transaction against the manual-receipt clearing account. A rejection creates no wallet credit.
 
@@ -73,7 +58,7 @@ A screenshot, receipt upload, or customer-supplied reference is **not** proof of
 
 - `GET /customer/deposit-receipts` — own receipt submission history.
 - `POST /customer/deposit-receipts` — create a pending upload and get a presigned PUT URL.
-- `POST /customer/deposit-receipts/:id/complete` — verify the private object and enqueue review.
+- `PUT /customer/deposit-receipts/:id/file` — authenticated, size-limited upload and file-signature check; enqueue review.
 - `GET /customer/deposit-receipts/:id/file` — short-lived view URL for own receipt.
 - `GET /admin/session` — verifies the authenticated `super_admin` role.
 - `GET /admin/deposit-receipts` — pending review queue.
