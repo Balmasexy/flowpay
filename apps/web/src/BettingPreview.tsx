@@ -1,29 +1,33 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, Gift, ShieldCheck, CheckCircle2 } from "lucide-react";
 
+const OPERATORS = ["SportyBet", "Bet9ja", "BetKing", "1xBet", "Merrybet", "NairaBet", "SureBet"];
+
 export default function BettingPreview() {
   const [operator, setOperator] = useState("");
+  const [otherOperator, setOtherOperator] = useState("");
   const [accountId, setAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [review, setReview] = useState(false);
   const [error, setError] = useState("");
 
+  const selectedOperator = operator === "Other" ? otherOperator.trim() : operator;
   const amountValue = Number(amount);
-  const valid = operator.trim().length >= 2 &&
+  const valid = selectedOperator.length >= 2 &&
     /^[A-Za-z0-9@._-]{3,50}$/.test(accountId.trim()) &&
-    /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0;
+    /^\\d+(?:\\.\\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0;
 
   const summary = useMemo(() => ({
-    operator: operator.trim(),
+    operator: selectedOperator,
     account: accountId.trim(),
     amount: amountValue
-  }), [operator, accountId, amountValue]);
+  }), [selectedOperator, accountId, amountValue]);
 
   function preview() {
     setError("");
     setReview(false);
     if (!valid) {
-      setError("Enter an operator name, a valid account ID and an amount greater than zero.");
+      setError("Choose a betting operator, enter a valid account ID and an amount greater than zero.");
       return;
     }
     setReview(true);
@@ -32,10 +36,18 @@ export default function BettingPreview() {
   return <section className="fp-panel fp-form-panel">
     <div className="fp-form-icon"><Gift/></div>
     <h2>Betting wallet funding</h2>
-    <p className="fp-muted">Prepare a local funding summary. FlowPay is not connected to a verified betting provider, so this page cannot fund an account.</p>
+    <p className="fp-muted">Choose your betting operator and prepare a funding summary. Provider lookup and funding are not connected, so this page cannot debit your FlowPay wallet or credit a betting account.</p>
 
     <label htmlFor="betting-operator">Betting operator</label>
-    <input id="betting-operator" value={operator} onChange={e => { setOperator(e.target.value); setReview(false); }} placeholder="Enter operator name" autoComplete="off" maxLength={60}/>
+    <select id="betting-operator" value={operator} onChange={e => { setOperator(e.target.value); setReview(false); }} autoComplete="off">
+      <option value="">Select betting operator</option>
+      {OPERATORS.map(name => <option key={name} value={name}>{name}</option>)}
+      <option value="Other">Other operator</option>
+    </select>
+    {operator === "Other" && <>
+      <label htmlFor="betting-other-operator">Operator name</label>
+      <input id="betting-other-operator" value={otherOperator} onChange={e => { setOtherOperator(e.target.value); setReview(false); }} placeholder="Enter operator name" autoComplete="off" maxLength={60}/>
+    </>}
 
     <label htmlFor="betting-account">Customer username / account ID</label>
     <input id="betting-account" value={accountId} onChange={e => { setAccountId(e.target.value); setReview(false); }} placeholder="Enter customer account ID" autoComplete="off" maxLength={50}/>
@@ -54,6 +66,6 @@ export default function BettingPreview() {
       <p className="fp-muted">This is only a draft. No operator lookup, account validation, wallet debit or funding request has occurred.</p>
     </div>}
 
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> Real betting funding is disabled. Do not treat this preview as a completed payment or share your FlowPay PIN, password or OTP.</div>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> Real betting funding remains disabled until a verified provider integration, customer validation and ledger posting controls are available. Do not treat this preview as a completed payment.</div>
   </section>;
 }
