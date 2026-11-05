@@ -102,10 +102,10 @@ export default function App() {
 
   useEffect(() => {
     const token = authSession.data?.session?.token;
-    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
-    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
     const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
     const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
+    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
+    const controller = new AbortController();
     void fetch(apiBase + "/customer/account-details", {
       method: "GET",
       credentials: "omit",
