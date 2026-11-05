@@ -322,7 +322,7 @@ const server = createServer(async (req, res) => {
           customerLedgerAmountMinor: row.customer_ledger_amount_minor,
           customerEntryCount: row.customer_entry_count
         })),
-        limit, offset, total, hasMore: offset + result.rows.length < total,
+        limit, offset, nextOffset: offset + result.rows.length, total, hasMore: offset + result.rows.length < total,
         directionAvailable: false,
         directionNote: "Incoming/outgoing direction is not inferred until the ledger sign convention is configured."
       });
