@@ -88,7 +88,7 @@ jobs:
           }
           trap cleanup EXIT
           ready=0
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             if curl --silent --fail http://127.0.0.1:3000/health > "$RUNNER_TEMP/flowpay-health.json"; then
               ready=1
               break
