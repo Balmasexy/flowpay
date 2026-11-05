@@ -104,7 +104,7 @@ export default function App() {
     const token = authSession.data?.session?.token;
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
     if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
-    const controller = new AbortController();
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
     void fetch(apiBase + "/customer/account-details", {
       method: "GET",
       credentials: "omit",
