@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { ArrowDownLeft, RefreshCw, ShieldCheck, AlertCircle, ExternalLink, CheckCircle2, Clock3 } from "lucide-react";
+import { ArrowDownLeft, RefreshCw, ShieldCheck, AlertCircle, ExternalLink, CheckCircle2, Clock3, UploadCloud, FileCheck2 } from "lucide-react";
 
 type DepositStatus = "pending" | "posted" | "failed";
 type Deposit = {
@@ -19,6 +19,19 @@ type PaystackStatus = {
   currency: string;
   status: DepositStatus;
 };
+type ReceiptSubmissionStatus = "pending_upload" | "pending_review" | "approved" | "rejected";
+type ReceiptSubmission = { id: string; amountMinor: string; currency: string; reference: string | null; fileName: string; status: ReceiptSubmissionStatus; createdAt: string; reviewedAt: string | null; reviewNote: string | null };
+
+function parseReceiptSubmission(value: unknown): ReceiptSubmission | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.amountMinor !== "string" || !/^\d+$/.test(row.amountMinor) || !["pending_upload", "pending_review", "approved", "rejected"].includes(String(row.status))) return null;
+  return { id: textValue(row.id, "receipt", 128), amountMinor: row.amountMinor, currency: typeof row.currency === "string" && /^[A-Z]{3}$/.test(row.currency) ? row.currency : "NGN", reference: typeof row.reference === "string" ? row.reference.slice(0, 100) : null, fileName: textValue(row.fileName, "Receipt file", 100), status: row.status as ReceiptSubmissionStatus, createdAt: typeof row.createdAt === "string" ? row.createdAt : "", reviewedAt: typeof row.reviewedAt === "string" ? row.reviewedAt : null, reviewNote: typeof row.reviewNote === "string" ? row.reviewNote.slice(0, 500) : null };
+}
+
+function receiptStatusLabel(status: ReceiptSubmissionStatus) {
+  return status === "approved" ? "Verified · Credited" : status === "rejected" ? "Rejected · Not credited" : status === "pending_review" ? "Under review" : "Upload incomplete";
+}
 
 function textValue(value: unknown, fallback: string, max = 120): string {
   return typeof value === "string" && value.trim()
@@ -94,6 +107,17 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
+  const [receiptAmount, setReceiptAmount] = useState("");
+  const [receiptReference, setReceiptReference] = useState("");
+  const [receiptNote, setReceiptNote] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptSending, setReceiptSending] = useState(false);
+  const [receiptError, setReceiptError] = useState("");
+  const [receiptMessage, setReceiptMessage] = useState("");
+  const [receiptRows, setReceiptRows] = useState<ReceiptSubmission[]>([]);
+  const [receiptRowsLoading, setReceiptRowsLoading] = useState(false);
+  const [receiptRefresh, setReceiptRefresh] = useState(0);
+  const [receiptRequestId, setReceiptRequestId] = useState<string | null>(null);
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
   const params = new URLSearchParams(window.location.search);
   const returnReference = paymentReturn ? (params.get("reference") || params.get("trxref") || "") : "";
