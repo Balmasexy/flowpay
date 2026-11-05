@@ -112,6 +112,17 @@ async function signedCustomerToken(): Promise<string> {
     .sign(keyPair.privateKey);
 }
 
+async function signedSuperAdminToken(): Promise<string> {
+  return new SignJWT({})
+    .setProtectedHeader({ alg: "EdDSA", kid: "flowpay-receipt-test" })
+    .setIssuer(TEST_ISSUER)
+    .setAudience(TEST_AUDIENCE)
+    .setSubject("flowpay-super-admin-subject")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(keyPair.privateKey);
+}
+
 function configuredStorage() {
   process.env.R2_ENDPOINT = "https://test-account.r2.cloudflarestorage.com";
   process.env.R2_BUCKET_NAME = "flowpay-private-receipts";
@@ -329,4 +340,178 @@ test("valid customer token cannot access the Super Admin receipt queue", async (
   assert.equal(recorder.result().status, 403);
   assert.equal(recorder.result().body?.error, "ACTIVE_SUPER_ADMIN_REQUIRED");
   assert.equal(queries.length, 1);
+});
+
+
+test("Super Admin approval posts one balanced and audited ledger credit only after funds attestation", async () => {
+  configuredStorage();
+  const token = await signedSuperAdminToken();
+  const receiptId = "00000000-0000-4000-8000-000000000201";
+  const customerId = "00000000-0000-4000-8000-000000000202";
+  const transactionId = "00000000-0000-4000-8000-000000000203";
+  const walletId = "00000000-0000-4000-8000-000000000204";
+  const clearingId = "00000000-0000-4000-8000-000000000205";
+  const clientQueries: string[] = [];
+  const ledgerEntries: unknown[][] = [];
+  const client = {
+    query: async (sql: string, values?: unknown[]) => {
+      clientQueries.push(sql);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rowCount: 0, rows: [] };
+      if (sql.includes("FROM public.fp_deposit_receipts WHERE id=$1 FOR UPDATE")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: receiptId, user_id: customerId, amount_minor: "125000",
+            currency: "NGN", reference_text: "bank-ref-1250", customer_note: null,
+            object_key: "receipts/" + customerId + "/" + receiptId + ".png",
+            file_name: "bank-receipt.png", content_type: "image/png", size_bytes: 8,
+            status: "pending_review", created_at: new Date(), reviewed_at: null,
+            review_note: null, review_bank_reference: null, ledger_transaction_id: null
+          }]
+        };
+      }
+      if (sql.includes("SELECT id FROM public.fp_accounts") && sql.includes("account_type='customer'")) {
+        return { rowCount: 1, rows: [{ id: walletId }] };
+      }
+      if (sql.includes("SELECT id FROM public.fp_accounts") && sql.includes("manual_receipt_ngn_clearing")) {
+        return { rowCount: 1, rows: [{ id: clearingId }] };
+      }
+      if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
+        return { rowCount: 1, rows: [{ id: transactionId }] };
+      }
+      if (sql.includes("SELECT COUNT(*)::int AS count FROM public.fp_ledger_entries")) {
+        return { rowCount: 1, rows: [{ count: 0 }] };
+      }
+      if (sql.includes("INSERT INTO public.fp_ledger_entries")) {
+        ledgerEntries.push(values ?? []);
+        return { rowCount: 2, rows: [] };
+      }
+      if (sql.includes("UPDATE public.fp_ledger_transactions")) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("UPDATE public.fp_deposit_receipts")) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")) {
+        return { rowCount: 1, rows: [] };
+      }
+      throw new Error("Unexpected review SQL: " + sql);
+    },
+    release: () => undefined
+  };
+  const authQueries: string[] = [];
+  const pool = {
+    query: async (sql: string, values?: unknown[]) => {
+      authQueries.push(sql);
+      if (sql.includes('FROM neon_auth."user"')) {
+        assert.deepEqual(values, ["flowpay-super-admin-subject"]);
+        assert.ok(sql.includes("app_user.role = 'super_admin'"));
+        return { rowCount: 1, rows: [{ id: testUserId, role: "super_admin" }] };
+      }
+      throw new Error("Unexpected pool SQL: " + sql);
+    },
+    connect: async () => client
+  } as unknown as Pool;
+  const handler = createDepositReceiptsHandler({
+    pool, jwks: localJwks, issuer: TEST_ISSUER, audience: TEST_AUDIENCE
+  });
+  const recorder = responseRecorder();
+  await handler(authenticatedRequest("POST", "/admin/deposit-receipts/" + receiptId + "/review", token, {
+    decision: "approve",
+    reviewNote: "Matched receiving bank statement and confirmed funds.",
+    bankTransactionReference: "BANK-SETTLEMENT-REF-1250",
+    fundsVerified: true
+  }), recorder.res);
+
+  assert.equal(recorder.result().status, 200, JSON.stringify(recorder.result().body));
+  assert.equal(recorder.result().body?.status, "approved");
+  assert.equal(recorder.result().body?.walletCredited, true);
+  assert.equal(recorder.result().body?.transactionId, transactionId);
+  assert.equal(ledgerEntries.length, 1);
+  assert.deepEqual(ledgerEntries[0], [transactionId, walletId, "125000", clearingId, "-125000"]);
+  assert.ok(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_ledger_transactions")));
+  assert.ok(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_ledger_entries")));
+  assert.ok(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")));
+});
+
+test("Super Admin rejection audits the decision and never writes ledger entries", async () => {
+  configuredStorage();
+  const token = await signedSuperAdminToken();
+  const receiptId = "00000000-0000-4000-8000-000000000211";
+  const customerId = "00000000-0000-4000-8000-000000000212";
+  const clientQueries: string[] = [];
+  const client = {
+    query: async (sql: string) => {
+      clientQueries.push(sql);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rowCount: 0, rows: [] };
+      if (sql.includes("FROM public.fp_deposit_receipts WHERE id=$1 FOR UPDATE")) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: receiptId, user_id: customerId, amount_minor: "125000",
+            currency: "NGN", reference_text: "bank-ref-1250", customer_note: null,
+            object_key: "receipts/" + customerId + "/" + receiptId + ".png",
+            file_name: "bank-receipt.png", content_type: "image/png", size_bytes: 8,
+            status: "pending_review", created_at: new Date(), reviewed_at: null,
+            review_note: null, review_bank_reference: null, ledger_transaction_id: null
+          }]
+        };
+      }
+      if (sql.includes("UPDATE public.fp_deposit_receipts")) return { rowCount: 1, rows: [] };
+      if (sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")) return { rowCount: 1, rows: [] };
+      throw new Error("Unexpected rejection SQL: " + sql);
+    },
+    release: () => undefined
+  };
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes('FROM neon_auth."user"')) return { rowCount: 1, rows: [{ id: testUserId, role: "super_admin" }] };
+      throw new Error("Unexpected pool SQL: " + sql);
+    },
+    connect: async () => client
+  } as unknown as Pool;
+  const handler = createDepositReceiptsHandler({
+    pool, jwks: localJwks, issuer: TEST_ISSUER, audience: TEST_AUDIENCE
+  });
+  const recorder = responseRecorder();
+  await handler(authenticatedRequest("POST", "/admin/deposit-receipts/" + receiptId + "/review", token, {
+    decision: "reject",
+    reviewNote: "Statement does not show the submitted transfer."
+  }), recorder.res);
+
+  assert.equal(recorder.result().status, 200, JSON.stringify(recorder.result().body));
+  assert.equal(recorder.result().body?.status, "rejected");
+  assert.equal(recorder.result().body?.walletCredited, false);
+  assert.equal(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_ledger_transactions")), false);
+  assert.equal(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_ledger_entries")), false);
+  assert.ok(clientQueries.some(sql => sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")));
+});
+
+test("Super Admin cannot approve without independently confirmed funds and a bank reference", async () => {
+  configuredStorage();
+  const token = await signedSuperAdminToken();
+  let databaseConnections = 0;
+  const pool = {
+    query: async (sql: string) => {
+      if (sql.includes('FROM neon_auth."user"')) return { rowCount: 1, rows: [{ id: testUserId, role: "super_admin" }] };
+      throw new Error("Unexpected pool SQL: " + sql);
+    },
+    connect: async () => {
+      databaseConnections += 1;
+      throw new Error("Should not connect before approval validation");
+    }
+  } as unknown as Pool;
+  const handler = createDepositReceiptsHandler({
+    pool, jwks: localJwks, issuer: TEST_ISSUER, audience: TEST_AUDIENCE
+  });
+  const recorder = responseRecorder();
+  await handler(authenticatedRequest("POST", "/admin/deposit-receipts/00000000-0000-4000-8000-000000000221/review", token, {
+    decision: "approve",
+    reviewNote: "I looked at the receipt.",
+    bankTransactionReference: "BANK-REF-12345",
+    fundsVerified: false
+  }), recorder.res);
+  assert.equal(recorder.result().status, 400);
+  assert.equal(recorder.result().body?.error, "INDEPENDENT_FUNDS_VERIFICATION_REQUIRED");
+  assert.equal(databaseConnections, 0);
 });
