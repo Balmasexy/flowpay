@@ -498,3 +498,22 @@
 .fp-account-wallet-list strong{color:#3e8255;font-size:8px}.fp-account-actions{display:flex;flex-wrap:wrap;gap:9px}
 @media(max-width:720px){.fp-money-page,.fp-account-page{padding:14px;gap:16px}.fp-money-hero{padding:18px}.fp-money-hero h2{font-size:22px}.fp-money-steps{gap:5px}.fp-money-steps>div{align-items:flex-start;flex-direction:column;padding:8px;gap:5px}.fp-money-steps b{font-size:8px}.fp-money-content-grid{grid-template-columns:1fr}.fp-money-side-column{grid-template-columns:1fr 1fr}.fp-money-security-card,.fp-money-help-card{padding:13px}.fp-money-history-heading{align-items:flex-start}.fp-money-status{max-width:110px;text-align:center;white-space:normal}.fp-account-hero{padding:18px}.fp-account-number-highlight strong{font-size:21px}.fp-account-detail-grid{grid-template-columns:1fr}.fp-account-type-card>p{min-height:0}}
 @media(max-width:480px){.fp-money-side-column{grid-template-columns:1fr}.fp-money-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.fp-money-steps b{line-height:1.3}.fp-money-quick-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-money-history-item{align-items:flex-start;gap:8px}.fp-money-history-icon{flex-basis:32px;width:32px;height:32px}.fp-money-history-copy b{font-size:11px}.fp-money-status{padding:5px 6px;font-size:7px}.fp-account-page{padding:12px}.fp-account-number-highlight{align-items:flex-start;flex-direction:column}.fp-account-number-highlight button{align-self:flex-end}.fp-account-wallet-list{grid-template-columns:1fr}.fp-account-actions{display:grid;grid-template-columns:1fr}.fp-transfer-page .fp-transfer-destination-grid{grid-template-columns:1fr!important}}
+
+
+/* Private bank receipt submission */
+.fp-money-receipt-form{display:grid;gap:10px;padding:17px;border:1px solid #eee1d5;border-radius:15px;background:linear-gradient(155deg,#fffaf5,#fff)}
+.fp-money-receipt-heading{display:flex;align-items:flex-start;gap:10px;margin-bottom:3px}
+.fp-money-receipt-heading>div{display:grid;gap:4px;min-width:0}
+.fp-money-receipt-heading h3{margin:0;color:#292d27;font:800 14px Manrope,sans-serif}
+.fp-money-receipt-heading p{margin:0;color:#85877f;font-size:9px;line-height:1.6}
+.fp-money-receipt-icon{display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:11px;background:#fff0e2;color:#c26119}
+.fp-money-receipt-form>label{margin:2px 0 -5px;color:#454841;font-size:10px;font-weight:800}
+.fp-money-receipt-text,.fp-money-receipt-textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid #dedfd8;border-radius:9px;background:#fff;color:#30322d;font:500 11px Manrope,sans-serif}
+.fp-money-receipt-text:focus,.fp-money-receipt-textarea:focus,.fp-money-receipt-file:focus{outline:0;border-color:#ff9750;box-shadow:0 0 0 3px #ff7a1818}
+.fp-money-receipt-textarea{resize:vertical;min-height:68px;line-height:1.5}
+.fp-money-receipt-file{width:100%;min-width:0;padding:10px;border:1px dashed #e7cdb7;border-radius:10px;background:#fff;color:#686b62;font-size:10px}
+.fp-money-receipt-file::file-selector-button{margin-right:9px;padding:8px 10px;border:0;border-radius:8px;background:#fff0e2;color:#b95c17;font-size:9px;font-weight:800}
+.fp-money-receipt-file-hint{margin-top:-7px;color:#8f9189;font-size:8px}
+.fp-money-receipt-success{display:flex;align-items:flex-start;gap:8px;padding:10px;border:1px solid #d6eadc;border-radius:10px;background:#f1faf3;color:#286943;font-size:9px;line-height:1.6}
+.fp-money-receipt-success svg{flex-shrink:0}
+.fp-money-receipt-history{margin-top:2px}
