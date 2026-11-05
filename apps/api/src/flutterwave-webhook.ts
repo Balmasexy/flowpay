@@ -126,11 +126,17 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
 
     const verifiedReference = typeof verified.tx_ref === "string" ? verified.tx_ref : "";
     const verifiedCurrency = typeof verified.currency === "string" ? verified.currency : "";
+    const eventCurrency = typeof data.currency === "string" ? data.currency : "";
+    const verifiedId = typeof verified.id === "number" && Number.isSafeInteger(verified.id)
+      ? String(verified.id)
+      : typeof verified.id === "string" && /^\\d{1,30}$/.test(verified.id) ? verified.id : null;
     const verifiedAmount = amountToMinor(verified.amount);
     const eventAmount = amountToMinor(data.amount);
     if (
+      verifiedId !== providerIdText ||
       verifiedReference !== providerReference ||
       verifiedCurrency !== "NGN" ||
+      eventCurrency !== "NGN" ||
       verifiedAmount === null ||
       eventAmount === null ||
       verifiedAmount !== eventAmount
