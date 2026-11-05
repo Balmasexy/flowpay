@@ -70,6 +70,9 @@ jobs:
       - name: Test Paystack sandbox bank payout, idempotency and ledger safeguards
         run: npm run test:paystack-bank-transfers --prefix apps/api
 
+      - name: Test Paystack dedicated bank account consent and assignment
+        run: npm run test:paystack-dedicated-accounts --prefix apps/api
+
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api
 
