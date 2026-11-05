@@ -498,3 +498,66 @@
 .fp-account-wallet-list strong{color:#3e8255;font-size:8px}.fp-account-actions{display:flex;flex-wrap:wrap;gap:9px}
 @media(max-width:720px){.fp-money-page,.fp-account-page{padding:14px;gap:16px}.fp-money-hero{padding:18px}.fp-money-hero h2{font-size:22px}.fp-money-steps{gap:5px}.fp-money-steps>div{align-items:flex-start;flex-direction:column;padding:8px;gap:5px}.fp-money-steps b{font-size:8px}.fp-money-content-grid{grid-template-columns:1fr}.fp-money-side-column{grid-template-columns:1fr 1fr}.fp-money-security-card,.fp-money-help-card{padding:13px}.fp-money-history-heading{align-items:flex-start}.fp-money-status{max-width:110px;text-align:center;white-space:normal}.fp-account-hero{padding:18px}.fp-account-number-highlight strong{font-size:21px}.fp-account-detail-grid{grid-template-columns:1fr}.fp-account-type-card>p{min-height:0}}
 @media(max-width:480px){.fp-money-side-column{grid-template-columns:1fr}.fp-money-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.fp-money-steps b{line-height:1.3}.fp-money-quick-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-money-history-item{align-items:flex-start;gap:8px}.fp-money-history-icon{flex-basis:32px;width:32px;height:32px}.fp-money-history-copy b{font-size:11px}.fp-money-status{padding:5px 6px;font-size:7px}.fp-account-page{padding:12px}.fp-account-number-highlight{align-items:flex-start;flex-direction:column}.fp-account-number-highlight button{align-self:flex-end}.fp-account-wallet-list{grid-template-columns:1fr}.fp-account-actions{display:grid;grid-template-columns:1fr}.fp-transfer-page .fp-transfer-destination-grid{grid-template-columns:1fr!important}}
+
+/* Private customer-submitted deposit evidence. */
+.fp-money-receipt-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:4px}
+.fp-money-receipt-upload{display:inline-flex!important;align-items:center;gap:6px!important;width:max-content;padding:7px 10px;border:1px solid #f5c79f;border-radius:8px;background:#fff7f0;color:#a85113!important;font-size:9px!important;font-weight:800!important;cursor:pointer}
+.fp-money-receipt-upload input{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
+.fp-money-receipt-notice{flex:1 1 180px;color:#777d72!important;font-size:9px!important;line-height:1.5}
+.fp-admin-receipts{min-height:100vh}
+.fp-admin-receipts .fp-admin-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.fp-admin-receipts .fp-admin-heading button{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.fp-receipt-review-banner{display:flex;align-items:flex-start;gap:10px;margin:0 0 18px;padding:13px 15px;border:1px solid #f0d5bd;border-radius:12px;background:#fff8f1;color:#775437;font-size:11px;line-height:1.65}
+.fp-receipt-review-banner svg{flex:0 0 18px;margin-top:1px;color:#c66a23}
+.fp-receipt-review-banner b{color:#8f4510}
+.fp-receipt-review-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}
+.fp-receipt-review-toolbar>span{color:#84877e;font-size:10px;font-weight:800;white-space:nowrap}
+.fp-receipt-review-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:3px}
+.fp-receipt-review-tabs button{padding:9px 12px;border:1px solid #e6e7e1;border-radius:99px;background:#fff;color:#686d63;font-size:9px;font-weight:800;white-space:nowrap}
+.fp-receipt-review-tabs button.active{border-color:#ff9c58;background:#fff2e7;color:#a84d0a}
+.fp-admin-error{display:flex;align-items:center;gap:8px;padding:12px 13px;margin-bottom:14px;border:1px solid #efc8c2;border-radius:10px;background:#fff4f2;color:#a44337;font-size:10px}
+.fp-admin-muted{color:#83877d;font-size:11px}
+.fp-admin-empty{display:grid;justify-items:center;gap:9px;padding:40px 20px;border:1px dashed #dfe1da;border-radius:14px;background:#fff;color:#7b8177;text-align:center}
+.fp-admin-empty svg{color:#bf6b2b}.fp-admin-empty b{color:#3f453c;font-size:13px}.fp-admin-empty span{max-width:390px;font-size:10px;line-height:1.6}
+.fp-receipt-review-list{display:grid;gap:12px}
+.fp-receipt-review-card{min-width:0;padding:17px;border:1px solid #e5e6df;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(32,37,30,.045)}
+.fp-receipt-review-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:13px;border-bottom:1px solid #eeefe9}
+.fp-receipt-review-card-top h2{margin:5px 0 3px;color:#2a3028;font:800 19px Manrope,sans-serif}
+.fp-receipt-review-card-top p{overflow-wrap:anywhere;margin:0;color:#81867d;font-size:9px}
+.fp-receipt-status{padding:7px 9px;border-radius:99px;background:#fff4e8;color:#a35b1d;font-size:8px;font-weight:900;white-space:nowrap}
+.fp-receipt-status.evidence_accepted{background:#eaf6ed;color:#32794b}.fp-receipt-status.rejected{background:#fff0ee;color:#af4a40}
+.fp-receipt-review-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:13px 0}
+.fp-receipt-review-meta>div{display:grid;gap:4px;min-width:0}
+.fp-receipt-review-meta small{color:#a0a298;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}
+.fp-receipt-review-meta b{overflow-wrap:anywhere;color:#41473e;font-size:10px}
+.fp-receipt-review-meta span{overflow-wrap:anywhere;color:#83877f;font-size:9px;line-height:1.4}
+.fp-receipt-review-note{display:grid;gap:4px;margin-bottom:12px;padding:10px;border-radius:9px;background:#f7f7f4;color:#686d63;font-size:9px;line-height:1.5}
+.fp-receipt-review-note b{color:#41473e;font-size:9px}
+.fp-receipt-review-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-top:12px;border-top:1px solid #eeefe9}
+.fp-receipt-review-actions>button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 11px;border-radius:9px;font-size:9px;font-weight:800}
+.fp-receipt-review-actions>textarea{flex:1 1 180px;min-width:140px;min-height:38px;padding:9px 10px;border:1px solid #dedfd8;border-radius:9px;resize:vertical;font:10px/1.45 inherit;color:#40443d}
+.fp-receipt-review-actions>textarea:focus{outline:0;border-color:#ff9954;box-shadow:0 0 0 3px #ff7a1818}
+.fp-receipt-accept{border:1px solid #c3dfcb;background:#edf8f0;color:#286c41}
+.fp-receipt-reject{border:1px solid #edc7c2;background:#fff4f2;color:#a7463b}
+.fp-receipt-review-actions button:disabled{opacity:.5;cursor:not-allowed}
+.fp-receipt-preview-overlay{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:20px;background:#080b0aaf}
+.fp-receipt-preview{display:grid;grid-template-rows:auto minmax(0,1fr);width:min(900px,100%);max-height:min(90dvh,900px);overflow:hidden;border:1px solid #e4e5df;border-radius:16px;background:#fff;box-shadow:0 30px 90px #0007}
+.fp-receipt-preview header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid #ecece8}
+.fp-receipt-preview header>div{display:grid;gap:3px;min-width:0}.fp-receipt-preview header b{color:#30352d;font-size:12px}.fp-receipt-preview header small{overflow-wrap:anywhere;color:#85897f;font-size:9px}
+.fp-receipt-preview header button{display:grid;place-items:center;width:34px;height:34px;border:1px solid #e2e3dc;border-radius:9px;background:#fff;color:#464b43}
+.fp-receipt-preview img{display:block;max-width:100%;max-height:calc(90dvh - 70px);margin:auto;object-fit:contain}
+@media(max-width:700px){
+ .fp-admin-receipts .fp-admin-heading{align-items:flex-start;flex-direction:column}
+ .fp-receipt-review-toolbar{align-items:flex-start;flex-direction:column}
+ .fp-receipt-review-meta{grid-template-columns:1fr 1fr}
+ .fp-receipt-review-meta>div:last-child{grid-column:1/-1}
+}
+@media(max-width:460px){
+ .fp-receipt-review-card{padding:13px}
+ .fp-receipt-review-card-top h2{font-size:17px}
+ .fp-receipt-review-meta{grid-template-columns:1fr}
+ .fp-receipt-review-meta>div:last-child{grid-column:auto}
+ .fp-receipt-review-actions{align-items:stretch}
+ .fp-receipt-review-actions>button{flex:1 1 auto}
+ .fp-receipt-preview-overlay{padding:8px}
+}
