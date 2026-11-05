@@ -73,6 +73,9 @@ jobs:
       - name: Test authenticated FlowPay BALMZ AI customer assistant
         run: npm run test:customer-ai --prefix apps/api
 
+      - name: Test private deposit receipt submission and administrator review
+        run: npm run test:deposit-receipts --prefix apps/api
+
       - name: Smoke-test API health and safe readiness behavior
         shell: bash
         run: |
