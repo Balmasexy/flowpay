@@ -1,46 +1,84 @@
-# Paystack sandbox integration
+# FlowPay Paystack sandbox deposits
 
-## Scope and safety
+Paystack is integrated inside the existing FlowPay API. It is a separate provider adapter and uses FlowPay customer authentication, pending deposit records, a provider-specific clearing account, the existing double-entry ledger, and the shared provider-event receipt table.
 
-FlowPay supports a separate Paystack Standard hosted-checkout adapter in **test mode only**. This integration is independent of Flutterwave and uses FlowPay's own customer identity, NGN wallet, ledger transaction IDs, and deposit records. It does not copy PWFB customer data or credentials.
+## Test-only safety boundary
 
-The API refuses to initialize checkout or process webhooks unless `PAYSTACK_ENVIRONMENT=test` and `PAYSTACK_SECRET_KEY` starts with `sk_test_`. No live mode is implemented. A verified Paystack webhook records provider verification only: the FlowPay deposit and ledger transaction remain pending and `walletCredited:false`. No wallet funds are posted until a separately reviewed, atomic double-entry posting implementation is completed and tested.
+- Set `PAYSTACK_ENVIRONMENT=test` and use a Paystack test secret beginning with `sk_test_`.
+- Live credentials and live mode are rejected by the checkout and webhook handlers.
+- The customer identity and email are loaded from the verified FlowPay session; the browser cannot substitute an email or customer ID.
+- The only supported currency is NGN. The browser submits an amount in kobo as an integer string.
+- A deposit is credited only after a valid Paystack signature, independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, and a pending FlowPay deposit have all been confirmed.
+- The webhook posts a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
+- Duplicate webhook delivery cannot post a second credit. A previously received event can resume a pending deposit if its ledger posting did not complete.
+- No test clearing account balance represents money held at Paystack or a bank. Sandbox credits are not real funds.
+- Live money movement remains disabled.
 
-## Endpoints
+## Render backend configuration
 
-- `POST /customer/paystack/deposits` — authenticated FlowPay customer creates hosted checkout.
-- `POST /webhooks/paystack` — Paystack webhook; validates HMAC-SHA512 signature and independently verifies the transaction with Paystack.
+Configure these variables on the FlowPay backend service only. Do not put the secret in the web service, APK, source code, build arguments, or this repository.
 
-Request:
+| Variable | Value |
+|---|---|
+| `PAYSTACK_ENVIRONMENT` | `test` |
+| `PAYSTACK_SECRET_KEY` | Paystack test secret (`sk_test_...`) |
+| `PAYSTACK_CALLBACK_URL` | `https://flowpay-web-jx7i.onrender.com/payment-return/paystack` |
+| `PAYSTACK_DEPOSIT_MIN_MINOR` | Approved minimum amount in kobo |
+| `PAYSTACK_DEPOSIT_MAX_MINOR` | Approved maximum amount in kobo |
+
+The backend requires positive integer min/max values and rejects amounts outside that inclusive range. The API never accepts a provider secret from the browser.
+
+## Paystack webhook setup
+
+Register this HTTPS endpoint in the Paystack dashboard for the **test integration**:
+
+`https://flowpay-backend-qz79.onrender.com/webhooks/paystack`
+
+Paystack signs the raw request body with HMAC-SHA512 using the test secret. FlowPay compares `x-paystack-signature` in constant time, then independently calls Paystack's transaction verification endpoint. Only `charge.success` events for a verified `test` transaction in NGN are eligible for ledger posting.
+
+Do not configure the live integration to call this test-only webhook. Do not use an `sk_live_` key.
+
+## Customer API
+
+### Initialize checkout
+
+`POST /customer/paystack/deposits`
+
+Requires a verified FlowPay bearer session.
 
 ```json
-{ "amountMinor": 250000, "idempotencyKey": "b0ca3b0d-a69c-44e2-a661-6ccf9cf9b3f1" }
+{
+  "amountMinor": "250000",
+  "idempotencyKey": "UUID"
+}
 ```
 
-Amount is NGN kobo (250000 = NGN 2,500.00). Retries must reuse the same UUID idempotency key. Customer email/name are read from FlowPay's authenticated Neon Auth identity, never accepted from the client.
+A successful response contains a hosted `checkoutUrl`, the FlowPay transaction ID, the unique provider reference, and `environment: "test"`. The customer UI accepts only the HTTPS host `checkout.paystack.com` before redirecting.
 
-## Render API environment
+### Check callback status
 
-Configure only on the FlowPay **backend** service:
+`GET /customer/paystack/deposits/status?reference=flowpay-ps-...`
 
-- `PAYSTACK_ENVIRONMENT=test`
-- `PAYSTACK_SECRET_KEY=sk_test_...` (secret; never place in frontend or source control)
-- `PAYSTACK_CALLBACK_URL=https://flowpay-web-jx7i.onrender.com/...` (HTTPS customer return route)
-- `PAYSTACK_DEPOSIT_MIN_MINOR` (positive integer kobo)
-- `PAYSTACK_DEPOSIT_MAX_MINOR` (integer kobo, >= minimum)
+Requires the same customer's verified bearer session. A reference belonging to another customer is not returned. The API returns the persisted deposit status and whether the wallet was credited.
 
-Set the Paystack dashboard webhook URL to `https://flowpay-backend-qz79.onrender.com/webhooks/paystack`. Paystack signs webhooks with HMAC-SHA512 using the secret key; this handler validates `x-paystack-signature`, then calls the transaction verification endpoint and checks test domain, successful status, reference, NGN currency, and exact amount.
+### Deposit history
 
-## Database
+`GET /customer/money-received`
 
-Migration `015_paystack_sandbox_deposits.sql` creates an independent Paystack deposit table and adds nullable receipt metadata to the shared provider-event table. It does not modify customer balances, Flutterwave records, or ledger entries. It must be reviewed and applied explicitly; API startup does not run migrations.
+Returns posted Flutterwave deposits plus Paystack pending, posted, and failed attempts for the authenticated customer. The Paystack part is omitted until the Paystack schema migration is applied; existing Flutterwave history remains available.
 
-## Not yet enabled
+## Database migration
 
-- Wallet crediting / ledger posting.
-- Transfers / payouts.
-- Dedicated virtual account assignment.
-- Production or live keys.
-- Provider end-to-end verification until Paystack test credentials and webhook configuration are securely set in Render.
+Apply `apps/api/migrations/016_paystack_sandbox_ledger_posting.sql` to the approved FlowPay database before accepting test deposits. The migration is additive and idempotent: it creates the Paystack deposit table, adds nullable provider-event receipt metadata when absent, extends the system-account role check, and creates a zero-opening-balance Paystack clearing account. It does not alter existing customer balances, existing ledger entries, Flutterwave deposits, or customer records.
 
-A callback redirect is not proof of payment. Only a signed webhook plus independent server-side transaction verification is accepted as provider-verified; even then, this stage does not credit the wallet.
+The migration also records `015_paystack_sandbox_deposits` because the Paystack table and event columns are created in this consolidated migration to accommodate existing FlowPay databases where the older Flutterwave migration sequence is incomplete.
+
+Never apply this migration to Production without explicit approval. Confirm the database and Neon branch before applying it.
+
+## Operational behavior and recovery
+
+- A provider verification or database error returns a retryable server error; the provider event is not marked processed.
+- A duplicate receipt with the same payload and FlowPay transaction may safely resume a pending ledger posting.
+- A posted FlowPay transaction is acknowledged as a duplicate only after its two ledger entries are checked against the customer account, clearing account, amount, and equal-and-opposite balance.
+- A deposit whose account, amount, provider transaction ID, or existing ledger entries do not match is not credited automatically and requires reconciliation.
+- Checkout initialization that returns an uncertain provider outcome remains pending. Do not treat an HTTP error as evidence that a payment failed or was successful; reconcile the provider reference before retrying with a new request.
