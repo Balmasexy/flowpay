@@ -1,4 +1,4 @@
-import { randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -53,6 +53,9 @@ function testPaystackSecret(): string | null {
 }
 function payoutsEnabled(): boolean {
   return process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+}
+function beneficiaryFingerprint(secret: string, accountNumber: string): string {
+  return createHmac("sha256", secret).update(accountNumber, "utf8").digest("hex");
 }
 function safeStatus(value: unknown): PayoutStatus {
   const status = typeof value === "string" ? value.toLowerCase() : "";
@@ -180,6 +183,7 @@ type StoredPayout = {
   bank_name: string;
   account_name: string;
   account_number_last4: string;
+  account_fingerprint: string;
   status: PayoutStatus;
   provider_status: string | null;
 };
@@ -187,7 +191,7 @@ async function loadPayout(pool: Pool, reference: string, userId?: string): Promi
   const result = await pool.query<StoredPayout>(
     `SELECT transaction_id, user_id, account_id, reference, recipient_code,
             transfer_code, provider_transfer_id, amount_minor::text AS amount_minor,
-            currency, bank_code, bank_name, account_name, account_number_last4,
+            currency, bank_code, bank_name, account_name, account_number_last4, account_fingerprint,
             status, provider_status
        FROM public.fp_paystack_bank_transfers
       WHERE reference = $1 AND ($2::uuid IS NULL OR user_id = $2)
@@ -215,7 +219,7 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
     const locked = await client.query<StoredPayout>(
       `SELECT transaction_id, user_id, account_id, reference, recipient_code,
               transfer_code, provider_transfer_id, amount_minor::text AS amount_minor,
-              currency, bank_code, bank_name, account_name, account_number_last4,
+              currency, bank_code, bank_name, account_name, account_number_last4, account_fingerprint,
               status, provider_status
          FROM public.fp_paystack_bank_transfers
         WHERE reference = $1
@@ -558,7 +562,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
         const matches = saved.user_id === identity.id &&
           saved.amount_minor === input.amountMinor &&
           saved.bank_code === bankCode &&
-          saved.account_number_last4.trim() === accountNumber.slice(-4);
+          saved.account_number_last4.trim() === accountNumber.slice(-4) &&
+          saved.account_fingerprint === beneficiaryFingerprint(secret, accountNumber);
         if (!matches) {
           send(res, 409, { error: "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_TRANSFER" }); return true;
         }
@@ -641,7 +646,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
         const matches = saved.user_id === identity.id &&
           saved.amount_minor === input.amountMinor &&
           saved.bank_code === bankCode &&
-          saved.account_number_last4.trim() === accountNumber.slice(-4);
+          saved.account_number_last4.trim() === accountNumber.slice(-4) &&
+          saved.account_fingerprint === beneficiaryFingerprint(secret, accountNumber);
         await client.query("COMMIT");
         if (!matches) {
           send(res, 409, { error: "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_TRANSFER" }); return true;
@@ -706,7 +712,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
             account_name, account_number_last4, status)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'NGN',$8,$9,$10,$11,'initiating')`,
         [transactionId, identity.id, walletId, dbKey, reference, recipient.recipientCode,
-          input.amountMinor, bankCode, bankName, recipient.accountName, accountNumber.slice(-4)]
+          input.amountMinor, bankCode, bankName, recipient.accountName, accountNumber.slice(-4),
+          beneficiaryFingerprint(secret, accountNumber)]
       );
       await client.query("COMMIT");
     } catch (error) {
