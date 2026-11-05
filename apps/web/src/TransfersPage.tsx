@@ -170,7 +170,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setRecipientName("");
     setRecipientCanTransfer(false);
     setTransferResult(null);
-    if (!/^\d{12}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
+    if (!/^[1-9]\d{9}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setRecipientLookup("loading");
