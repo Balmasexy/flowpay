@@ -1,73 +1,30 @@
 BEGIN;
 
--- Public FlowPay wallet account numbers are separate from wallet ledger UUIDs
--- and from provider-issued virtual bank account numbers.
+-- Public FlowPay wallet account numbers are separate from ledger UUIDs and
+-- from provider-issued virtual bank account numbers. A sequence guarantees
+-- unique 12-digit numbers without relying on random collision retries.
+CREATE SEQUENCE IF NOT EXISTS public.fp_customer_account_number_seq
+  AS BIGINT
+  START WITH 100000000000
+  INCREMENT BY 1
+  MINVALUE 100000000000
+  MAXVALUE 999999999999
+  NO CYCLE;
+
 CREATE TABLE IF NOT EXISTS public.fp_customer_account_numbers (
   user_id UUID PRIMARY KEY REFERENCES public.fp_users(id) ON DELETE RESTRICT,
   account_number TEXT NOT NULL UNIQUE CHECK (account_number ~ '^[0-9]{12}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE OR REPLACE FUNCTION public.fp_assign_customer_account_number()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  candidate TEXT;
-BEGIN
-  IF NEW.role <> 'customer' THEN
-    RETURN NEW;
-  END IF;
-  LOOP
-    candidate := (100000000000::BIGINT + floor(random() * 900000000000)::BIGINT)::TEXT;
-    BEGIN
-      INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
-      VALUES (NEW.id, candidate);
-      RETURN NEW;
-    EXCEPTION WHEN unique_violation THEN
-      IF EXISTS (
-        SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = NEW.id
-      ) THEN
-        RETURN NEW;
-      END IF;
-    END;
-  END LOOP;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS fp_users_assign_account_number ON public.fp_users;
-CREATE TRIGGER fp_users_assign_account_number
-AFTER INSERT ON public.fp_users
-FOR EACH ROW
-EXECUTE FUNCTION public.fp_assign_customer_account_number();
-
--- Backfill existing FlowPay customers without altering customer or ledger data.
-DO $$
-DECLARE
-  customer RECORD;
-  candidate TEXT;
-  assigned BOOLEAN;
-BEGIN
-  FOR customer IN SELECT id FROM public.fp_users WHERE role = 'customer' ORDER BY id LOOP
-    IF EXISTS (SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = customer.id) THEN
-      CONTINUE;
-    END IF;
-    assigned := FALSE;
-    WHILE NOT assigned LOOP
-      candidate := (100000000000::BIGINT + floor(random() * 900000000000)::BIGINT)::TEXT;
-      BEGIN
-        INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
-        VALUES (customer.id, candidate);
-        assigned := TRUE;
-      EXCEPTION WHEN unique_violation THEN
-        assigned := EXISTS (
-          SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = customer.id
-        );
-      END;
-    END LOOP;
-  END LOOP;
-END;
-$$;
+-- Existing customer accounts receive unique numbers. Non-customer users are
+-- intentionally excluded. New customers receive a number on first account-
+-- details request, using the same sequence.
+INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
+SELECT id, nextval('public.fp_customer_account_number_seq')::TEXT
+  FROM public.fp_users
+ WHERE role = 'customer'
+ON CONFLICT DO NOTHING;
 
 -- Transaction PINs are salted scrypt hashes; no plaintext PIN is persisted.
 CREATE TABLE IF NOT EXISTS public.fp_transaction_pins (
