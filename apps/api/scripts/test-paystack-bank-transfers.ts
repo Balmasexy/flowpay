@@ -142,7 +142,8 @@ async function setup(options: SetupOptions = {}) {
             ledgerValues.push(values ?? []);
             return { rowCount: 2, rows: [] };
           }
-          if (sql.includes("UPDATE public.fp_ledger_transactions") && sql.includes("SET status = 'posted'")) {
+          if (sql.includes("UPDATE public.fp_ledger_transactions") &&
+              (sql.includes("SET status = 'posted'") || sql.includes("SET status = 'failed'"))) {
             return { rowCount: 1, rows: [] };
           }
           if (sql.includes("UPDATE public.fp_paystack_bank_transfers")) return { rowCount: 1, rows: [] };
@@ -280,6 +281,37 @@ test("insufficient available balance prevents transfer initiation and ledger pos
   assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
   assert.equal(transferInitiations, 0);
   assert.equal(context.ledgerValues.length, 0);
+});
+
+
+test("a definite Paystack rejection releases the reservation without a wallet debit", async () => {
+  const context = await setup();
+  let transferInitiations = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.startsWith("https://api.paystack.co/bank/resolve?")) {
+      return new Response(JSON.stringify({ status: true, data: { account_number: accountNumber, account_name: "Test Customer" } }), { status: 200 });
+    }
+    if (url === "https://api.paystack.co/transferrecipient") {
+      return new Response(JSON.stringify({
+        status: true,
+        data: { domain: "test", active: true, type: "nuban", currency: "NGN", recipient_code: "RCP_test123", details: { bank_name: "Zenith Bank", account_number: accountNumber, bank_code: bankCode } }
+      }), { status: 200 });
+    }
+    if (url === "https://api.paystack.co/transfer") {
+      transferInitiations += 1;
+      return new Response(JSON.stringify({ status: false, message: "Transfer feature unavailable" }), { status: 400 });
+    }
+    throw new Error("Unexpected Paystack request: " + url);
+  };
+  const response = context.response();
+  await context.handler(context.request("POST", "/customer/transfers/bank", body()), response.res);
+  assert.equal(response.result().status, 202);
+  assert.equal(response.result().body.status, "failed");
+  assert.equal(response.result().body.final, true);
+  assert.equal(transferInitiations, 1);
+  assert.equal(context.ledgerValues.length, 0);
+  assert.ok(context.statements.some(item => item.sql.includes("SET status = 'failed'")));
 });
 
 test("incorrect transaction PIN is rejected before beneficiary creation", async () => {
