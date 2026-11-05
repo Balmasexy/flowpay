@@ -21,7 +21,7 @@ const clearingId = "00000000-0000-4000-8000-000000000007";
 const transactionId = "00000000-0000-4000-8000-000000000008";
 const accountNumber = "0000000000";
 const bankCode = "057";
-const amountMinor = "12345";
+const amountMinor = "5000000";
 const pinSalt = Buffer.from("0123456789abcdef");
 const pinHash = scryptSync("123456", pinSalt, 64);
 const pair = generateKeyPairSync("ed25519");
@@ -118,7 +118,7 @@ async function setup(options: SetupOptions = {}) {
             return { rowCount: 1, rows: [{ id: clearingId }] };
           }
           if (sql.includes("SUM(entry.amount_minor)")) {
-            return { rowCount: 1, rows: [{ amount_minor: options.balance ?? "500000" }] };
+            return { rowCount: 1, rows: [{ amount_minor: options.balance ?? "20000000" }] };
           }
           if (sql.includes("SUM(amount_minor)") && sql.includes("fp_paystack_bank_transfers")) {
             return { rowCount: 1, rows: [{ amount_minor: "0" }] };
@@ -200,7 +200,7 @@ test("requires the explicit sandbox feature switch and never accepts live creden
   assert.equal(context.connections(), 0);
 });
 
-test("posts a verified sandbox payout with one balanced wallet debit and clearing credit", async () => {
+test("posts a ₦50,000 sandbox bank withdrawal with one balanced wallet debit and clearing credit", async () => {
   const context = await setup();
   const calls: { url: string; method: string; body: Record<string, unknown> }[] = [];
   let reference = "";
@@ -258,7 +258,7 @@ test("posts a verified sandbox payout with one balanced wallet debit and clearin
   assert.equal(result.body.bankName, "Zenith Bank");
   assert.equal(result.body.accountNumberMasked, "******0000");
   assert.ok(/^flowpay-bnk-[a-f0-9]{32}$/.test(result.body.reference));
-  assert.deepEqual(context.ledgerValues, [[transactionId, walletId, "-12345", clearingId, "12345"]]);
+  assert.deepEqual(context.ledgerValues, [[transactionId, walletId, "-5000000", clearingId, "5000000"]]);
   const payoutInsert = context.statements.find(item => item.sql.includes("INSERT INTO public.fp_paystack_bank_transfers"));
   assert.ok(payoutInsert);
   assert.ok(payoutInsert.values?.includes("0000"));
