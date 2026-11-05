@@ -278,16 +278,6 @@ export function createFlowPayTransfersHandler(options: Options) {
       try {
         await client.query("BEGIN");
 
-        const senderActive = await client.query(
-          "SELECT id FROM public.fp_users WHERE id = $1 AND role = 'customer' AND status = 'active' FOR UPDATE",
-          [identity.id]
-        );
-        if (senderActive.rowCount !== 1) {
-          await client.query("ROLLBACK");
-          send(res, 403, { error: "ACTIVE_FLOWPAY_CUSTOMER_REQUIRED" });
-          return true;
-        }
-
         const recipientResult = await client.query<{
           id: string; account_number: string; recipient_name: string;
         }>(
@@ -300,8 +290,7 @@ export function createFlowPayTransfersHandler(options: Options) {
               AND customer.status = 'active'
               AND customer.role = 'customer'
               AND auth_user."emailVerified" = true
-            LIMIT 1
-            FOR UPDATE OF customer`,
+            LIMIT 1`,
           [input.recipientAccountNumber]
         );
         if (recipientResult.rowCount !== 1) {
@@ -313,6 +302,20 @@ export function createFlowPayTransfersHandler(options: Options) {
         if (recipient.id === identity.id) {
           await client.query("ROLLBACK");
           send(res, 400, { error: "CANNOT_TRANSFER_TO_SAME_ACCOUNT" });
+          return true;
+        }
+
+        // Lock sender and recipient in the same UUID order to prevent opposite-
+        // direction transfers from deadlocking each other.
+        const eligibleUsers = await client.query<{ id: string }>(
+          `SELECT id FROM public.fp_users
+            WHERE id = ANY($1::uuid[]) AND role = 'customer' AND status = 'active'
+            ORDER BY id FOR UPDATE`,
+          [[identity.id, recipient.id]]
+        );
+        if (eligibleUsers.rowCount !== 2) {
+          await client.query("ROLLBACK");
+          send(res, 403, { error: "ACTIVE_FLOWPAY_CUSTOMER_REQUIRED" });
           return true;
         }
 
