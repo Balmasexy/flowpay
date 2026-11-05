@@ -62,7 +62,8 @@ export function createDepositReceiptHandler(options: Options) {
     if (!pool || !jwks || !issuer || !audience) {
       return { ok: false, status: 503, error: admin ? "ADMIN_RECEIPT_SERVICE_NOT_CONFIGURED" : "DEPOSIT_RECEIPT_SERVICE_NOT_CONFIGURED" };
     }
-    const bearer = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    const authorization = req.headers.authorization ?? "";
+    const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (!bearer) return { ok: false, status: 401, error: "AUTHENTICATION_REQUIRED" };
     try {
       const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
@@ -101,14 +102,21 @@ export function createDepositReceiptHandler(options: Options) {
 
   return async function handleDepositReceipt(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
-    const pathname = url.pathname.replace(/\\/+$/, "") || "/";
+    const pathname = url.pathname;
+    const segments = pathname.split("/").filter(Boolean);
     const customerReceiptPath = "/customer/paystack/deposits/receipt";
     const adminCollectionPath = "/admin/deposit-receipts";
+    const adminFileId = segments.length === 4 && segments[0] === "admin" && segments[1] === "deposit-receipts" && segments[3] === "file" ? segments[2] : null;
+    const adminReviewId = segments.length === 4 && segments[0] === "admin" && segments[1] === "deposit-receipts" && segments[3] === "review" ? segments[2] : null;
+    const isCustomerRoute = pathname === customerReceiptPath && (req.method === "POST" || req.method === "GET");
+    const isAdminRoute = pathname === adminCollectionPath && req.method === "GET";
+    const isAdminFileRoute = Boolean(adminFileId) && req.method === "GET";
+    const isAdminReviewRoute = Boolean(adminReviewId) && req.method === "PATCH";
     const adminFileMatch = /^\\/admin\\/deposit-receipts\\/([0-9a-f-]{36})\\/file$/i.exec(pathname);
     const adminReviewMatch = /^\\/admin\\/deposit-receipts\\/([0-9a-f-]{36})\\/review$/i.exec(pathname);
     const isCustomerRoute = pathname === customerReceiptPath && (req.method === "POST" || req.method === "GET");
     const isAdminRoute = pathname === adminCollectionPath && req.method === "GET";
-    if (!isCustomerRoute && !isAdminRoute && !(adminFileMatch && req.method === "GET") && !(adminReviewMatch && req.method === "PATCH")) {
+    if (!isCustomerRoute && !isAdminRoute && !isAdminFileRoute && !isAdminReviewRoute) {
       return false;
     }
     if (!pool) {
@@ -116,7 +124,7 @@ export function createDepositReceiptHandler(options: Options) {
       return true;
     }
 
-    const admin = isAdminRoute || Boolean(adminFileMatch) || Boolean(adminReviewMatch);
+    const admin = isAdminRoute || isAdminFileRoute || isAdminReviewRoute;
     const session = await authenticate(req, admin);
     if (!session.ok) {
       json(res, session.status, { error: session.error });
@@ -180,13 +188,15 @@ export function createDepositReceiptHandler(options: Options) {
         json(res, 400, { error: "RECEIPT_IMAGE_REQUIRED" });
         return true;
       }
-      const match = /^data:(image\\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(input.imageDataUrl);
-      if (!match) {
-        json(res, 400, { error: "INVALID_RECEIPT_IMAGE" });
-        return true;
-      }
-      const mimeType = match[1];
-      const fileData = Buffer.from(match[2], "base64");
+      const imagePrefix = "data:image/";
+      const marker = ";base64,";
+      const splitAt = input.imageDataUrl.indexOf(marker);
+      const header = splitAt > 0 ? input.imageDataUrl.slice(0, splitAt) : "";
+      const mimeType = header === "data:image/jpeg" ? "image/jpeg" : header === "data:image/png" ? "image/png" : header === "data:image/webp" ? "image/webp" : "";
+      const encoded = splitAt > 0 ? input.imageDataUrl.slice(splitAt + marker.length) : "";
+      const fileData = encoded && /^[A-Za-z0-9+/]+=*$/.test(encoded) ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
+      const canonical = fileData.toString("base64").replace(/=+$/, "");
+      if (!mimeType || !encoded || !canonical || canonical !== encoded.replace(/=+$/, "")) { json(res, 400, { error: "INVALID_RECEIPT_IMAGE" }); return true; }
       if (!fileData.length || fileData.length > MAX_FILE_BYTES) {
         json(res, 413, { error: "RECEIPT_IMAGE_TOO_LARGE", maximumBytes: MAX_FILE_BYTES });
         return true;
@@ -312,8 +322,8 @@ export function createDepositReceiptHandler(options: Options) {
       return true;
     }
 
-    if (adminFileMatch && req.method === "GET") {
-      if (!UUID_PATTERN.test(adminFileMatch[1])) {
+    if (isAdminFileRoute && adminFileId) {
+      if (!UUID_PATTERN.test(adminFileId)) {
         json(res, 400, { error: "INVALID_RECEIPT_ID" });
         return true;
       }
@@ -321,14 +331,14 @@ export function createDepositReceiptHandler(options: Options) {
         const result = await pool.query<{ file_data: Buffer; mime_type: string; file_name: string }>(
           `SELECT file_data, mime_type, file_name
              FROM public.fp_deposit_receipts WHERE id = $1 LIMIT 1`,
-          [adminFileMatch[1]]
+          [adminFileId]
         );
         if (result.rowCount !== 1 || !result.rows[0]) {
           json(res, 404, { error: "DEPOSIT_RECEIPT_NOT_FOUND" });
           return true;
         }
         const { file_data, mime_type, file_name } = result.rows[0];
-        const attachmentName = file_name.replace(/["\\r\\n]/g, "_");
+        const attachmentName = file_name.replaceAll('"', "_").replaceAll(String.fromCharCode(13), "_").replaceAll(String.fromCharCode(10), "_");
         res.writeHead(200, {
           "Content-Type": mime_type,
           "Content-Length": file_data.length,
@@ -344,8 +354,8 @@ export function createDepositReceiptHandler(options: Options) {
       return true;
     }
 
-    if (adminReviewMatch && req.method === "PATCH") {
-      if (!UUID_PATTERN.test(adminReviewMatch[1])) {
+    if (isAdminReviewRoute && adminReviewId) {
+      if (!UUID_PATTERN.test(adminReviewId)) {
         json(res, 400, { error: "INVALID_RECEIPT_ID" });
         return true;
       }
@@ -388,12 +398,12 @@ export function createDepositReceiptHandler(options: Options) {
                   review_note = NULLIF($4, ''), reviewed_at = NOW()
             WHERE id = $1 AND review_status = 'pending_review'
             RETURNING id, user_id`,
-          [adminReviewMatch[1], reviewStatus, session.identity.id, reviewNote]
+          [adminReviewId, reviewStatus, session.identity.id, reviewNote]
         );
         if (changed.rowCount !== 1 || !changed.rows[0]) {
           const existing = await client.query<{ review_status: string }>(
             "SELECT review_status FROM public.fp_deposit_receipts WHERE id = $1 LIMIT 1",
-            [adminReviewMatch[1]]
+            [adminReviewId]
           );
           await client.query("ROLLBACK");
           json(res, existing.rowCount === 1 ? 409 : 404, {
