@@ -251,6 +251,6 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/spend-save") return <SpendSavePage/>;
   if (path === "/security") return <SecurityCenter token={token}/>;
   if (path === "/face-verification") return <FaceVerification token={token}/>;
-  if (path === "/support") return <HelpSupport go={go}/>;
+  if (path === "/support") return <HelpSupport go={go} token={token}/>;
   return <section className="fp-panel fp-detail-panel"><h2>Page not found</h2><button className="fp-primary" onClick={()=>go("/")}>Return to home</button></section>;
 }
