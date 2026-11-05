@@ -58,6 +58,9 @@ jobs:
       - name: Test Smile ID face and liveness result decisions
         run: npm run test:face-verification --prefix apps/api
 
+      - name: Test Flutterwave webhook verification and replay protection
+        run: npm run test:flutterwave-webhook --prefix apps/api
+
       - name: Smoke-test API health and safe readiness behavior
         shell: bash
         run: |
