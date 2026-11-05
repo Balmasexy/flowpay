@@ -29,7 +29,7 @@ const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issu
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
-const bankAccountLookupHandler = createBankAccountLookupHandler({ jwks, issuer, audience });
+const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
