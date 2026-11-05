@@ -359,6 +359,25 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
           <small className="fp-money-minor-note">Sandbox transaction · No live customer funds are collected in this environment.</small>
         </form> : <div className="fp-money-unavailable" role="status"><span><AlertCircle size={20}/></span><div><b>Deposit checkout is not available right now</b><p>Paystack test checkout requires the test secret, callback URL, deposit limits, database migration and clearing account to be correctly configured on the FlowPay backend.</p></div></div>}
       </div>
+        <form className="fp-money-receipt-form" onSubmit={submitReceipt}>
+          <div className="fp-money-receipt-heading">
+            <span className="fp-money-receipt-icon"><UploadCloud size={19}/></span>
+            <div><span className="fp-money-eyebrow">ALTERNATIVE DEPOSIT</span><h3>Upload a bank transfer receipt</h3><p>Submit your transfer details for a secure review when you paid by bank transfer.</p></div>
+          </div>
+          <label htmlFor="fp-receipt-amount">Amount transferred (NGN)</label>
+          <div className="fp-money-amount-input"><span>₦</span><input id="fp-receipt-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={receiptAmount} onChange={event => setReceiptAmount(event.target.value)} disabled={receiptSending} required/></div>
+          <label htmlFor="fp-receipt-reference">Bank transfer reference (optional)</label>
+          <input id="fp-receipt-reference" className="fp-money-receipt-text" value={receiptReference} onChange={event => setReceiptReference(event.target.value)} maxLength={100} placeholder="Enter your bank reference" disabled={receiptSending}/>
+          <label htmlFor="fp-receipt-file">Receipt image or PDF</label>
+          <input id="fp-receipt-file" className="fp-money-receipt-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={event => { setReceiptFile(event.target.files?.[0] ?? null); setReceiptRequestId(null); setReceiptError(""); }} disabled={receiptSending} required/>
+          <small className="fp-money-receipt-file-hint">{receiptFile ? receiptFile.name + " · " + (receiptFile.size / 1024 / 1024).toFixed(2) + " MB" : "JPG, PNG, WEBP or PDF · maximum 5 MB"}</small>
+          <label htmlFor="fp-receipt-note">Additional details (optional)</label>
+          <textarea id="fp-receipt-note" className="fp-money-receipt-textarea" value={receiptNote} onChange={event => setReceiptNote(event.target.value)} maxLength={500} rows={3} placeholder="Add any details that help us identify the transfer." disabled={receiptSending}/>
+          <div className="fp-money-checkout-note"><ShieldCheck size={16}/><span>Uploading a receipt does not create an automatic wallet credit. An authorised FlowPay reviewer must independently confirm the matching funds were received before crediting your wallet.</span></div>
+          {receiptError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {receiptError}</div>}
+          {receiptMessage && <div className="fp-money-receipt-success" role="status"><CheckCircle2 size={16}/> {receiptMessage}</div>}
+          <button type="submit" className="fp-primary fp-money-submit" disabled={receiptSending || !receiptAmount.trim() || !receiptFile}>{receiptSending ? "Uploading receipt…" : <>Submit receipt for review <FileCheck2 size={16}/></>}</button>
+        </form>
       <aside className="fp-money-side-column">
         <div className="fp-money-security-card"><span className="fp-money-side-icon"><ShieldCheck size={19}/></span><b>Wallet credit protection</b><p>Payment screenshots or checkout redirects are not proof of payment. A signed provider event and matching transaction verification are required before funds can appear in your available balance.</p><ul><li>Verified provider reference</li><li>Exact amount and currency match</li><li>Duplicate-credit protection</li><li>Balanced ledger posting</li></ul></div>
         <div className="fp-money-help-card"><b>Need help with a deposit?</b><p>Keep your provider reference and contact FlowPay support if a completed checkout is still pending.</p></div>
@@ -375,6 +394,16 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
         <span className={`fp-money-status ${item.status}`}>{statusLabel(item.status)}</span>
       </article>)}</div>}
     </div>
-    <div className="fp-money-bottom-note"><ShieldCheck size={15}/> FlowPay does not treat uploaded receipt images as automatic proof of payment. A secure receipt-submission and staff-review service must be connected before receipt uploads can be accepted; wallet credits remain subject to verified provider records.</div>
+    <div className="fp-money-history fp-money-receipt-history">
+      <div className="fp-money-history-heading"><div><span className="fp-money-eyebrow">03 / MANUAL TRANSFER REVIEW</span><h3>Receipt submissions</h3><p>Track uploaded receipts and the authorised review decision.</p></div><span className="fp-money-count">{receiptRows.length} {receiptRows.length === 1 ? "receipt" : "receipts"}</span></div>
+      {receiptRowsLoading && <p className="fp-muted" role="status">Loading receipt submissions…</p>}
+      {!receiptRowsLoading && receiptRows.length === 0 && <div className="fp-empty fp-money-empty"><FileCheck2 size={22}/><b>No receipt submissions</b><span>Bank transfer receipts you submit will appear here with their review status.</span></div>}
+      {!receiptRowsLoading && receiptRows.length > 0 && <div className="fp-money-history-list">{receiptRows.map(item => <article className="fp-money-history-item" key={item.id}>
+        <span className={"fp-money-history-icon " + (item.status === "approved" ? "posted" : item.status === "rejected" ? "failed" : "pending")}><FileCheck2 size={18}/></span>
+        <div className="fp-money-history-copy"><b>{formatAmount(item.amountMinor, item.currency)}</b><span>{item.fileName}{item.reference ? " · " + item.reference : ""}</span><small>{receiptStatusLabel(item.status)} · Submitted {formatDate(item.createdAt)}</small>{item.reviewNote && <small>Reviewer note: {item.reviewNote}</small>}</div>
+        <span className={"fp-money-status " + (item.status === "approved" ? "posted" : item.status === "rejected" ? "failed" : "pending")}>{receiptStatusLabel(item.status)}</span>
+      </article>)}</div>}
+    </div>
+    <div className="fp-money-bottom-note"><ShieldCheck size={15}/> Receipt files are private and visible only to the submitting customer and authorised reviewers. A receipt is not proof of settlement by itself; wallet credits are posted only after an authorised reviewer confirms receipt of the matching funds.</div>
   </section>;
 }
