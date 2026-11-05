@@ -80,7 +80,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm run start --prefix apps/api > "$RUNNER_TEMP/flowpay-api.log" 2>&1 &
+          cd apps/api
+          node --import tsx src/server.ts > "$RUNNER_TEMP/flowpay-api.log" 2>&1 &
           api_pid=$!
           cleanup() {
             kill "$api_pid" 2>/dev/null || true
@@ -89,7 +90,7 @@ jobs:
           trap cleanup EXIT
           ready=0
           for attempt in $(seq 1 60); do
-            if curl --silent --fail http://127.0.0.1:3000/health > "$RUNNER_TEMP/flowpay-health.json"; then
+            if curl --silent --fail --connect-timeout 1 --max-time 2 http://127.0.0.1:3000/health > "$RUNNER_TEMP/flowpay-health.json"; then
               ready=1
               break
             fi
@@ -107,7 +108,7 @@ jobs:
               throw new Error("Unexpected /health response: " + JSON.stringify(health));
             }
           '
-          ready_status="$(curl --silent --output "$RUNNER_TEMP/flowpay-ready.json" --write-out "%{http_code}" http://127.0.0.1:3000/ready)"
+          ready_status="$(curl --silent --connect-timeout 1 --max-time 2 --output "$RUNNER_TEMP/flowpay-ready.json" --write-out "%{http_code}" http://127.0.0.1:3000/ready)"
           if [ "$ready_status" != "503" ]; then
             cat "$RUNNER_TEMP/flowpay-ready.json"
             echo "Expected /ready to return 503 when DATABASE_URL is not configured; got $ready_status" >&2
