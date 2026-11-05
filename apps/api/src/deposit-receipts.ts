@@ -335,7 +335,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
         return true;
       }
 
-      if (customerMatch && req.method === "PUT" && customerMatch[1] && customerMatch[0]) {
+      if (customerMatch && req.method === "PUT") {
         const receiptId = customerMatch[1];
         const found = await pool.query<Receipt>(
           `SELECT id, user_id, amount_minor::text, currency, reference_text, customer_note,
@@ -426,7 +426,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
         return true;
       }
 
-            if (customerMatch && req.method === "GET" && customerMatch[2] === "file") {
+            if (customerMatch && req.method === "GET") {
         const result = await pool.query<{ object_key: string; file_name: string; content_type: string }>(
           `SELECT object_key,file_name,content_type FROM public.fp_deposit_receipts
             WHERE id=$1 AND user_id=$2 AND status IN ('pending_review','approved','rejected') LIMIT 1`,
