@@ -384,3 +384,117 @@
  .fp-activity-filters label{flex:1 1 130px}
  .fp-activity-filters button{flex:1 1 auto;justify-content:center}
 }
+
+/* FlowPay money centre — unique orange and charcoal deposit, transfer and account screens. */
+.fp-money-page,.fp-transfer-page,.fp-account-page{width:100%;max-width:960px;gap:22px}
+.fp-money-page{background:#fff;border-color:#e8e4df;padding:22px}
+.fp-money-hero{position:relative;overflow:hidden;padding:24px 25px 22px;border-radius:19px;background:radial-gradient(circle at 94% 10%,#5a3824 0,transparent 30%),linear-gradient(128deg,#171b19,#252823 62%,#171a17);color:#fff;box-shadow:0 18px 42px #151a171c}
+.fp-money-hero:after{content:"";position:absolute;right:-60px;bottom:-160px;width:300px;height:300px;border:1px solid #ffffff16;border-radius:50%;box-shadow:0 0 0 28px #ffffff08,0 0 0 56px #ffffff05;pointer-events:none}
+.fp-money-hero-top{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.fp-money-brand-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#ff7a18;color:white}
+.fp-money-hero-tag{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #ffffff25;border-radius:99px;color:#f7c59e;font-size:9px;font-weight:800;letter-spacing:1px}
+.fp-money-refresh{display:grid;place-items:center;width:36px;height:36px;margin-left:auto;border:1px solid #ffffff25;border-radius:10px;background:#ffffff0a;color:#fff}
+.fp-money-refresh:disabled{opacity:.55;cursor:not-allowed}
+.fp-money-eyebrow{display:block;color:#d86b1b;font-size:9px;font-weight:800;letter-spacing:1.5px}
+.fp-money-hero .fp-money-eyebrow{position:relative;z-index:1;margin-top:23px;color:#ffad70}
+.fp-money-hero h2{position:relative;z-index:1;margin:7px 0 8px;color:#fff;font:800 25px/1.15 Manrope,sans-serif;letter-spacing:-.7px}
+.fp-money-hero>p{position:relative;z-index:1;max-width:560px;margin:0;color:#c6cbc4;font-size:11px;line-height:1.7}
+.fp-money-steps{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:22px}
+.fp-money-steps>div{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid #ffffff17;border-radius:10px;background:#ffffff08}
+.fp-money-steps span{display:grid;place-items:center;flex:0 0 25px;width:25px;height:25px;border-radius:8px;background:#ff7a1828;color:#ffad70;font-size:9px;font-weight:800}
+.fp-money-steps b{color:#e6e8e3;font-size:9px}
+.fp-money-result{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid #e7d8c8;border-radius:13px;background:#fff9f2;color:#46433d}
+.fp-money-result.is-success{border-color:#bbdfc9;background:#f2fbf5}.fp-money-result.is-failed{border-color:#edc6c1;background:#fff6f4}
+.fp-money-result-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#fff;color:#ba5b16}
+.fp-money-result.is-success .fp-money-result-icon{color:#28764a}.fp-money-result.is-failed .fp-money-result-icon{color:#b44338}
+.fp-money-result-copy{display:grid;gap:5px;min-width:0}.fp-money-result-copy b{font-size:12px}.fp-money-result-copy span{font-size:10px;line-height:1.55}.fp-money-result-copy small{overflow-wrap:anywhere;color:#888;font-size:9px}
+.fp-money-content-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(220px,.8fr);gap:17px;align-items:start}
+.fp-money-main-column,.fp-money-side-column{display:grid;gap:13px;min-width:0}
+.fp-money-section-heading,.fp-money-history-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.fp-money-section-heading h3,.fp-money-history-heading h3{margin:5px 0 0;color:#252721;font:800 16px Manrope,sans-serif}
+.fp-money-currency,.fp-money-count{padding:6px 9px;border:1px solid #f0dfd1;border-radius:99px;background:#fff7f0;color:#a95211;font-size:9px;font-weight:800;white-space:nowrap}
+.fp-money-checkout{display:grid;gap:12px;padding:17px;border:1px solid #e9e4de;border-radius:15px;background:linear-gradient(180deg,#fff,#fdfbf9)}
+.fp-money-provider-head{display:flex;align-items:center;gap:10px;padding-bottom:13px;border-bottom:1px solid #eeeae4}
+.fp-money-provider-logo{display:grid;place-items:center;width:37px;height:37px;border-radius:11px;background:#087b62;color:white;font:800 18px Manrope,sans-serif}
+.fp-money-provider-head>div{display:grid;gap:3px;min-width:0;flex:1}.fp-money-provider-head b{font-size:11px;color:#2b302b}.fp-money-provider-head small{color:#92948d;font-size:9px}
+.fp-money-test-badge{padding:6px 8px;border-radius:99px;background:#fff3e8;color:#b95c17;font-size:8px;font-weight:900;letter-spacing:.7px}
+.fp-money-checkout>label{color:#454841;font-size:10px;font-weight:800}
+.fp-money-amount-input{display:flex;align-items:center;gap:10px;padding:5px 13px;border:1px solid #dadbd4;border-radius:11px;background:#fff}
+.fp-money-amount-input:focus-within{border-color:#ff9a50;box-shadow:0 0 0 3px #ff7a1818}
+.fp-money-amount-input>span{color:#b65c19;font:800 19px Manrope,sans-serif}
+.fp-money-amount-input input{width:100%;min-width:0;padding:10px 0;border:0;outline:0;background:transparent;color:#242722;font:800 25px Manrope,sans-serif;font-variant-numeric:tabular-nums}
+.fp-money-amount-input input::placeholder{color:#c7c8c1}
+.fp-money-quick-amounts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.fp-money-quick-amounts button{min-width:0;padding:9px 4px;border:1px solid #e8e6e0;border-radius:9px;background:#fff;color:#6b6c65;font-size:9px;font-weight:800}
+.fp-money-quick-amounts button.selected,.fp-money-quick-amounts button:focus{border-color:#ff9a50;background:#fff5ec;color:#b85710}
+.fp-money-checkout-note{display:flex;align-items:flex-start;gap:8px;padding:11px;border:1px solid #f3e2d1;border-radius:10px;background:#fff8f1;color:#71583f;font-size:9px;line-height:1.6}
+.fp-money-checkout-note svg{flex-shrink:0;color:#c76a20}
+.fp-money-submit{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:10px;background:#ff7a18;box-shadow:0 8px 18px #ff7a1822}
+.fp-money-minor-note{color:#9a9b94;text-align:center;font-size:8px}
+.fp-money-unavailable{display:flex;align-items:flex-start;gap:11px;padding:15px;border:1px solid #efdfd0;border-radius:13px;background:#fff8f0}
+.fp-money-unavailable>span{display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:10px;background:#fff0e1;color:#bf641c}
+.fp-money-unavailable b{font-size:11px;color:#55402d}.fp-money-unavailable p{margin:5px 0 0;color:#8b7865;font-size:9px;line-height:1.6}
+.fp-money-security-card,.fp-money-help-card{padding:16px;border:1px solid #e9e4de;border-radius:14px;background:#faf9f6}
+.fp-money-security-card{background:linear-gradient(150deg,#202521,#151815);border-color:#303832;color:#fff}
+.fp-money-side-icon{display:grid;place-items:center;width:36px;height:36px;margin-bottom:12px;border-radius:11px;background:#ff7a1826;color:#ff9b53}
+.fp-money-security-card>b,.fp-money-help-card>b{display:block;font:800 12px Manrope,sans-serif}
+.fp-money-security-card>p,.fp-money-help-card>p{margin:7px 0 0;color:#b8beb6;font-size:9px;line-height:1.7}
+.fp-money-security-card ul{display:grid;gap:7px;padding:0;margin:14px 0 0;list-style:none}
+.fp-money-security-card li{display:flex;align-items:center;gap:7px;color:#e0e4dd;font-size:9px}
+.fp-money-security-card li:before{content:"";width:6px;height:6px;border-radius:50%;background:#ff8a35}
+.fp-money-help-card{background:#fff8f2;border-color:#f1e2d5}.fp-money-help-card>b{color:#54412e}.fp-money-help-card>p{color:#8c7662}
+.fp-money-history{display:grid;gap:13px;padding-top:19px;border-top:1px solid #ece8e2}
+.fp-money-history-heading p{margin:5px 0 0;color:#8e9088;font-size:9px;line-height:1.5}
+.fp-money-history-list{display:grid;border-top:1px solid #eeeae5}
+.fp-money-history-item{display:flex;align-items:center;gap:11px;min-width:0;padding:12px 4px;border-bottom:1px solid #eeeae5}
+.fp-money-history-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:11px;background:#f3f4f0;color:#888}
+.fp-money-history-icon.posted{background:#eaf7ee;color:#2e8754}.fp-money-history-icon.pending{background:#fff4e7;color:#bc681d}.fp-money-history-icon.failed{background:#fff0ee;color:#bd4b3f}
+.fp-money-history-copy{display:grid;gap:4px;flex:1;min-width:0}.fp-money-history-copy b{color:#2e312b;font:800 12px Manrope,sans-serif}.fp-money-history-copy span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#666a61;font-size:9px}.fp-money-history-copy small{color:#96988f;font-size:8px}
+.fp-money-status{padding:6px 8px;border-radius:99px;background:#f3f3f0;color:#777;font-size:8px;font-weight:800;white-space:nowrap}
+.fp-money-status.posted{background:#eaf7ee;color:#2d7d4b}.fp-money-status.pending{background:#fff2e5;color:#a95d18}.fp-money-status.failed{background:#fff0ee;color:#ae493e}
+.fp-money-empty{border:1px dashed #e7e1d8;border-radius:12px;background:#fbfaf8}
+.fp-money-bottom-note{display:flex;align-items:flex-start;gap:8px;padding-top:12px;border-top:1px solid #eeeae4;color:#888a82;font-size:9px;line-height:1.6}
+.fp-money-bottom-note svg{flex-shrink:0;color:#d06a1e}
+.fp-transfer-page{max-width:920px}
+.fp-transfer-hero{background:radial-gradient(circle at 95% 0,#684126 0,transparent 34%),linear-gradient(130deg,#151a17,#292b26)!important;border:1px solid #343a34}
+.fp-transfer-page .fp-transfer-destination-grid>button{position:relative;min-height:83px!important;border-radius:13px!important;transition:transform .15s,border-color .15s,background .15s}
+.fp-transfer-page .fp-transfer-destination-grid>button:hover{transform:translateY(-1px)}
+.fp-transfer-page .fp-transfer-destination-grid>button[aria-selected="true"]{background:linear-gradient(120deg,#ff7a18,#e8670b)!important;border-color:#ffb16e!important;box-shadow:0 7px 18px #ff7a1830}
+.fp-transfer-page .fp-transfer-destination-grid>button[aria-selected="false"]{background:#ffffff0a!important;border-color:#ffffff26!important}
+.fp-transfer-page .fp-transfer-destination-grid>button[aria-selected="false"]:hover{background:#ffffff15!important}
+.fp-transfer-form-card{border-color:#e8e3dc!important;border-radius:16px!important;background:#fff!important;box-shadow:0 10px 28px #1d21180b}
+.fp-transfer-page input,.fp-transfer-page select{min-height:43px;padding:11px 12px;border:1px solid #dedfd8;border-radius:9px;background:#fff;color:#30322d;font-size:11px}
+.fp-transfer-page input:focus,.fp-transfer-page select:focus{outline:0;border-color:#ff9750;box-shadow:0 0 0 3px #ff7a1818}
+.fp-transfer-page label{display:block;margin:9px 0 6px;color:#4b4e46;font-size:10px;font-weight:800}
+.fp-transfer-page .fp-account-section-title{display:flex;align-items:center;gap:8px;color:#2d322c;font:800 14px Manrope,sans-serif}
+.fp-transfer-page .fp-primary{min-height:43px;border-radius:9px;box-shadow:0 7px 17px #ff7a1820}
+.fp-transfer-page .fp-detail-list>div{padding:11px 0}.fp-transfer-page .fp-detail-list b{overflow-wrap:anywhere}
+.fp-account-page{max-width:900px;background:#fff;border-color:#e8e4df;padding:22px}
+.fp-account-hero{padding:23px;border-radius:18px;background:radial-gradient(circle at 95% 10%,#604026 0,transparent 30%),linear-gradient(130deg,#181d19,#282c26);color:#fff}
+.fp-account-hero-icon{display:grid;place-items:center;width:40px;height:40px;margin-bottom:16px;border-radius:12px;background:#ff7a182b;color:#ff9a51}
+.fp-account-hero>.fp-money-eyebrow{color:#ffad70}.fp-account-hero h2{margin:5px 0 7px;color:#fff;font:800 23px Manrope,sans-serif}
+.fp-account-hero>p{max-width:650px;margin:0;color:#c3c9c0;font-size:10px;line-height:1.7}
+.fp-account-number-highlight{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding:14px;border:1px solid #ffffff24;border-radius:12px;background:#ffffff0c}
+.fp-account-number-highlight>div{display:grid;gap:5px;min-width:0}.fp-account-number-highlight small{color:#c2c8bf;font-size:8px;font-weight:800;letter-spacing:1px}
+.fp-account-number-highlight strong{overflow-wrap:anywhere;color:#fff;font:800 25px Manrope,sans-serif;letter-spacing:1px}
+.fp-account-number-highlight button{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1px solid #ffffff36;border-radius:9px;background:#ffffff0b;color:#fff;font-size:9px;font-weight:800;white-space:nowrap}
+.fp-account-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.fp-account-type-card{display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0;padding:17px;border:1px solid #e7e4de;border-radius:15px;background:#fbfaf8}
+.fp-account-wallet-card{background:linear-gradient(155deg,#fff8f1,#fff);border-color:#f0dfd1}.fp-account-bank-card{background:linear-gradient(155deg,#f8f9f7,#fff);border-color:#e3e7e0}
+.fp-account-type-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#fff0e2;color:#c26119}
+.fp-account-type-card h3{margin:0;color:#292d27;font:800 15px Manrope,sans-serif}.fp-account-type-card>p{min-height:47px;margin:0;color:#7c8178;font-size:9px;line-height:1.6}
+.fp-account-type-value{overflow-wrap:anywhere;width:100%;padding:11px;border:1px dashed #e5d3c2;border-radius:9px;background:#fff;color:#383a34;font:800 18px Manrope,sans-serif;letter-spacing:.5px}
+.fp-account-bank-card .fp-account-type-value{border-color:#dfe4dc}
+.fp-account-live-label{display:inline-flex;align-items:center;gap:6px;color:#3b7d54;font-size:9px;font-weight:800}.fp-account-live-label.is-pending{color:#a5682a}
+.fp-account-type-card .fp-outline{display:inline-flex;align-items:center;gap:7px;background:#fff}
+.fp-account-pending{display:flex;align-items:flex-start;gap:9px;width:100%;padding:11px;border:1px solid #f0e0d0;border-radius:10px;background:#fff8f1;color:#bc6a22}
+.fp-account-pending span{display:grid;gap:4px;color:#6e5038}.fp-account-pending b{font-size:10px}.fp-account-pending small{font-size:8px;line-height:1.5}
+.fp-account-bank-details{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;width:100%;font-size:9px}.fp-account-bank-details span{color:#8b8e85}.fp-account-bank-details b{overflow-wrap:anywhere;color:#41443d}
+.fp-account-wallets{display:grid;gap:10px;padding-top:17px;border-top:1px solid #ece9e3}
+.fp-account-wallet-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.fp-account-wallet-list>div{display:flex;align-items:center;gap:9px;min-width:0;padding:10px;border:1px solid #ece9e3;border-radius:10px}
+.fp-account-currency{display:grid;place-items:center;flex:0 0 32px;height:32px;border-radius:9px;background:#fff0e4;color:#bb5e17;font-size:9px;font-weight:900}
+.fp-account-wallet-list>div>span:nth-child(2){display:grid;gap:3px;flex:1;min-width:0}.fp-account-wallet-list b{font-size:9px;color:#41443d}.fp-account-wallet-list small{color:#92948d;font-size:8px}
+.fp-account-wallet-list strong{color:#3e8255;font-size:8px}.fp-account-actions{display:flex;flex-wrap:wrap;gap:9px}
+@media(max-width:720px){.fp-money-page,.fp-account-page{padding:14px;gap:16px}.fp-money-hero{padding:18px}.fp-money-hero h2{font-size:22px}.fp-money-steps{gap:5px}.fp-money-steps>div{align-items:flex-start;flex-direction:column;padding:8px;gap:5px}.fp-money-steps b{font-size:8px}.fp-money-content-grid{grid-template-columns:1fr}.fp-money-side-column{grid-template-columns:1fr 1fr}.fp-money-security-card,.fp-money-help-card{padding:13px}.fp-money-history-heading{align-items:flex-start}.fp-money-status{max-width:110px;text-align:center;white-space:normal}.fp-account-hero{padding:18px}.fp-account-number-highlight strong{font-size:21px}.fp-account-detail-grid{grid-template-columns:1fr}.fp-account-type-card>p{min-height:0}}
+@media(max-width:480px){.fp-money-side-column{grid-template-columns:1fr}.fp-money-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.fp-money-steps b{line-height:1.3}.fp-money-quick-amounts{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-money-history-item{align-items:flex-start;gap:8px}.fp-money-history-icon{flex-basis:32px;width:32px;height:32px}.fp-money-history-copy b{font-size:11px}.fp-money-status{padding:5px 6px;font-size:7px}.fp-account-page{padding:12px}.fp-account-number-highlight{align-items:flex-start;flex-direction:column}.fp-account-number-highlight button{align-self:flex-end}.fp-account-wallet-list{grid-template-columns:1fr}.fp-account-actions{display:grid;grid-template-columns:1fr}.fp-transfer-page .fp-transfer-destination-grid{grid-template-columns:1fr!important}}

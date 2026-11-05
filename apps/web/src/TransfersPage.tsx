@@ -315,17 +315,17 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setBankPreview(null);
   };
 
-  return <section className="fp-panel fp-detail-panel">
-    <div style={{background:"linear-gradient(135deg,#111827 0%,#252a34 100%)",color:"#fff",borderRadius:20,padding:20,marginBottom:20,boxShadow:"0 16px 36px rgba(15,23,42,.16)"}}>
+  return <section className="fp-panel fp-detail-panel fp-transfer-page">
+    <div className="fp-transfer-hero" style={{background:"linear-gradient(135deg,#111827 0%,#252a34 100%)",color:"#fff",borderRadius:20,padding:20,marginBottom:20,boxShadow:"0 16px 36px rgba(15,23,42,.16)"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <span style={{width:42,height:42,borderRadius:14,display:"grid",placeItems:"center",background:"rgba(249,115,22,.18)",color:"#fb923c"}}><ArrowLeftRight size={21}/></span>
-          <div><div style={{fontSize:11,letterSpacing:1.5,fontWeight:800,color:"#fdba74"}}>FLOWPAY TRANSFERS</div><h2 style={{fontSize:23,lineHeight:1.15,margin:"4px 0 0",color:"#fff"}}>Send money</h2></div>
+          <div><div style={{fontSize:11,letterSpacing:1.5,fontWeight:800,color:"#fdba74"}}>FLOWPAY TRANSFERS</div><h2 style={{fontSize:23,lineHeight:1.15,margin:"4px 0 0",color:"#fff"}}>{mode === "flowpay" ? "Send to FlowPay" : "Send to a bank"}</h2></div>
         </div>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,padding:"7px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#f8fafc"}}>NGN WALLET</span>
       </div>
-      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>Choose a trusted destination. Your wallet balance and transaction history stay in FlowPay.</p>
-      <div className="fp-transfer-mode-switch" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>{mode === "flowpay" ? "Move money between verified FlowPay wallets, with recipient confirmation and your transaction PIN." : "Verify a Nigerian bank account and review the payout details. Bank payout submission is not enabled yet."}</p>
+      <div className="fp-transfer-mode-switch fp-transfer-destination-grid" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
         <button type="button" role="tab" aria-selected={mode === "flowpay"} onClick={() => changeMode("flowpay")}
           style={{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"13px 14px",borderRadius:14,border:mode === "flowpay" ? "2px solid #fb923c" : "1px solid rgba(255,255,255,.18)",background:mode === "flowpay" ? "#f97316" : "rgba(255,255,255,.07)",color:"#fff",cursor:"pointer",minHeight:72}}>
           <Wallet size={22}/><span style={{display:"grid",gap:3}}><b style={{fontSize:14}}>To FlowPay</b><small style={{fontSize:11,color:mode === "flowpay" ? "#fff7ed" : "#cbd5e1"}}>Another FlowPay wallet</small></span>
@@ -344,7 +344,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         <div><span>Transaction PIN</span><b>{pinStatusLoading ? "Checking…" : pinSet ? "Configured" : "Setup required"}</b></div>
       </div>
 
-      <div style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
+      <div className="fp-transfer-form-card" style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
         <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
         <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 12-digit FlowPay account number. We will confirm the customer's name before you continue.</p>

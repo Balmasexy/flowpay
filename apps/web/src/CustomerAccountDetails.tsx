@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { Building2, Check, Clock3, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
@@ -80,26 +80,26 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
 
   useEffect(() => { void load(); }, [load]);
 
-  return <section className="fp-panel fp-detail-panel">
-    <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Building2 size={19}/></span><span>Account information</span></div>
-    <p className="fp-muted">Your FlowPay wallet ledger account and any verified virtual bank account assignment.</p>
-    {loading ? <p className="fp-overview-muted" role="status">Loading your account records…</p> : error ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
-      <div className="fp-detail-list">
-        <div><span>FlowPay account number</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.flowpayAccountNumber || "Not yet assigned"}</b>{data?.flowpayAccountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)}><Copy size={14}/> Copy</button>}</span></div>
-        <div><span>Virtual bank account number</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.assigned ? data.virtualBankAccount.accountNumber : "Not yet assigned"}</b>{data?.virtualBankAccount.assigned && data.virtualBankAccount.accountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("Account number", data.virtualBankAccount.accountNumber)}><Copy size={14}/> Copy</button>}</span></div>
-        <div><span>Bank / provider</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.bankName || "Not yet assigned"}</b>{data?.virtualBankAccount.bankName && <button type="button" className="fp-outline" onClick={() => void copyValue("Bank name", data.virtualBankAccount.bankName)}><Copy size={14}/> Copy</button>}</span></div>
-        <div><span>Account name</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.accountName || "Not yet linked"}</b>{data?.virtualBankAccount.accountName && <button type="button" className="fp-outline" onClick={() => void copyValue("Account name", data.virtualBankAccount.accountName)}><Copy size={14}/> Copy</button>}</span></div>
+  return <section className="fp-panel fp-detail-panel fp-account-page">
+    <div className="fp-account-hero">
+      <span className="fp-account-hero-icon"><Building2 size={22}/></span><span className="fp-money-eyebrow">FLOWPAY · ACCOUNT CENTRE</span>
+      <h2>Your account numbers</h2>
+      <p>Your FlowPay number is a unique destination for transfers between FlowPay customers. A bank-issued virtual account is different and appears only when a provider confirms issuance.</p>
+      <div className="fp-account-number-highlight"><div><small>YOUR FLOWPAY TRANSFER NUMBER</small><strong>{data?.flowpayAccountNumber || (loading ? "Assigning…" : "Not assigned")}</strong></div>{data?.flowpayAccountNumber && <button type="button" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)} aria-label="Copy FlowPay account number"><Copy size={17}/> Copy</button>}</div>
+    </div>
+    {loading ? <p className="fp-overview-muted" role="status">Loading your assigned account records…</p> : error ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
+      <div className="fp-account-detail-grid">
+        <article className="fp-account-type-card fp-account-wallet-card"><span className="fp-account-type-icon"><Wallet size={19}/></span><span className="fp-money-eyebrow">FLOWPAY WALLET</span><h3>To FlowPay</h3><p>Use this unique 12-digit FlowPay number when another FlowPay customer sends you money.</p><div className="fp-account-type-value">{data?.flowpayAccountNumber || "Not yet assigned"}</div><span className="fp-account-live-label"><Check size={14}/> {data?.flowpayAccountNumber ? "Assigned to your customer profile" : "Awaiting assignment"}</span>{data?.flowpayAccountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)}><Copy size={14}/> Copy number</button>}</article>
+        <article className="fp-account-type-card fp-account-bank-card"><span className="fp-account-type-icon"><Building2 size={19}/></span><span className="fp-money-eyebrow">BANK TRANSFER ACCOUNT</span><h3>Receive from any bank</h3>
+          {data?.virtualBankAccount.assigned ? <><p>Provider-confirmed bank account linked to your FlowPay customer profile.</p><div className="fp-account-type-value">{data.virtualBankAccount.accountNumber}</div><div className="fp-account-bank-details"><span>Bank</span><b>{data.virtualBankAccount.bankName}</b><span>Account name</span><b>{data.virtualBankAccount.accountName}</b></div><span className="fp-account-live-label"><Check size={14}/> Provider assignment confirmed</span></> : <><p>A dedicated bank NUBAN has not yet been issued for this customer. The FlowPay transfer number above cannot receive transfers from outside banks.</p><div className="fp-account-pending"><Clock3 size={18}/><span><b>Bank account not issued</b><small>Paystack live dedicated-account activation and customer eligibility checks are still required.</small></span></div><span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> No placeholder bank number displayed</span></>}
+        </article>
+      </div>
+      <div className="fp-account-wallets"><div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">LEDGER ACCOUNTS</span><h3>Your FlowPay wallets</h3></div><span className="fp-money-count">{data?.walletAccounts.length ?? 0} currencies</span></div>
+        {data?.walletAccounts.length ? <div className="fp-account-wallet-list">{data.walletAccounts.map((wallet,index)=><div key={wallet.currency+"-"+index}><span className="fp-account-currency">{wallet.currency.slice(0,2)}</span><span><b>{wallet.currency} wallet</b><small>Created {dateLabel(wallet.createdAt)}</small></span><strong>{wallet.status === "active" ? "Active" : wallet.status}</strong></div>)}</div> : <div className="fp-empty"><Wallet size={22}/><b>No wallet account is linked</b><span>Contact FlowPay support if you believe this is incorrect.</span></div>}
       </div>
       {copied && <p className="fp-muted" role="status"><Check size={14}/> {copied === "Clipboard unavailable" ? copied : copied + " copied"}</p>}
-      <h3 className="fp-account-section-title"><Wallet size={17}/> FlowPay wallet accounts</h3>
-      {data?.walletAccounts.length ? <div className="fp-detail-list">
-        {data.walletAccounts.map((account, index) => <div key={account.currency + "-" + index}>
-          <span>{account.currency} wallet · {dateLabel(account.createdAt)}</span>
-          <b>{account.status === "active" ? "Active" : account.status}</b>
-        </div>)}
-      </div> : <div className="fp-empty"><Wallet size={22}/><b>No wallet account is linked</b><span>Contact FlowPay support if you believe this is incorrect.</span></div>}
       <div className="fp-preview-warning"><ShieldCheck size={17}/>{data?.message}</div>
     </>}
-    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh account details</button>{go && <button className="fp-outline" type="button" onClick={() => go("/documents")}><FileText size={16}/> Documents</button>}</div>
+    <div className="fp-account-actions"><button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh account details</button>{go && <button className="fp-outline" type="button" onClick={() => go("/documents")}><FileText size={16}/> Documents</button>}</div>
   </section>;
 }
