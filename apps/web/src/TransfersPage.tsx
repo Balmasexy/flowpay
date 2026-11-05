@@ -316,7 +316,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   const submitBankTransfer = async () => {
     if (bankTransferBusy || !bankPreview) return;
     if (!pinSet) { setTransferError("Set your 6-digit transaction PIN before sending to a bank."); return; }
-    if (!/^\\d{6}$/.test(transactionPin)) { setTransferError("Enter your 6-digit transaction PIN."); return; }
+    if (!/^\d{6}$/.test(transactionPin)) { setTransferError("Enter your 6-digit transaction PIN."); return; }
     if (bankLookup !== "verified" || bankPreview.accountNumber !== bankAccountNumber) {
       setTransferError("Re-verify the beneficiary bank account before sending."); return;
     }
@@ -526,11 +526,11 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
               <p>Set a transaction PIN before authorizing a bank transfer.</p>
               <label htmlFor="fp-bank-transfer-pin-new">Create 6-digit transaction PIN</label>
               <input id="fp-bank-transfer-pin-new" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6}
-                value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\\D/g, "").slice(0, 6))}/>
+                value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
               <label htmlFor="fp-bank-transfer-pin-confirm">Confirm transaction PIN</label>
               <input id="fp-bank-transfer-pin-confirm" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6}
-                value={pinConfirm} onChange={event => setPinConfirm(event.target.value.replace(/\\D/g, "").slice(0, 6))}/>
-              <button className="fp-primary" type="button" disabled={pinSetupBusy || !/^\\d{6}$/.test(transactionPin) || transactionPin !== pinConfirm}
+                value={pinConfirm} onChange={event => setPinConfirm(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+              <button className="fp-primary" type="button" disabled={pinSetupBusy || !/^\d{6}$/.test(transactionPin) || transactionPin !== pinConfirm}
                 onClick={() => void setupPin({ preventDefault: () => undefined } as FormEvent<HTMLFormElement>)}>
                 {pinSetupBusy ? "Saving PIN…" : "Save transaction PIN"}
               </button>
@@ -538,9 +538,9 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
               <label htmlFor="fp-bank-transfer-pin">Transaction PIN</label>
               <input id="fp-bank-transfer-pin" type="password" inputMode="numeric" autoComplete="current-password" maxLength={6}
                 placeholder="Enter your 6-digit PIN" value={transactionPin}
-                onChange={event => setTransactionPin(event.target.value.replace(/\\D/g, "").slice(0, 6))}/>
+                onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
               <button className="fp-primary" type="button" onClick={() => void submitBankTransfer()}
-                disabled={bankTransferBusy || !pinSet || !/^\\d{6}$/.test(transactionPin)}>
+                disabled={bankTransferBusy || !pinSet || !/^\d{6}$/.test(transactionPin)}>
                 {bankTransferBusy ? "Submitting to Paystack…" : "Confirm bank transfer · Test mode"}
               </button>
             </>}
