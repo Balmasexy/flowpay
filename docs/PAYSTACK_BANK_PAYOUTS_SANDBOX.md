@@ -12,10 +12,12 @@ This integration is deliberately limited to Paystack test credentials:
 
 - `PAYSTACK_ENVIRONMENT=test`
 - `PAYSTACK_SECRET_KEY` must be an `sk_test_` key, stored only in Render's encrypted environment settings.
+- `FLOWPAY_RUNTIME_ENV=development` identifies the isolated development deployment. The API also refuses the payout route when `NODE_ENV=production`.
 - `PAYSTACK_TRANSFERS_ENABLED=true` is an explicit feature switch for the sandbox payout submission route.
-- `PAYSTACK_TRANSFERS_ENABLED` is not set by this branch, and no Render environment setting is changed by this feature.
+- Both switches must be set only on a dedicated development/sandbox API connected to a disposable or Development Neon database. Do not set them on the production FlowPay service.
+- Neither switch is set by this branch, and no Render environment setting is changed by this feature.
 
-The API rejects live Paystack credentials for these routes. Responses identify the environment as `test` and report `livePayoutsEnabled=false`.
+The API rejects live Paystack credentials for these routes. The extra runtime guard prevents simulated Paystack success from touching production customer ledgers. Responses identify the environment as `test` and report `livePayoutsEnabled=false`.
 
 **A Paystack test-mode success is simulated; it does not move real money to a bank account.** Do not use a production customer's bank account to test this feature. Use only Paystack's published sandbox beneficiary details.
 
