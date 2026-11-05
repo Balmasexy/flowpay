@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync, scryptSync } from "node:crypto";
+import { createHmac, generateKeyPairSync, scryptSync } from "node:crypto";
 import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
@@ -46,6 +46,7 @@ function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001"
     bank_name: "Zenith Bank",
     account_name: "Test Customer",
     account_number_last4: "0000",
+    account_fingerprint: createHmac("sha256", "sk_test_unit_test_secret").update(accountNumber, "utf8").digest("hex"),
     status: "success",
     provider_status: "success"
   };
