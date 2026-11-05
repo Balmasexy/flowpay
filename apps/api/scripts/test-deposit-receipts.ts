@@ -174,6 +174,9 @@ test("valid customer receives a short-lived, content-type-bound private R2 uploa
           }]
         };
       }
+      if (sql.includes("INSERT INTO public.fp_deposit_receipt_audit_events")) {
+        return { rowCount: 1, rows: [] };
+      }
       throw new Error("Unexpected receipt SQL: " + sql);
     }
   } as unknown as Pool;
