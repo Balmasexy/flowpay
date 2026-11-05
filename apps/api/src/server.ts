@@ -267,20 +267,53 @@ const server = createServer(async (req, res) => {
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
-      const parsedLimit = Number(new URL(req.url ?? "/", "http://localhost").searchParams.get("limit") ?? "50");
+      const params = new URL(req.url ?? "/", "http://localhost").searchParams;
+      const parsedLimit = Number(params.get("limit") ?? "50");
+      const parsedOffset = Number(params.get("offset") ?? "0");
       const limit = Number.isInteger(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 50;
-      const result = await pool.query(
-        `SELECT t.id, t.transaction_type, t.description, t.status, t.created_at, t.posted_at,
-                e.currency, SUM(e.amount_minor)::text AS customer_ledger_amount_minor,
-                COUNT(e.id)::int AS customer_entry_count
-           FROM public.fp_ledger_transactions AS t
-           JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
-           JOIN public.fp_accounts AS a ON a.id = e.account_id
-          WHERE a.user_id = $1 AND a.account_type = 'customer'
-            AND t.status IN ('posted', 'reversed')
-          GROUP BY t.id, e.currency
-          ORDER BY COALESCE(t.posted_at, t.created_at) DESC, t.id
-          LIMIT $2`, [identity.rows[0].id, limit]);
+      const offset = Number.isInteger(parsedOffset) ? Math.min(2147483647, Math.max(0, parsedOffset)) : 0;
+      const fromDate = params.get("fromDate");
+      const toDate = params.get("toDate");
+      const validDate = (value: string | null) => {
+        if (value === null) return true;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const parsed = new Date(value + "T00:00:00.000Z");
+        return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+      };
+      if (!validDate(fromDate) || !validDate(toDate) || (fromDate && toDate && fromDate > toDate)) {
+        send(res, 400, { error: "INVALID_ACTIVITY_DATE_RANGE" }); return;
+      }
+      const dateValues = [identity.rows[0].id, fromDate, toDate];
+      const [result, count] = await Promise.all([
+        pool.query(
+          `SELECT t.id, t.transaction_type, t.description, t.status, t.created_at, t.posted_at,
+                  e.currency, SUM(e.amount_minor)::text AS customer_ledger_amount_minor,
+                  COUNT(e.id)::int AS customer_entry_count
+             FROM public.fp_ledger_transactions AS t
+             JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
+             JOIN public.fp_accounts AS a ON a.id = e.account_id
+            WHERE a.user_id = $1 AND a.account_type = 'customer'
+              AND t.status IN ('posted', 'reversed')
+              AND ($2::date IS NULL OR COALESCE(t.posted_at, t.created_at) >= $2::date)
+              AND ($3::date IS NULL OR COALESCE(t.posted_at, t.created_at) < ($3::date + INTERVAL '1 day'))
+            GROUP BY t.id, e.currency
+            ORDER BY COALESCE(t.posted_at, t.created_at) DESC, t.id
+            LIMIT $4 OFFSET $5`, [...dateValues, limit, offset]),
+        pool.query(
+          `SELECT COUNT(*)::int AS total
+             FROM (
+               SELECT t.id, e.currency
+                 FROM public.fp_ledger_transactions AS t
+                 JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
+                 JOIN public.fp_accounts AS a ON a.id = e.account_id
+                WHERE a.user_id = $1 AND a.account_type = 'customer'
+                  AND t.status IN ('posted', 'reversed')
+                  AND ($2::date IS NULL OR COALESCE(t.posted_at, t.created_at) >= $2::date)
+                  AND ($3::date IS NULL OR COALESCE(t.posted_at, t.created_at) < ($3::date + INTERVAL '1 day'))
+                GROUP BY t.id, e.currency
+             ) AS matching`, dateValues)
+      ]);
+      const total = count.rows[0]?.total ?? 0;
       send(res, 200, {
         transactions: result.rows.map(row => ({
           id: row.id, type: row.transaction_type, description: row.description ?? "",
@@ -289,7 +322,8 @@ const server = createServer(async (req, res) => {
           customerLedgerAmountMinor: row.customer_ledger_amount_minor,
           customerEntryCount: row.customer_entry_count
         })),
-        limit, directionAvailable: false,
+        limit, offset, nextOffset: offset + result.rows.length, total, hasMore: offset + result.rows.length < total,
+        directionAvailable: false,
         directionNote: "Incoming/outgoing direction is not inferred until the ledger sign convention is configured."
       });
     } catch (error) {

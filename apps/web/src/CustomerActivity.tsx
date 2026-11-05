@@ -13,7 +13,10 @@ type Transaction = {
   customerEntryCount: number;
 };
 
+type ActivityPage = { transactions: Transaction[]; total: number; hasMore: boolean; offset: number; nextOffset: number; limit: number };
+
 const VALID_STATUSES = new Set<Transaction["status"]>(["posted", "reversed"]);
+const PAGE_SIZE = 100;
 
 function parseTransactions(value: unknown): Transaction[] {
   if (!Array.isArray(value)) return [];
@@ -47,46 +50,107 @@ function csvCell(value: string | number): string {
 export default function CustomerActivity({ token }: { token: string }) {
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+  const [exportError, setExportError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  const invalidRange = Boolean(fromDate && toDate && fromDate > toDate);
+
+  const pageUrl = (offset: number) => {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+    if (fromDate) params.set("fromDate", fromDate);
+    if (toDate) params.set("toDate", toDate);
+    return apiBase + "/customer/activity?" + params.toString();
+  };
+
+  const requestPage = async (offset: number): Promise<ActivityPage> => {
+    const response = await fetch(pageUrl(offset), {
+      method: "GET",
+      credentials: "omit",
+      headers: { Authorization: "Bearer " + token }
+    });
+    const data: unknown = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Unable to load transaction activity.";
+      throw new Error(message);
+    }
+    const raw = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    const transactions = parseTransactions(raw.transactions);
+    const pageTotal = typeof raw.total === "number" && Number.isSafeInteger(raw.total) && raw.total >= 0 ? raw.total : transactions.length;
+    return {
+      transactions, total: pageTotal,
+      hasMore: raw.hasMore === true,
+      offset: typeof raw.offset === "number" ? raw.offset : offset,
+      nextOffset: typeof raw.nextOffset === "number" ? raw.nextOffset : offset + transactions.length,
+      limit: typeof raw.limit === "number" ? raw.limit : PAGE_SIZE
+    };
+  };
 
   useEffect(() => {
     let active = true;
     if (!token || !apiBase) {
       setItems([]);
+      setTotal(0);
+      setHasMore(false);
+      setNextOffset(0);
       setError("Your authenticated activity service is not configured.");
+      setLoading(false);
+      return () => { active = false; };
+    }
+    if (invalidRange) {
+      setItems([]);
+      setTotal(0);
+      setHasMore(false);
+      setNextOffset(0);
+      setError("");
       setLoading(false);
       return () => { active = false; };
     }
     setLoading(true);
     setError("");
-    fetch(apiBase + "/customer/activity?limit=100", {
-      method: "GET",
-      credentials: "omit",
-      headers: { Authorization: "Bearer " + token }
-    }).then(async response => {
-      const data: unknown = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Unable to load transaction activity.";
-        throw new Error(message);
-      }
-      return data;
-    }).then(data => {
+    setExportError("");
+    requestPage(0).then(page => {
       if (active) {
-        const payload = data && typeof data === "object" && "transactions" in data ? data.transactions : [];
-        setItems(parseTransactions(payload));
+        setItems(page.transactions);
+        setTotal(page.total);
+        setHasMore(page.hasMore);
+        setNextOffset(page.nextOffset);
       }
     }).catch(reason => {
       if (active) {
         setItems([]);
+        setTotal(0);
+        setHasMore(false);
+        setNextOffset(0);
         setError(reason instanceof Error ? reason.message : "Unable to load transaction activity.");
       }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [token, apiBase, refresh]);
+  }, [token, apiBase, refresh, fromDate, toDate]);
+
+  const loadMore = async () => {
+    if (loadingMore || loading || !hasMore || error) return;
+    setLoadingMore(true);
+    setExportError("");
+    try {
+      const page = await requestPage(nextOffset);
+      setItems(current => [...current, ...page.transactions]);
+      setTotal(page.total);
+      setHasMore(page.hasMore);
+      setNextOffset(page.nextOffset);
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : "Unable to load more transactions.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const formatAmount = (minor: string, currency: string) => {
     const value = Number(minor);
@@ -104,34 +168,43 @@ export default function CustomerActivity({ token }: { token: string }) {
     return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
   };
 
-  const filteredItems = items.filter(item => {
-    const rawDate = item.postedAt || item.createdAt;
-    const timestamp = new Date(rawDate).getTime();
-    if (!Number.isFinite(timestamp)) return false;
-    const day = new Date(timestamp).toISOString().slice(0, 10);
-    return (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
-  });
-  const invalidRange = Boolean(fromDate && toDate && fromDate > toDate);
-
-  const downloadCsv = () => {
-    if (invalidRange || filteredItems.length === 0) return;
-    const rows = [
-      ["Transaction ID", "Type", "Description", "Status", "Date", "Currency", "Ledger amount minor units", "Customer ledger entries"],
-      ...filteredItems.map(item => [
-        item.id, item.type, item.description, item.status, item.postedAt || item.createdAt,
-        item.currency, item.customerLedgerAmountMinor, item.customerEntryCount
-      ])
-    ];
-    const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
-    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "flowpay-transactions-" + (fromDate || "all") + "-to-" + (toDate || "all") + ".csv";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+  const downloadCsv = async () => {
+    if (invalidRange || exporting || total === 0 || loading) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const all: Transaction[] = [];
+      let offset = 0;
+      let more = true;
+      while (more) {
+        const page = await requestPage(offset);
+        all.push(...page.transactions);
+        more = page.hasMore;
+        offset = page.nextOffset;
+        if (page.transactions.length === 0 && more) throw new Error("The activity service returned an incomplete page. Please refresh and try again.");
+      }
+      const rows = [
+        ["Transaction ID", "Type", "Description", "Status", "Date", "Currency", "Ledger amount minor units", "Customer ledger entries"],
+        ...all.map(item => [
+          item.id, item.type, item.description, item.status, item.postedAt || item.createdAt,
+          item.currency, item.customerLedgerAmountMinor, item.customerEntryCount
+        ])
+      ];
+      const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "flowpay-transactions-" + (fromDate || "all") + "-to-" + (toDate || "all") + ".csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : "Unable to download the complete transaction statement.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return <section className="fp-panel fp-detail-panel">
@@ -142,18 +215,18 @@ export default function CustomerActivity({ token }: { token: string }) {
     <div className="fp-activity-filters">
       <label>From date<input type="date" value={fromDate} max={toDate || undefined} onChange={event => setFromDate(event.target.value)}/></label>
       <label>To date<input type="date" value={toDate} min={fromDate || undefined} onChange={event => setToDate(event.target.value)}/></label>
-      <button type="button" className="fp-outline" onClick={downloadCsv} disabled={loading || Boolean(error) || invalidRange || filteredItems.length === 0}><Download size={15}/> Download CSV</button>
+      <button type="button" className="fp-outline" onClick={downloadCsv} disabled={loading || exporting || Boolean(error) || invalidRange || total === 0}><Download size={15}/> {exporting ? "Preparing statement…" : "Download CSV"}</button>
       <button type="button" className="fp-activity-clear" onClick={() => { setFromDate(""); setToDate(""); }}>Clear dates</button>
     </div>
     {invalidRange && <div className="fp-preview-warning"><AlertCircle size={17}/> The start date must be on or before the end date.</div>}
-    <div className="fp-preview-warning"><Activity size={17}/> Amounts are customer ledger-entry totals. The export includes only verified records returned by FlowPay; no sample transactions are added.</div>
+    <div className="fp-preview-warning"><Activity size={17}/> Statements include only verified posted and reversed ledger records. Incoming/outgoing direction is not inferred where the ledger sign convention is not configured.</div>
     {loading && <p className="fp-muted">Loading verified activity…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
-    {!loading && !error && items.length === 0 && <div className="fp-empty"><Activity size={24}/><b>No posted transaction history yet</b><span>Only records confirmed by the FlowPay ledger appear here.</span></div>}
-    {!loading && !error && items.length > 0 && filteredItems.length === 0 && <div className="fp-empty"><Activity size={24}/><b>No transactions in this date range</b><span>Choose another date range or clear the filters.</span></div>}
-    {!loading && !error && filteredItems.length > 0 && <div className="fp-activity-result-count">Showing {filteredItems.length} of {items.length} loaded transactions</div>}
-    {!loading && !error && filteredItems.length > 0 && <div className="fp-feature-list">
-      {filteredItems.map(item => <div key={item.id} style={{alignItems:"flex-start",gap:12}}>
+    {exportError && <div className="fp-preview-warning"><AlertCircle size={17}/> {exportError}</div>}
+    {!loading && !error && total === 0 && !invalidRange && <div className="fp-empty"><Activity size={24}/><b>No posted transaction history yet</b><span>Only records confirmed by the FlowPay ledger appear here.</span></div>}
+    {!loading && !error && items.length > 0 && <div className="fp-activity-result-count">Showing {items.length} of {total} matching transactions</div>}
+    {!loading && !error && items.length > 0 && <div className="fp-feature-list">
+      {items.map(item => <div key={item.id + ":" + item.currency} style={{alignItems:"flex-start",gap:12}}>
         <Activity size={18}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{item.description || item.type.replace(/_/g," ")}</b>
@@ -166,6 +239,7 @@ export default function CustomerActivity({ token }: { token: string }) {
         </div>
       </div>)}
     </div>}
-    {!loading && !error && <p className="fp-overview-footnote">Date filters and CSV downloads apply to the latest 100 transactions currently returned by the activity API. Older records are not included in this export.</p>}
+    {!loading && !error && hasMore && <button type="button" className="fp-outline" onClick={loadMore} disabled={loadingMore}>{loadingMore ? "Loading…" : "Load more transactions"}</button>}
+    {!loading && !error && total > 0 && <p className="fp-overview-footnote">Date filters are applied by the API to your full matching ledger history. CSV downloads retrieve every matching page, not just the rows currently displayed.</p>}
   </section>;
 }
