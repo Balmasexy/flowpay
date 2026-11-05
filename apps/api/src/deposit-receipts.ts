@@ -66,7 +66,7 @@ export function createDepositReceiptHandler(options: Options) {
     const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (!bearer) return { ok: false, status: 401, error: "AUTHENTICATION_REQUIRED" };
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(bearer, jwks, { algorithms: ["EdDSA"], issuer, audience });
       if (typeof payload.sub !== "string" || !payload.sub) {
         return { ok: false, status: 401, error: "INVALID_SESSION" };
       }
@@ -112,13 +112,6 @@ export function createDepositReceiptHandler(options: Options) {
     const isAdminRoute = pathname === adminCollectionPath && req.method === "GET";
     const isAdminFileRoute = Boolean(adminFileId) && req.method === "GET";
     const isAdminReviewRoute = Boolean(adminReviewId) && req.method === "PATCH";
-    const adminFileMatch = /^\\/admin\\/deposit-receipts\\/([0-9a-f-]{36})\\/file$/i.exec(pathname);
-    const adminReviewMatch = /^\\/admin\\/deposit-receipts\\/([0-9a-f-]{36})\\/review$/i.exec(pathname);
-    const isCustomerRoute = pathname === customerReceiptPath && (req.method === "POST" || req.method === "GET");
-    const isAdminRoute = pathname === adminCollectionPath && req.method === "GET";
-    if (!isCustomerRoute && !isAdminRoute && !isAdminFileRoute && !isAdminReviewRoute) {
-      return false;
-    }
     if (!pool) {
       json(res, 503, { error: "DATABASE_UNAVAILABLE" });
       return true;
@@ -188,15 +181,16 @@ export function createDepositReceiptHandler(options: Options) {
         json(res, 400, { error: "RECEIPT_IMAGE_REQUIRED" });
         return true;
       }
-      const imagePrefix = "data:image/";
       const marker = ";base64,";
       const splitAt = input.imageDataUrl.indexOf(marker);
       const header = splitAt > 0 ? input.imageDataUrl.slice(0, splitAt) : "";
       const mimeType = header === "data:image/jpeg" ? "image/jpeg" : header === "data:image/png" ? "image/png" : header === "data:image/webp" ? "image/webp" : "";
       const encoded = splitAt > 0 ? input.imageDataUrl.slice(splitAt + marker.length) : "";
-      const fileData = encoded && /^[A-Za-z0-9+/]+=*$/.test(encoded) ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
+      const base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      const base64IsValid = encoded.length > 0 && [...encoded].every((character, index) => character === "=" ? index >= encoded.length - 2 : base64Chars.includes(character));
+      const fileData = base64IsValid ? Buffer.from(encoded, "base64") : Buffer.alloc(0);
       const canonical = fileData.toString("base64").replace(/=+$/, "");
-      if (!mimeType || !encoded || !canonical || canonical !== encoded.replace(/=+$/, "")) { json(res, 400, { error: "INVALID_RECEIPT_IMAGE" }); return true; }
+      if (!mimeType || !base64IsValid || !canonical || canonical !== encoded.replace(/=+$/, "")) { json(res, 400, { error: "INVALID_RECEIPT_IMAGE" }); return true; }
       if (!fileData.length || fileData.length > MAX_FILE_BYTES) {
         json(res, 413, { error: "RECEIPT_IMAGE_TOO_LARGE", maximumBytes: MAX_FILE_BYTES });
         return true;
