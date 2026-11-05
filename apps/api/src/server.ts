@@ -12,6 +12,7 @@ import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
 import { createPaystackBankTransfersHandler } from "./paystack-bank-transfers.js";
+import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 
@@ -43,6 +44,7 @@ const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
 const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, audience });
+const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer, audience });
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
 
@@ -74,6 +76,7 @@ const server = createServer(async (req, res) => {
   if (await customerAiHandler(req, res)) return;
   if (await flowPayTransfersHandler(req, res)) return;
   if (await paystackBankTransfersHandler(req, res)) return;
+  if (await paystackDedicatedAccountsHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
@@ -333,6 +336,22 @@ const server = createServer(async (req, res) => {
            FROM public.fp_cards
           WHERE user_id = $1
           ORDER BY created_at DESC`, [identity.rows[0].id]);
+      const dedicatedAccountSchema = await pool.query<{ available: boolean }>(
+        "SELECT to_regclass('public.fp_paystack_dedicated_accounts') IS NOT NULL AS available"
+      );
+      const dedicatedAccountRows = dedicatedAccountSchema.rows[0]?.available === true
+        ? await pool.query(
+            `SELECT account_number, bank_name, account_name, status
+               FROM public.fp_paystack_dedicated_accounts
+              WHERE user_id = $1 LIMIT 1`,
+            [identity.rows[0].id]
+          )
+        : { rows: [] as Array<Record<string, unknown>> };
+      const virtualBankAccount = dedicatedAccountRows.rows[0];
+      const virtualBankAccountAssigned = virtualBankAccount?.status === "assigned" &&
+        /^\\d{10}$/.test(String(virtualBankAccount.account_number ?? "")) &&
+        typeof virtualBankAccount.bank_name === "string" &&
+        typeof virtualBankAccount.account_name === "string";
       send(res, 200, {
         cardholderName: typeof identity.rows[0].cardholder_name === "string" && identity.rows[0].cardholder_name.trim()
           ? identity.rows[0].cardholder_name.trim() : null,
@@ -342,8 +361,21 @@ const server = createServer(async (req, res) => {
           expiryMonth: row.expiry_month, expiryYear: row.expiry_year,
           createdAt: row.created_at, updatedAt: row.updated_at
         })),
+        virtualBankAccount: virtualBankAccountAssigned ? {
+          assigned: true,
+          status: "assigned",
+          accountNumber: String(virtualBankAccount.account_number),
+          bankName: String(virtualBankAccount.bank_name),
+          accountName: String(virtualBankAccount.account_name)
+        } : {
+          assigned: false,
+          status: typeof virtualBankAccount?.status === "string" ? virtualBankAccount.status : "not_requested",
+          accountNumber: null, bankName: null, accountName: null
+        },
         actionsEnabled: false,
-        cardIssuanceAvailable: false
+        cardIssuanceAvailable: false,
+        cardSensitiveDetailsAvailable: false,
+        cardSensitiveDetailsMessage: "Full card number, CVV, expiry and card PIN are available only through a provider-approved secure card-details flow. FlowPay does not store or fabricate card credentials."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
