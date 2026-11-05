@@ -303,6 +303,16 @@ export function createFlowPayTransfersHandler(options: Options) {
       try {
         await client.query("BEGIN");
 
+        const senderActive = await client.query(
+          "SELECT id FROM public.fp_users WHERE id = $1 AND role = 'customer' AND status = 'active' FOR UPDATE",
+          [identity.id]
+        );
+        if (senderActive.rowCount !== 1) {
+          await client.query("ROLLBACK");
+          send(res, 403, { error: "ACTIVE_FLOWPAY_CUSTOMER_REQUIRED" });
+          return true;
+        }
+
         const recipientResult = await client.query<{
           id: string; account_number: string; recipient_name: string;
         }>(
@@ -313,6 +323,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
+              AND customer.role = 'customer'
               AND auth_user."emailVerified" = true
             LIMIT 1
             FOR UPDATE OF customer`,
