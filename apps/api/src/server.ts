@@ -4,6 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
+import { createSupportRequestsHandler } from "./support-requests.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -26,6 +27,7 @@ const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
+const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -47,6 +49,7 @@ const server = createServer(async (req, res) => {
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
+  if (await supportRequestsHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
     send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/face-verification/status", "/face-verification/callback", "/customer/face-verification"] }); return;
