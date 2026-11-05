@@ -223,6 +223,15 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         send(res, 200, { provider: "Paystack", environment: "test", virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: false });
         return true;
       }
+      if (current?.status === "pending") {
+        send(res, 202, {
+          provider: "Paystack", environment: "test",
+          virtualBankAccount: view(current),
+          message: "A Paystack dedicated-account request is already pending for this profile. FlowPay will not submit a duplicate request.",
+          livePaymentsEnabled: false
+        });
+        return true;
+      }
       if (!sandboxEnabled()) {
         send(res, 503, {
           error: "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED",
@@ -244,17 +253,37 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         return true;
       }
 
-      await pool.query(
-        `INSERT INTO public.fp_paystack_dedicated_accounts(user_id, status, consent_at, last_error_code)
+      const requestClaim = await pool.query(
+        `INSERT INTO public.fp_paystack_dedicated_accounts AS existing
+           (user_id, status, consent_at, last_error_code)
          VALUES ($1, 'pending', NOW(), NULL)
          ON CONFLICT (user_id) DO UPDATE
-           SET status = CASE WHEN public.fp_paystack_dedicated_accounts.status = 'assigned'
-                             THEN 'assigned' ELSE 'pending' END,
+           SET status = 'pending',
                consent_at = EXCLUDED.consent_at,
                last_error_code = NULL,
-               updated_at = NOW()`,
+               updated_at = NOW()
+         WHERE existing.status = 'failed'
+         RETURNING user_id`,
         [identity.id]
       );
+      if (requestClaim.rowCount !== 1) {
+        const latest = await pool.query<DedicatedAccountRow>(
+          `SELECT user_id, paystack_customer_code, dedicated_account_id,
+                  account_number, bank_name, account_name, status
+             FROM public.fp_paystack_dedicated_accounts
+            WHERE user_id = $1 LIMIT 1`,
+          [identity.id]
+        );
+        const latestRow = latest.rows[0] ?? current;
+        send(res, latestRow?.status === "assigned" ? 200 : 202, {
+          provider: "Paystack", environment: "test",
+          virtualBankAccount: view(latestRow),
+          duplicate: true,
+          message: "A dedicated-account request already exists for this profile. FlowPay did not create another Paystack account.",
+          livePaymentsEnabled: false
+        });
+        return true;
+      }
 
       const secret = process.env.PAYSTACK_SECRET_KEY!.trim();
       let customerCode = current?.paystack_customer_code ?? null;
