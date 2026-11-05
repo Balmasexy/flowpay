@@ -101,6 +101,20 @@ export default function App() {
   }, [authSession.data?.session?.token, authSession.data?.user?.id]);
 
   useEffect(() => {
+    const token = authSession.data?.session?.token;
+    const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
+    const controller = new AbortController();
+    void fetch(apiBase + "/customer/account-details", {
+      method: "GET",
+      credentials: "omit",
+      signal: controller.signal,
+      headers: { Authorization: "Bearer " + token }
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+
+  useEffect(() => {
     const onPop = () => { setPath(window.location.pathname); setQuery(window.location.search); };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
