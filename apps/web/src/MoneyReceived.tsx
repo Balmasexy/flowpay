@@ -132,9 +132,42 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
           ? root.depositProviders as Record<string, unknown> : {};
         setPaystackEnabled(providerConfig.paystack === true);
         const deposits = root.deposits;
-        setItems(Array.isArray(deposits)
+        const parsedDeposits = Array.isArray(deposits)
           ? deposits.map(parseDeposit).filter((item): item is Deposit => item !== null)
-          : []);
+          : [];
+        setItems(parsedDeposits);
+        const paystackDeposits = parsedDeposits
+          .filter(item => item.provider.toLowerCase() === "paystack" && /^flowpay-ps-[0-9a-f]{32}$/i.test(item.reference))
+          .slice(0, 25);
+        void Promise.all(paystackDeposits.map(async item => {
+          try {
+            const query = new URLSearchParams({ reference: item.reference });
+            const response = await fetch(apiBase + "/customer/paystack/deposits/receipt?" + query.toString(), {
+              method: "GET",
+              credentials: "omit",
+              headers: { Authorization: "Bearer " + token }
+            });
+            if (!response.ok) return null;
+            const body: unknown = await response.json().catch(() => ({}));
+            const rows = body && typeof body === "object" && "receipts" in body && Array.isArray(body.receipts)
+              ? body.receipts as Array<Record<string, unknown>>
+              : [];
+            const latest = rows[0];
+            if (!latest || typeof latest.reviewStatus !== "string") return null;
+            const message = latest.reviewStatus === "evidence_accepted"
+              ? "Receipt evidence reviewed. Wallet credit still requires verified provider settlement."
+              : latest.reviewStatus === "rejected"
+                ? "Receipt not accepted: " + (typeof latest.reviewNote === "string" ? latest.reviewNote : "Please contact FlowPay support.")
+                : "Receipt submitted for administrator review. Uploading evidence does not credit your wallet.";
+            return [item.reference, message] as const;
+          } catch {
+            return null;
+          }
+        })).then(entries => {
+          if (!active) return;
+          const valid = entries.filter((entry): entry is readonly [string, string] => entry !== null);
+          if (valid.length) setReceiptNotices(current => ({ ...current, ...Object.fromEntries(valid) }));
+        });
       })
       .catch(reason => {
         if (active) {
