@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
+  pool: Pool | null;
   jwks: ReturnType<typeof createRemoteJWKSet> | null;
   issuer?: string;
   audience?: string;
@@ -55,11 +57,11 @@ async function fetchBanks(secret: string): Promise<Bank[]> {
 }
 
 export function createBankAccountLookupHandler(options: Options) {
-  const { jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handleBankAccountLookup(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (!["GET", "POST"].includes(req.method ?? "") || !["/customer/banks", "/customer/bank-account-lookup"].includes(pathname)) return false;
-    if (!jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer || !audience) {
       send(res, 503, { error: "BANK_LOOKUP_AUTH_NOT_CONFIGURED" }); return true;
     }
     const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
@@ -68,7 +70,14 @@ export function createBankAccountLookupHandler(options: Options) {
     try {
       const { payload } = await jwtVerify(auth[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return true; }
-      userId = payload.sub;
+      const identity = await pool.query(
+        `SELECT app_user.id
+           FROM neon_auth."user" AS auth_user
+           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
+          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
+            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" }); return true; }
+      userId = String(identity.rows[0].id);
     } catch (error) {
       if (isJwtError(error)) send(res, 401, { error: "INVALID_SESSION" });
       else send(res, 503, { error: "BANK_LOOKUP_AUTH_UNAVAILABLE" });
