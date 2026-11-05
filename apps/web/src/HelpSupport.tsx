@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { ArrowRight, BookOpen, CircleHelp, FileText, LockKeyhole, MessageSquareText, Search, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, BookOpen, CircleHelp, LockKeyhole, MessageSquareText, Search, ShieldAlert } from "lucide-react";
 
-type Props = { go: (path: string) => void };
+type Props = { go: (path: string) => void; token: string };
 type Topic = { title: string; category: string; detail: string; path: string; keywords: string };
 
 const topics: Topic[] = [
@@ -21,14 +21,56 @@ const topics: Topic[] = [
   { title: "I want to understand savings", category: "Savings", detail: "Savings and Fixed Savings currently provide planning previews only. No funds are deposited, locked, invested or debited by these planners.", path: "/savings", keywords: "savings fixed savings goal interest deposit maturity" }
 ];
 
-export default function HelpSupport({ go }: Props) {
+export default function HelpSupport({ go, token }: Props) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(topics[0].title);
   const [category, setCategory] = useState("Transaction issue");
   const [reference, setReference] = useState("");
   const [details, setDetails] = useState("");
-  const [showDraft, setShowDraft] = useState(false);
-  const [copyStatus, setCopyStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
+  const [submittedTicket, setSubmittedTicket] = useState("");
+  const [requests, setRequests] = useState<Array<{ticketReference:string;category:string;details:string;status:string;createdAt:string}>>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsError, setRequestsError] = useState("");
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  const [clientRequestId, setClientRequestId] = useState(() => crypto.randomUUID());
+
+  useEffect(() => {
+    let active = true;
+    if (!token || !apiBase) { setRequestsLoading(false); setRequestsError("Support service is not configured."); return () => { active = false; }; }
+    fetch(apiBase + "/customer/support-requests", { headers: { Authorization: "Bearer " + token }, credentials: "omit" })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Unable to load support requests.");
+        return data;
+      })
+      .then(data => { if (active) setRequests(Array.isArray(data.requests) ? data.requests : []); })
+      .catch(error => { if (active) setRequestsError(error instanceof Error ? error.message : "Unable to load support requests."); })
+      .finally(() => { if (active) setRequestsLoading(false); });
+    return () => { active = false; };
+  }, [token, apiBase]);
+
+  const submitRequest = async () => {
+    if (submitting || details.trim().length < 20 || !token || !apiBase) return;
+    setSubmitting(true); setSubmitStatus(""); setSubmittedTicket("");
+    try {
+      const response = await fetch(apiBase + "/customer/support-requests", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ clientRequestId, category, reference: reference.trim() || null, details: details.trim() })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Support request could not be submitted.");
+      setSubmittedTicket(data.request?.ticketReference || "");
+      setSubmitStatus(data.message || "Your support request was saved.");
+      setClientRequestId(crypto.randomUUID());
+      setDetails(""); setReference("");
+      setRequests(current => [data.request, ...current.filter(item => item.ticketReference !== data.request?.ticketReference)].slice(0, 50));
+    } catch (error) {
+      setSubmitStatus(error instanceof Error ? error.message : "Support request could not be submitted. Retry safely.");
+    } finally { setSubmitting(false); }
+  };
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? topics.filter(t => (t.title + " " + t.category + " " + t.keywords + " " + t.detail).toLowerCase().includes(q)) : topics;
@@ -53,29 +95,30 @@ export default function HelpSupport({ go }: Props) {
     </section>
 
     <section className="fp-panel fp-detail-panel">
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}><MessageSquareText size={20}/><div><h2 style={{ margin: 0 }}>Prepare a support request</h2><p className="fp-muted" style={{ margin: "5px 0 0" }}>Create a copyable draft with the details support may need.</p></div></div>
-      <div className="fp-preview-warning" style={{ marginTop: 15 }}><ShieldAlert size={17}/> Support submission is not connected yet. This form does not send or save a request and does not create a ticket.</div>
-      <label style={{ display: "grid", gap: 7, marginTop: 16 }}>Issue type<select value={category} onChange={e => { setCategory(e.target.value); setShowDraft(false); setCopyStatus(""); }} style={field}><option>Transaction issue</option><option>Account access</option><option>Profile or photo</option><option>Card issue</option><option>Airtime, data or bill</option><option>Security concern</option><option>Other</option></select></label>
-      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Transaction or reference ID (optional)<input value={reference} onChange={e => { setReference(e.target.value); setShowDraft(false); setCopyStatus(""); }} maxLength={100} placeholder="Enter a reference only if relevant" style={field}/></label>
-      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Describe the issue<textarea value={details} onChange={e => { setDetails(e.target.value); setShowDraft(false); setCopyStatus(""); }} maxLength={2000} rows={5} placeholder="Tell us what happened, when it happened, and what you expected..." style={{ ...field, resize: "vertical" }}/></label>
-      <p className="fp-muted" style={{ fontSize: 13, lineHeight: 1.5 }}>Never include your password, PIN, OTP, recovery code, full card number, CVV, BVN or NIN.</p>
-      <button type="button" className="fp-primary" disabled={!details.trim()} onClick={() => { setShowDraft(true); setCopyStatus(""); }} style={{ opacity: details.trim() ? 1 : .55 }}>Prepare draft</button>
-      {showDraft && <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid var(--fp-border, #d8dee8)" }}>
-        <b>Support request draft — not submitted</b>
-        <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", font: "inherit", lineHeight: 1.55, margin: "10px 0" }}>{`Issue type: ${category}\nReference: ${reference.trim() || "Not provided"}\n\nDetails:\n${details.trim()}`}</pre>
-        <button type="button" style={button} onClick={async () => {
-          const text = `Issue type: ${category}\nReference: ${reference.trim() || "Not provided"}\n\nDetails:\n${details.trim()}`;
-          try {
-            if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-            await navigator.clipboard.writeText(text);
-            setCopyStatus("Draft copied to clipboard.");
-          } catch {
-            setCopyStatus("Could not access the clipboard. Select and copy the draft text above.");
-          }
-        }}>Copy draft</button>
-        {copyStatus && <small role="status" className="fp-muted" style={{ display: "block", marginTop: 8 }}>{copyStatus}</small>}
-        <small className="fp-muted" style={{ display: "block", marginTop: 8 }}>Copy this text and share it only through an official FlowPay support channel when one is provided.</small>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}><MessageSquareText size={20}/><div><h2 style={{ margin: 0 }}>Submit a support request</h2><p className="fp-muted" style={{ margin: "5px 0 0" }}>Your request is saved securely against your signed-in FlowPay account.</p></div></div>
+      <div className="fp-preview-warning" style={{ marginTop: 15 }}><ShieldAlert size={17}/> Never include passwords, PINs, OTPs, recovery codes, full card numbers, CVV, BVN or NIN.</div>
+      <label style={{ display: "grid", gap: 7, marginTop: 16 }}>Issue type<select value={category} onChange={e => { setCategory(e.target.value); setSubmitStatus(""); setSubmittedTicket(""); }} style={field}><option>Transaction issue</option><option>Account access</option><option>Profile or photo</option><option>Card issue</option><option>Airtime, data or bill</option><option>Security concern</option><option>Other</option></select></label>
+      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Transaction or reference ID (optional)<input value={reference} onChange={e => { setReference(e.target.value); setSubmitStatus(""); }} maxLength={100} placeholder="Enter a reference only if relevant" style={field}/></label>
+      <label style={{ display: "grid", gap: 7, marginTop: 13 }}>Describe the issue<textarea value={details} onChange={e => { setDetails(e.target.value); setSubmitStatus(""); }} maxLength={2000} minLength={20} rows={5} placeholder="Tell us what happened, when it happened, and what you expected (at least 20 characters)..." style={{ ...field, resize: "vertical" }}/></label>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
+        <button type="button" className="fp-primary" disabled={submitting || !token || details.trim().length < 20} onClick={submitRequest} style={{ opacity: submitting || !token || details.trim().length < 20 ? .55 : 1 }}>{submitting ? "Submitting…" : "Submit support request"}</button>
+        <small className="fp-muted">{details.trim().length}/2000 characters</small>
+      </div>
+      {submitStatus && <p role="status" className="fp-muted" style={{ marginTop: 12 }}>{submitStatus}</p>}
+      {submittedTicket && <div style={{ marginTop: 12, padding: 14, borderRadius: 12, border: "1px solid var(--fp-border, #d8dee8)" }}>
+        <b>Request submitted successfully</b><p style={{ margin: "7px 0" }}>Ticket reference: <strong>{submittedTicket}</strong></p><small className="fp-muted">Save this reference for follow-up. Your request is recorded as open; a support agent response is not implied by submission.</small>
       </div>}
+      <div style={{ marginTop: 22 }}>
+        <h3 style={{ margin: "0 0 10px" }}>Your support requests</h3>
+        {requestsLoading ? <p className="fp-muted">Loading your requests…</p> : requestsError ? <p className="fp-muted">{requestsError}</p> : requests.length === 0 ? <p className="fp-muted">You have no submitted support requests yet.</p> : <div style={{ display: "grid", gap: 9 }}>
+          {requests.map(item => <div key={item.ticketReference} style={{ border: "1px solid var(--fp-border, #d8dee8)", borderRadius: 10, padding: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}><b>{item.ticketReference}</b><small className="fp-muted">{item.status.replace("_", " ")}</small></div>
+            <div style={{ marginTop: 5 }}>{item.category}</div>
+            <small className="fp-muted">{new Date(item.createdAt).toLocaleString()}</small>
+            <p className="fp-muted" style={{ margin: "7px 0 0", whiteSpace: "pre-wrap" }}>{item.details}</p>
+          </div>)}
+        </div>}
+      </div>
     </section>
     <section className="fp-panel fp-detail-panel"><h2 style={{ display: "flex", gap: 9, alignItems: "center" }}><LockKeyhole size={19}/> Account safety</h2><p className="fp-muted" style={{ lineHeight: 1.6 }}>FlowPay support will never need your password, one-time passcode, card security code or private recovery credentials. If you suspect unauthorized access, review your Security page and use only verified official contact channels.</p><button type="button" style={button} onClick={() => go("/security")}>Review security <ArrowRight size={15}/></button><span style={{ display: "none" }}><FileText/></span></section>
   </div>;
