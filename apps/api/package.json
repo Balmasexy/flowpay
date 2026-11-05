@@ -10,6 +10,7 @@
     "test:face-verification": "tsx scripts/test-face-verification.ts",
     "test:flutterwave-webhook": "tsx --test scripts/test-flutterwave-webhook.ts",
     "test:paystack-webhook": "tsx --test scripts/test-paystack-webhook.ts",
+    "test:paystack-checkout-50000": "tsx --test scripts/test-paystack-checkout-50000.ts",
     "test:flowpay-transfers": "tsx --test scripts/test-flowpay-transfers.ts",
     "test:paystack-bank-lookup": "tsx --test scripts/test-paystack-bank-lookup.ts",
     "test:paystack-bank-transfers": "tsx --test scripts/test-paystack-bank-transfers.ts",
