@@ -13,6 +13,11 @@ type PaystackBank = {
   code?: unknown; name?: unknown; active?: unknown; is_deleted?: unknown;
   country?: unknown; currency?: unknown; type?: unknown;
 };
+type PaystackResponse = {
+  status?: unknown;
+  data?: unknown;
+  meta?: { next?: unknown; perPage?: unknown };
+};
 let bankCache: { expiresAt: number; banks: Bank[] } | null = null;
 const lookups = new Map<string, number[]>();
 
@@ -40,37 +45,43 @@ function paystackTestSecret(): string | null {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
   return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
 }
-async function paystackGet(secret: string, path: string): Promise<{ status: boolean; data?: unknown; meta?: { pageCount?: number } }> {
+async function paystackGet(secret: string, path: string): Promise<PaystackResponse> {
   const response = await fetch("https://api.paystack.co" + path, {
-    headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" },
+    headers: { Authorization: "Bearer " + secret, Accept: "application/json" },
     signal: AbortSignal.timeout(10_000)
   });
-  const body = await response.json().catch(() => null) as { status?: unknown; data?: unknown; meta?: { pageCount?: number } } | null;
+  const body = await response.json().catch(() => null) as PaystackResponse | null;
   if (!response.ok || body?.status !== true) throw new Error("PAYSTACK_BANK_API_UNAVAILABLE");
-  return { status: true, data: body.data, meta: body.meta };
+  return body;
 }
 async function fetchBanks(secret: string): Promise<Bank[]> {
   if (bankCache && bankCache.expiresAt > Date.now()) return bankCache.banks;
   const banks: Bank[] = [];
-  let page = 1;
-  let pageCount = 1;
+  let next: string | null = null;
+  let page = 0;
   do {
-    const result = await paystackGet(secret, `/bank?country=nigeria&currency=NGN&perPage=100&page=${page}`);
+    const url = new URL("https://api.paystack.co/bank");
+    url.searchParams.set("country", "nigeria");
+    url.searchParams.set("currency", "NGN");
+    url.searchParams.set("perPage", "100");
+    url.searchParams.set("use_cursor", "true");
+    if (next) url.searchParams.set("next", next);
+    const result = await paystackGet(secret, url.pathname + url.search);
     if (!Array.isArray(result.data)) throw new Error("PAYSTACK_BANK_LIST_INVALID");
     for (const item of result.data as PaystackBank[]) {
       if (
         typeof item.code === "string" && item.code.trim() &&
         typeof item.name === "string" && item.name.trim() &&
         item.active !== false && item.is_deleted !== true &&
-        String(item.country ?? "").toLowerCase() === "nigeria" &&
-        String(item.currency ?? "").toUpperCase() === "NGN" &&
-        String(item.type ?? "").toLowerCase() === "nuban"
+        (!item.country || String(item.country).toLowerCase() === "nigeria") &&
+        (!item.currency || String(item.currency).toUpperCase() === "NGN") &&
+        (!item.type || String(item.type).toLowerCase() === "nuban")
       ) banks.push({ code: item.code.trim(), name: item.name.trim() });
     }
-    pageCount = Number.isSafeInteger(result.meta?.pageCount) && Number(result.meta?.pageCount) > 0
-      ? Number(result.meta?.pageCount) : page;
+    next = typeof result.meta?.next === "string" && result.meta.next.trim()
+      ? result.meta.next.trim() : null;
     page += 1;
-  } while (page <= pageCount && page <= 10);
+  } while (next && page < 10);
   const unique = [...new Map(banks.map(bank => [bank.code, bank])).values()]
     .sort((a, b) => a.name.localeCompare(b.name));
   if (!unique.length) throw new Error("PAYSTACK_BANK_LIST_EMPTY");
@@ -81,13 +92,13 @@ async function fetchBanks(secret: string): Promise<Bank[]> {
 export function createBankAccountLookupHandler(options: Options) {
   const { pool, jwks, issuer, audience } = options;
   return async function handleBankAccountLookup(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\\/+$/, "") || "/";
+    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (!["GET", "POST"].includes(req.method ?? "") ||
         !["/customer/banks", "/customer/bank-account-lookup"].includes(pathname)) return false;
     if (!pool || !jwks || !issuer || !audience) {
       send(res, 503, { error: "BANK_LOOKUP_AUTH_NOT_CONFIGURED" }); return true;
     }
-    const auth = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+    const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!auth) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return true; }
     let userId: string;
     try {
@@ -96,11 +107,8 @@ export function createBankAccountLookupHandler(options: Options) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }
       const identity = await pool.query(
-        `SELECT app_user.id
-           FROM neon_auth."user" AS auth_user
-           JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
-          WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
-            AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
+        'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \\'active\\' LIMIT 1',
+        [payload.sub]);
       if (identity.rowCount !== 1) {
         send(res, 403, { error: "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" }); return true;
       }
@@ -130,7 +138,7 @@ export function createBankAccountLookupHandler(options: Options) {
       }
       const accountNumber = typeof input.accountNumber === "string" ? input.accountNumber.trim() : "";
       const bankCode = typeof input.bankCode === "string" ? input.bankCode.trim() : "";
-      if (!/^\\d{10}$/.test(accountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(bankCode)) {
+      if (!/^\d{10}$/.test(accountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(bankCode)) {
         send(res, 400, { error: "VALID_NIGERIAN_ACCOUNT_AND_BANK_REQUIRED" }); return true;
       }
       const banks = await fetchBanks(secret);
@@ -144,7 +152,7 @@ export function createBankAccountLookupHandler(options: Options) {
       url.searchParams.set("account_number", accountNumber);
       url.searchParams.set("bank_code", bankCode);
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" },
+        headers: { Authorization: "Bearer " + secret, Accept: "application/json" },
         signal: AbortSignal.timeout(12_000)
       });
       const body = await response.json().catch(() => null) as {
