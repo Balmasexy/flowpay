@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { test } from "node:test";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
 import { createFlutterwaveWebhookHandler } from "../src/flutterwave-webhook.js";
 
 const originalFetch = globalThis.fetch;
