@@ -1,81 +1,77 @@
-# FlowPay private deposit receipt storage
+# FlowPay private deposit receipt uploads
 
-This feature stores customer receipt files in a **private Cloudflare R2 bucket**. Receipt metadata and review audit events stay in FlowPay Postgres. The API handles private object writes and issues only short-lived presigned download URLs when a customer or authorised reviewer opens a receipt; R2 access keys remain on the API service.
+## What this adds
 
-## 1. Create the R2 bucket
+- Customers can submit a manual NGN bank-transfer receipt from **Deposit / Add Money**.
+- File bytes go directly to a private Cloudflare R2 bucket using a five-minute presigned PUT URL. The R2 access key is never sent to the browser.
+- Accepted files: JPEG, PNG, WEBP and PDF, maximum 5 MiB.
+- The API verifies the stored object's length, MIME type and file signature before moving it to the review queue.
+- Customer receipt history is private to the authenticated customer.
+- The Super Admin queue requires an authenticated, email-verified active user with `fp_users.role = 'super_admin'`.
+- Approving a receipt requires a reviewer note, a bank-statement transaction reference and an explicit attestation that the exact funds have reached FlowPay's receiving account. Approval posts one balanced NGN ledger transaction to a dedicated manual-receipt clearing account. Duplicate review requests cannot post a second credit.
+- Rejection records the reviewer note and does not create a wallet credit.
+- A screenshot or uploaded file alone never credits a wallet.
 
-In the Cloudflare dashboard, open **R2 Object Storage** and create this bucket:
+## Storage configuration
 
-- Bucket: `flowpay-private-receipts`
-- Public access: **disabled**
-- Do not enable an `r2.dev` public URL or attach a public custom domain.
+Create a Cloudflare R2 bucket named `flowpay-private-receipts` (or use another bucket name and set the matching variable). Keep the bucket **private**. Do not enable public bucket access, a public custom domain, or public object listing.
 
-Create an R2 S3 API token with Object Read and Object Write permissions scoped to this bucket only. Store its Access Key ID and Secret Access Key directly in Render. Never commit them to Git or send them in chat.
+Create an R2 API token/access key scoped only to this bucket with Object Read and Object Write permissions. Do not paste the secret into GitHub, this chat, or a source file.
 
-## 2. Configure Render API environment
-
-Set these variables on the FlowPay **backend** Render service:
+Set these variables on the **FlowPay API service in Render** after the bucket exists:
 
 | Variable | Value |
-| --- | --- |
-| `R2_ACCOUNT_ID` | Cloudflare account ID |
-| `R2_ACCESS_KEY_ID` | Bucket-scoped R2 Access Key ID |
-| `R2_SECRET_ACCESS_KEY` | Bucket-scoped R2 Secret Access Key |
+|---|---|
+| `R2_ACCOUNT_ID` | Cloudflare account ID (or set `R2_ENDPOINT` to the full endpoint below) |
+| `R2_ENDPOINT` | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
 | `R2_BUCKET_NAME` | `flowpay-private-receipts` |
+| `R2_ACCESS_KEY_ID` | The bucket-scoped R2 access key ID |
+| `R2_SECRET_ACCESS_KEY` | The bucket-scoped R2 secret access key |
 | `R2_REGION` | `auto` |
-| `R2_ENDPOINT` | Optional; otherwise derived from `R2_ACCOUNT_ID` |
 
-The service constructs `https://<account-id>.r2.cloudflarestorage.com` when `R2_ENDPOINT` is omitted. Use the account's S3-compatible endpoint only. Keep the bucket private.
+The server accepts either `R2_ENDPOINT` or `R2_ACCOUNT_ID`; the other four values are required. Restart/redeploy the API after saving the variables. Keep the credentials only in Render's encrypted environment-variable settings.
 
-## 3. Browser and bucket access
+## R2 CORS
 
-The web app uploads through the authenticated FlowPay API, not directly from the browser to R2. This lets the API enforce the 5 MB body limit and inspect the file signature before storing it. No browser-to-R2 CORS rule is needed.
+Configure the bucket's CORS policy to allow the exact FlowPay web origin (currently `https://flowpay-web-jx7i.onrender.com`) with:
+- Allowed method: `PUT`
+- Allowed header: `Content-Type`
+- Exposed header: `ETag`
+- Max age: `3600` seconds
 
-Keep the R2 bucket private. Do not enable an `r2.dev` public URL or attach a public custom domain. The API uses signed S3-compatible requests for writes and short-lived presigned GET URLs for private receipt viewing. The FlowPay API's CORS allowlist must include the deployed web origin; the API allows authenticated `PUT` requests from its configured origins.
-## 4. Apply the database migration
+Add a separate exact origin only if the deployed web application actually uses it (for example, a confirmed custom domain). Do not use wildcard origins for authenticated customer uploads. The browser sends the content type that the server signed.
 
-After review and when the correct target database is confirmed, apply:
+## Database migration
 
-`apps/api/migrations/018_deposit_receipt_submissions.sql`
+Apply `apps/api/migrations/018_deposit_receipt_submissions.sql` through the normal reviewed Neon migration process. It is additive: it creates receipt metadata/audit tables and one zero-opening-balance system clearing account, and expands the allowed role values to include `super_admin` without promoting any existing account. It does not update customer balances or ledger history.
 
-The migration is additive. It creates receipt metadata and audit tables, adds a dedicated NGN manual-receipt clearing account, and permits the `super_admin` role already enforced by the server. It does not promote any existing user, rewrite customer account numbers, modify customer balances, or post ledger entries.
+Do not apply this migration to production before the branch review, successful CI, backup/restore readiness and explicit deployment decision. Apply first to the FlowPay Development database and verify the resulting tables/indexes and unchanged customer/ledger counts.
 
-Do not apply this migration to production until the intended database and current migration state have been verified. Keep the migration file and `schema_migrations` record in sync.
+## API routes
 
-A designated, already verified administrator must be granted `role='super_admin'` through the organisation's approved database-access process. The migration deliberately does not select or promote an administrator automatically.
+Customer:
+- `GET /customer/deposit-receipts`
+- `POST /customer/deposit-receipts` — create a pending upload and return a five-minute presigned URL
+- `POST /customer/deposit-receipts/:id/complete` — verify uploaded bytes and submit for review
+- `GET /customer/deposit-receipts/:id/file` — return a short-lived private file URL for the owning customer
 
-## 5. Customer and reviewer flow
+Super Admin:
+- `GET /admin/deposit-receipts` — list the review queue and short-lived file links
+- `GET /admin/deposit-receipts/:id/file` — refresh a pending receipt's private file link
+- `POST /admin/deposit-receipts/:id/review` — approve or reject with audit record
 
-1. Customer enters the NGN amount, optional bank reference/note, and uploads a JPG, PNG, WEBP, or PDF receipt (up to 5 MB).
-2. The API creates a user-owned pending receipt record and returns the exact authenticated upload route for its server-generated object key.
-3. The customer sends the file to the authenticated FlowPay API. The API enforces the 5 MB byte limit, checks the claimed MIME type against the actual file signature, uploads it to the private R2 bucket, stores a SHA-256 digest and moves it to `pending_review`.
-4. An authenticated `super_admin` reviews it under `/admin`, compares the exact amount/reference against the receiving bank/provider statement, and enters the bank transaction reference.
-5. Approval is allowed only when the reviewer explicitly attests that the funds were independently received. The server posts one balanced, idempotent ledger transaction against the manual-receipt clearing account. A rejection creates no wallet credit.
+All routes require the existing Neon Auth JWT configuration. Admin routes additionally require `super_admin`. The review API deliberately does not call a bank payout or payment provider. The reviewer must verify funds using FlowPay's receiving bank statement/provider records before approval.
 
-A screenshot, receipt upload, or customer-supplied reference is **not** proof of settlement. Never approve based only on the file. Reviewers should use dual control for material amounts according to FlowPay's operations policy.
+## Checks before enabling
 
-## 6. API routes
+1. Confirm `/health` and `/ready` on the target API.
+2. Apply migration 018 to Development and confirm there are no customer, wallet or ledger row-count changes.
+3. Configure the private R2 bucket, scoped key, exact-origin CORS and Render environment variables.
+4. Run API typecheck and `npm run test:deposit-receipts --prefix apps/api`, then the full CI workflow.
+5. Test customer upload, wrong-file rejection, missing-object rejection, ownership checks, customer history, Super Admin review, replayed approval, bank-reference uniqueness and balanced ledger entries.
+6. Verify uploaded objects are not publicly reachable and signed links expire.
+7. Only then decide whether to merge and deploy. No migration is applied and no live wallet credit or payout is enabled by this feature branch.
 
-- `GET /customer/deposit-receipts` — own receipt submission history.
-- `POST /customer/deposit-receipts` — create a pending upload and get the exact authenticated file-upload route.
-- `PUT /customer/deposit-receipts/:id/file` — authenticated, size-limited upload and file-signature check; enqueue review.
-- `GET /customer/deposit-receipts/:id/file` — short-lived view URL for own receipt.
-- `GET /admin/session` — verifies the authenticated `super_admin` role.
-- `GET /admin/deposit-receipts` — pending review queue.
-- `GET /admin/deposit-receipts/:id/file` — short-lived reviewer URL.
-- `POST /admin/deposit-receipts/:id/review` — approve or reject with an audit trail.
+## Operational note
 
-The receipt handler fails closed when R2 or authentication configuration is missing. The feature does not alter existing Paystack hosted checkout or provider webhooks.
-
-## 7. Verification checklist
-
-- Run `npm ci --prefix apps/api`.
-- Run `npm run typecheck --prefix apps/api`.
-- Run `npm run test:deposit-receipts --prefix apps/api`.
-- Run the existing API tests and the web build.
-- After the R2 bucket, migration and Render environment are configured, perform a small sandbox upload and verify: pending review does not change the wallet; rejection does not post a ledger entry; approval after independent settlement verification creates exactly two equal-and-opposite ledger entries; a repeated review cannot credit twice.
-- Verify the object is not accessible without an unexpired signed URL.
-
-## Current setup limitation
-
-The connected Neon Development project is hosted in `aws-eu-west-2`, a region where Neon Object Storage is not available. This implementation therefore targets Cloudflare R2, but Cloudflare account provisioning is not connected to this workspace. No R2 bucket or key was created, no database migration was applied, and no Render secrets were configured by this change.
+The feature fails closed when R2 configuration is absent. The current FlowPay Development Neon project is in `aws-eu-west-2`, a region that does not support Neon branchable object storage; this implementation therefore targets Cloudflare R2 and does not change the existing Neon project's region or create another paid database project.
