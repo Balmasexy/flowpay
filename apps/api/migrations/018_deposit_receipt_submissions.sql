@@ -1,5 +1,13 @@
 BEGIN;
 
+-- Preserve existing customer/admin values while permitting an explicitly
+-- provisioned super_admin role used by the existing /admin/session gate.
+ALTER TABLE public.fp_users
+  DROP CONSTRAINT IF EXISTS fp_users_role_check;
+ALTER TABLE public.fp_users
+  ADD CONSTRAINT fp_users_role_check
+  CHECK (role IN ('customer','admin','super_admin'));
+
 -- Receipt metadata is kept in Postgres; the private file bytes are stored in
 -- the configured S3-compatible object store. Existing wallet and ledger rows
 -- are not modified.
