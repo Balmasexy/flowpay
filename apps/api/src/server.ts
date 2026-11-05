@@ -6,6 +6,7 @@ import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
+import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 
@@ -32,6 +33,7 @@ const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
 const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, audience });
 const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
+const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, jwks, issuer, audience });
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 
@@ -55,13 +57,14 @@ const server = createServer(async (req, res) => {
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
   if (await paystackWebhookHandler(req, res)) return;
+  if (await paystackDepositStatusHandler(req, res)) return;
   if (await paystackCheckoutHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
   if (await supportRequestsHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -111,11 +114,11 @@ const server = createServer(async (req, res) => {
             ORDER BY COALESCE(t.posted_at, t.created_at) DESC
             LIMIT 5`, [userId]),
         pool.query(
-          `SELECT a.currency, COUNT(t.id)::int AS posted_entry_count
+          `SELECT a.currency,
+                  COALESCE(SUM(e.amount_minor) FILTER (WHERE t.status = 'posted'), 0)::text AS amount_minor
              FROM public.fp_accounts AS a
              LEFT JOIN public.fp_ledger_entries AS e ON e.account_id = a.id
-             LEFT JOIN public.fp_ledger_transactions AS t
-               ON t.id = e.transaction_id AND t.status = 'posted'
+             LEFT JOIN public.fp_ledger_transactions AS t ON t.id = e.transaction_id
             WHERE a.user_id = $1 AND a.account_type = 'customer' AND a.status = 'active'
             GROUP BY a.currency
             ORDER BY a.currency`, [userId]),
@@ -128,11 +131,13 @@ const server = createServer(async (req, res) => {
               AND t.status IN ('posted', 'reversed')
             GROUP BY t.status`, [userId])
       ]);
-      // A zero balance is safe to present only when there are no posted ledger
-      // entries at all. Non-zero ledgers remain hidden until their sign convention
-      // is explicitly defined and verified.
-      const hasPostedEntries = balanceRows.rows.some(row => Number(row.posted_entry_count) > 0);
-      const zeroBalances = balanceRows.rows.map(row => ({ currency: row.currency, amountMinor: "0" }));
+      // Ledger convention: customer wallet credits are positive entries;
+      // debits are negative entries. Every posted provider deposit is balanced
+      // against its provider-specific system clearing account in the same DB transaction.
+      const balances = balanceRows.rows.map(row => ({
+        currency: String(row.currency).trim(),
+        amountMinor: String(row.amount_minor ?? "0")
+      }));
       send(res, 200, {
         overview: {
           accounts: accounts.rows.map(row => ({ currency: row.currency, status: row.status, count: row.account_count })),
@@ -144,9 +149,7 @@ const server = createServer(async (req, res) => {
             postedCount: Number(transactionCounts.rows.find(row => row.status === "posted")?.transaction_count ?? 0),
             reversedCount: Number(transactionCounts.rows.find(row => row.status === "reversed")?.transaction_count ?? 0)
           },
-          balance: hasPostedEntries
-            ? { available: false, reason: "LEDGER_SIGN_CONVENTION_NOT_CONFIGURED" }
-            : { available: true, balances: zeroBalances },
+          balance: { available: true, balances },
           paymentsEnabled: false,
           generatedAt: new Date().toISOString()
         }
@@ -207,17 +210,57 @@ const server = createServer(async (req, res) => {
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
-      const result = await pool.query(
-        `SELECT d.transaction_id, d.provider_tx_ref, d.amount_minor::text AS amount_minor,
-                d.currency, d.status, d.created_at, d.verified_at
-           FROM public.fp_flutterwave_deposits AS d
-          WHERE d.user_id = $1 AND d.status = 'posted'
-          ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [identity.rows[0].id]);
-      send(res, 200, { deposits: result.rows.map(row => ({
-        id: row.transaction_id, provider: "Flutterwave", reference: row.provider_tx_ref,
-        amountMinor: row.amount_minor, currency: String(row.currency).trim(),
-        status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
-      })), environment: "test", livePaymentsEnabled: false });
+      const userId = identity.rows[0].id;
+      const [flutterwaveResult, paystackTable] = await Promise.all([
+        pool.query(
+          `SELECT d.transaction_id, d.provider_tx_ref, d.amount_minor::text AS amount_minor,
+                  d.currency, d.status, d.created_at, d.verified_at
+             FROM public.fp_flutterwave_deposits AS d
+            WHERE d.user_id = $1 AND d.status = 'posted'
+            ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [userId]),
+        pool.query<{ available: boolean; clearing_account_available: boolean }>(
+          `SELECT
+             to_regclass('public.fp_paystack_deposits') IS NOT NULL AS available,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
+             ) AS clearing_account_available`)
+      ]);
+      const paystackAvailable = paystackTable.rows[0]?.available === true &&
+        paystackTable.rows[0]?.clearing_account_available === true;
+      const paystackResult = paystackTable.rows[0]?.available === true
+        ? await pool.query(
+            `SELECT d.transaction_id, d.reference, d.amount_minor::text AS amount_minor,
+                    d.currency, d.status, d.created_at, d.verified_at
+               FROM public.fp_paystack_deposits AS d
+              WHERE d.user_id = $1
+              ORDER BY d.created_at DESC LIMIT 100`, [userId])
+        : { rows: [] as Array<Record<string, unknown>> };
+      const deposits = [
+        ...flutterwaveResult.rows.map(row => ({
+          id: row.transaction_id, provider: "Flutterwave", reference: row.provider_tx_ref,
+          amountMinor: row.amount_minor, currency: String(row.currency).trim(),
+          status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
+        })),
+        ...paystackResult.rows.map(row => ({
+          id: row.transaction_id, provider: "Paystack", reference: row.reference,
+          amountMinor: row.amount_minor, currency: String(row.currency).trim(),
+          status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
+        }))
+      ].sort((a, b) => new Date(b.verifiedAt ?? b.createdAt).getTime() - new Date(a.verifiedAt ?? a.createdAt).getTime()).slice(0, 100);
+      const paystackConfigured = paystackAvailable &&
+        process.env.PAYSTACK_ENVIRONMENT === "test" &&
+        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
+        (process.env.PAYSTACK_CALLBACK_URL ?? "").startsWith("https://") &&
+        Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR)) &&
+        Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR) > 0 &&
+        Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
+        Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
+      send(res, 200, {
+        deposits, environment: "test", livePaymentsEnabled: false,
+        depositProviders: { paystack: paystackConfigured, flutterwave: false }
+      });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay money received request failed:", error instanceof Error ? error.message : "unknown money received error");
