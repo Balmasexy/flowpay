@@ -78,3 +78,22 @@ Migration `012_flutterwave_pending_checkout_sessions.sql` only makes the existin
 6. Complete sandbox end-to-end tests and independently review them before any live configuration or activation.
 
 No live payment, bank transfer, or production release is enabled by this foundation.
+
+
+## Verified sandbox webhook (stage 2)
+
+The API also exposes `POST /webhooks/flutterwave` for Flutterwave's `charge.completed` notification. Configure the Flutterwave dashboard webhook URL to this HTTPS endpoint and set a strong webhook secret hash in the API service as `FLW_WEBHOOK_SECRET_HASH`. The API checks the incoming `verif-hash` header using a constant-time comparison before parsing or acting on the event.
+
+For a successful event, the handler independently calls Flutterwave's transaction verification endpoint and requires the provider transaction ID, transaction reference, NGN currency, and exact amount to match the pending FlowPay deposit. It records a unique event receipt and the provider transaction ID / verification timestamp. Duplicate event IDs are acknowledged without repeating processing.
+
+**Wallet credit remains intentionally disabled.** A verified webhook only marks the provider transaction as verified; the FlowPay deposit and ledger transaction remain `pending`, no ledger entries are written, and the response explicitly reports `walletCredited: false`. The event table stores an SHA-256 digest and identifiers only, not raw provider payloads.
+
+Additional API environment variable:
+
+| Variable | Requirement |
+|---|---|
+| `FLW_WEBHOOK_SECRET_HASH` | Exact webhook secret hash configured in the Flutterwave dashboard; test environment only |
+
+Apply migration `013_flutterwave_webhook_receipts.sql` only after reviewing the schema and approving the migration. It creates a new receipt table and does not modify customer, account, balance, or ledger-entry rows.
+
+The next gate is a disposable-database test of the existing ledger's amount sign convention and balanced entry posting. Do not change a deposit to `posted` or credit a customer balance until that independent ledger test and atomic posting implementation are complete.
