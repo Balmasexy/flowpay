@@ -208,7 +208,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     const customerRoot = "/customer/deposit-receipts";
     const adminRoot = "/admin/deposit-receipts";
-    const customerMatch = pathname.match(/^\/customer\/deposit-receipts\/([0-9a-f-]{36})\/(complete|file)$/i);
+    const customerMatch = pathname.match(/^\/customer\/deposit-receipts\/([0-9a-f-]{36})\/file$/i);
     const adminMatch = pathname.match(/^\/admin\/deposit-receipts(?:\/([0-9a-f-]{36})\/(review|file))?$/i);
     if (!(pathname === customerRoot || pathname.startsWith(customerRoot + "/") || pathname === adminRoot || pathname.startsWith(adminRoot + "/"))) return false;
     const { pool, jwks, issuer, audience } = deps;
@@ -316,7 +316,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
           receipt = prior.rows[0];
           if (!receipt || receipt.status !== "pending_upload" ||
               receipt.amount_minor !== amount || receipt.content_type !== contentType ||
-              receipt.size_bytes !== sizeBytes || receipt.file_name !== fileName) {
+              receipt.size_bytes !== sizeBytes || receipt.file_name !== fileName || receipt.reference_text !== reference || receipt.customer_note !== note) {
             send(res, 409, { error: "RECEIPT_REQUEST_ALREADY_EXISTS" }); return true;
           }
         } else {
@@ -327,16 +327,15 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
             [receipt.id, identity.id, JSON.stringify({ sizeBytes, contentType })]
           );
         }
-        const uploadUrl = presignedUrl(config, "PUT", receipt.object_key, receipt.content_type, 300);
         send(res, inserted.rowCount === 1 ? 201 : 200, {
-          receiptId: receipt.id, status: receipt.status, uploadUrl,
-          uploadMethod: "PUT", uploadHeaders: { "Content-Type": receipt.content_type },
-          expiresInSeconds: 300, maxBytes: MAX_FILE_BYTES
+          receiptId: receipt.id, status: receipt.status,
+          uploadPath: "/customer/deposit-receipts/" + receipt.id + "/file",
+          uploadMethod: "PUT", maxBytes: MAX_FILE_BYTES
         });
         return true;
       }
 
-      if (customerMatch && req.method === "POST" && customerMatch[2] === "complete") {
+      if (customerMatch && req.method === "PUT" && customerMatch[1] && customerMatch[0]) {
         const receiptId = customerMatch[1];
         const found = await pool.query<Receipt>(
           `SELECT id, user_id, amount_minor::text, currency, reference_text, customer_note,
@@ -347,37 +346,44 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
         );
         if (found.rowCount !== 1) { send(res, 404, { error: "RECEIPT_NOT_FOUND" }); return true; }
         const receipt = found.rows[0];
-        if (receipt.status === "pending_review") { send(res, 200, { completed: true, status: receipt.status }); return true; }
+        if (receipt.status === "pending_review") { send(res, 200, { uploaded: true, status: "pending_review" }); return true; }
         if (receipt.status !== "pending_upload") { send(res, 409, { error: "RECEIPT_NOT_AWAITING_UPLOAD" }); return true; }
-        const head = await signedHead(config, receipt.object_key);
-        if (!head.ok) { send(res, 409, { error: "RECEIPT_FILE_NOT_FOUND_OR_NOT_UPLOADED" }); return true; }
-        const objectSize = Number(head.headers.get("content-length") ?? "0");
-        const objectType = (head.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-        if (objectSize !== receipt.size_bytes || objectSize < 1 || objectSize > MAX_FILE_BYTES || objectType !== receipt.content_type) {
-          send(res, 400, { error: "RECEIPT_FILE_METADATA_MISMATCH" }); return true;
-        }
-        const getUrl = presignedUrl(config, "GET", receipt.object_key, undefined, 120);
-        const fileResponse = await fetch(getUrl, { signal: AbortSignal.timeout(12_000) });
-        if (!fileResponse.ok || !fileResponse.body) { send(res, 503, { error: "RECEIPT_FILE_INSPECTION_UNAVAILABLE" }); return true; }
-        const reader = fileResponse.body.getReader();
+        const suppliedType = String(req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+        if (suppliedType !== receipt.content_type) { send(res, 400, { error: "RECEIPT_CONTENT_TYPE_MISMATCH" }); return true; }
         const chunks: Buffer[] = [];
         let totalBytes = 0;
-        try {
-          while (true) {
-            const part = await reader.read();
-            if (part.done) break;
-            totalBytes += part.value.byteLength;
-            if (totalBytes > MAX_FILE_BYTES) {
-              await reader.cancel().catch(() => undefined);
-              send(res, 413, { error: "RECEIPT_FILE_TOO_LARGE" });
-              return true;
-            }
-            chunks.push(Buffer.from(part.value));
+        for await (const chunk of req) {
+          const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          totalBytes += part.length;
+          if (totalBytes > MAX_FILE_BYTES || totalBytes > receipt.size_bytes) {
+            send(res, 413, { error: "RECEIPT_FILE_TOO_LARGE", maxBytes: MAX_FILE_BYTES });
+            return true;
           }
-        } finally { reader.releaseLock(); }
+          chunks.push(part);
+        }
         const fileBytes = Buffer.concat(chunks);
-        if (fileBytes.length !== objectSize || !hasExpectedMagic(fileBytes, receipt.content_type)) {
-          send(res, 400, { error: "RECEIPT_FILE_CONTENT_INVALID" }); return true;
+        if (fileBytes.length !== receipt.size_bytes || !hasExpectedMagic(fileBytes, receipt.content_type)) {
+          send(res, 400, { error: "RECEIPT_FILE_CONTENT_INVALID_OR_SIZE_MISMATCH" });
+          return true;
+        }
+        const uploadUrl = presignedUrl(config, "PUT", receipt.object_key, receipt.content_type, 120);
+        let objectResponse: Response;
+        try {
+          objectResponse = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": receipt.content_type },
+            body: new Uint8Array(fileBytes),
+            signal: AbortSignal.timeout(15_000)
+          });
+        } catch (error) {
+          console.error("FlowPay private receipt storage upload failed:", error instanceof Error ? error.message : "network error");
+          send(res, 503, { error: "RECEIPT_STORAGE_UPLOAD_UNAVAILABLE" });
+          return true;
+        }
+        if (!objectResponse.ok) {
+          console.error("FlowPay private receipt storage returned HTTP", objectResponse.status);
+          send(res, 503, { error: "RECEIPT_STORAGE_UPLOAD_FAILED" });
+          return true;
         }
         const digest = createHash("sha256").update(fileBytes).digest("hex");
         const client = await pool.connect();
@@ -397,28 +403,30 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
             );
             await client.query("ROLLBACK");
             if (current.rows[0]?.status === "pending_review") {
-              send(res, 200, { completed: true, status: "pending_review" });
+              send(res, 200, { uploaded: true, status: "pending_review" });
               return true;
             }
-            send(res, 409, { error: "RECEIPT_STATUS_CHANGED", status: current.rows[0]?.status ?? "not_found" });
+            send(res, 409, { error: "RECEIPT_STATUS_CHANGED" });
             return true;
           }
           await client.query(
             `INSERT INTO public.fp_deposit_receipt_audit_events
                (receipt_id, actor_user_id, actor_role, action, details)
              VALUES ($1,$2,'customer','uploaded',$3::jsonb)`,
-            [receipt.id, identity.id, JSON.stringify({ sizeBytes: objectSize, sha256: digest })]
+            [receipt.id, identity.id, JSON.stringify({ sizeBytes: fileBytes.length, sha256: digest })]
           );
           await client.query("COMMIT");
         } catch (error) {
           await client.query("ROLLBACK").catch(() => undefined);
           throw error;
-        } finally { client.release(); }
-        send(res, 200, { completed: true, status: "pending_review", message: "Receipt uploaded. It will be reviewed; no wallet credit is created until an authorised reviewer independently verifies the funds were received." });
+        } finally {
+          client.release();
+        }
+        send(res, 200, { uploaded: true, status: "pending_review", message: "Receipt uploaded and queued for review. No wallet credit is created until an authorised reviewer independently verifies the funds." });
         return true;
       }
 
-      if (customerMatch && req.method === "GET" && customerMatch[2] === "file") {
+            if (customerMatch && req.method === "GET" && customerMatch[2] === "file") {
         const result = await pool.query<{ object_key: string; file_name: string; content_type: string }>(
           `SELECT object_key,file_name,content_type FROM public.fp_deposit_receipts
             WHERE id=$1 AND user_id=$2 AND status IN ('pending_review','approved','rejected') LIMIT 1`,
