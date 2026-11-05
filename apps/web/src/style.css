@@ -360,3 +360,27 @@
 .fp-transaction-summary-card .fp-overview-stat-row strong{font-size:23px}
 @media(max-width:900px){.fp-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.fp-overview-grid{grid-template-columns:1fr}}
+
+
+/* Dashboard balance prominence and transaction history shortcut. */
+.fp-balance-values{display:flex;flex-wrap:wrap;gap:8px 18px;margin:13px 0 5px}
+.fp-balance-values strong{font:800 48px/1.08 Manrope,sans-serif;letter-spacing:-1.5px;color:#fff;font-variant-numeric:tabular-nums}
+.fp-balance-top-actions{display:flex;align-items:center;gap:8px}
+.fp-balance-history{display:inline-flex;align-items:center;gap:5px;padding:7px 9px;border:1px solid #494949;border-radius:8px;background:#292929;color:#fff;font-size:10px;font-weight:700}
+.fp-balance-history svg{color:#ff9a50}
+.fp-balance-history:hover{border-color:#ff9a50;background:#33271f}
+.fp-activity-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;padding:13px;border:1px solid var(--border);border-radius:11px;background:#fafaf8}
+.fp-activity-filters label{display:grid;gap:6px;color:#66675f;font-size:10px;font-weight:700}
+.fp-activity-filters input{min-height:37px;padding:8px 10px;border:1px solid #deded8;border-radius:8px;background:#fff;color:#252525;font-size:11px}
+.fp-activity-clear{min-height:37px;padding:8px 10px;border:0;background:transparent;color:#9a571d;font-size:10px;font-weight:700}
+.fp-activity-filters button:disabled{opacity:.45;cursor:not-allowed}
+.fp-activity-result-count{color:#777970;font-size:10px;font-weight:700}
+@media(max-width:600px){
+ .fp-balance-values strong{font-size:39px}
+ .fp-balance-top-actions{gap:2px}
+ .fp-balance-history{padding:6px;font-size:9px;gap:3px}
+ .fp-balance-history svg:last-child{display:none}
+ .fp-activity-filters{align-items:stretch}
+ .fp-activity-filters label{flex:1 1 130px}
+ .fp-activity-filters button{flex:1 1 auto;justify-content:center}
+}
