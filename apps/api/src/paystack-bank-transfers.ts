@@ -541,7 +541,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
           send(res, 202, { reference, status: saved.status, final: false, message: "Paystack has not returned a final status. The amount remains reserved until verification completes." });
           return true;
         }
-        const result = await applyVerifiedStatus(pool, reference, data);
+        const result = await applyVerifiedStatus(pool, secret, reference, data);
         send(res, 200, { reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status), amountMinor: saved.amount_minor, currency: "NGN" });
       } catch (error) {
         console.error("FlowPay bank payout status check failed:", error instanceof Error ? error.message : "database error");
