@@ -61,9 +61,15 @@ async function setup() {
     release: () => undefined
   } as unknown as PoolClient;
   const pool = {
-    query: async (sql: string) => {
-      assert.ok(sql.includes('FROM neon_auth."user"'));
-      return { rowCount: 1, rows: [{ id: userId, email: "test@example.invalid", name: "Test Customer" }] };
+    query: async (sql: string, values?: unknown[]) => {
+      statements.push({ sql, values });
+      if (sql.includes('FROM neon_auth."user"')) {
+        return { rowCount: 1, rows: [{ id: userId, email: "test@example.invalid", name: "Test Customer" }] };
+      }
+      if (sql.includes("UPDATE public.fp_paystack_deposits SET checkout_url")) {
+        return { rowCount: 1, rows: [] };
+      }
+      throw new Error("Unexpected pooled checkout query: " + sql);
     },
     connect: async () => client
   } as unknown as Pool;
