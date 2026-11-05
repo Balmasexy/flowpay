@@ -142,7 +142,12 @@ export default function App() {
   if (path === "/") return <LandingPage />;
   if (path === "/login") return <LoginPage />;
   if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
-  if (path === "/admin" || path.startsWith("/admin/")) return <AdminPage />;
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    if (!authConfigured) return <LoginPage />;
+    if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
+    if (!authSession.data?.user) { window.location.replace("/login"); return null; }
+    return <AdminPage token={authSession.data.session?.token ?? ""} />;
+  }
   if (!authConfigured) return <LoginPage />;
   if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
   if (!authSession.data?.user) { window.location.replace("/login"); return null; }
