@@ -107,8 +107,8 @@ export function createBankAccountLookupHandler(options: Options) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }
       const identity = await pool.query(
-        'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \\'active\\' LIMIT 1',
-        [payload.sub]);
+        'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = $2 LIMIT 1',
+        [payload.sub, "active"]);
       if (identity.rowCount !== 1) {
         send(res, 403, { error: "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" }); return true;
       }
