@@ -1,6 +1,6 @@
 # FlowPay private deposit receipt storage
 
-This feature stores customer receipt files in a **private Cloudflare R2 bucket**. Receipt metadata and review audit events stay in FlowPay Postgres. The web app receives only short-lived presigned object URLs; R2 access keys remain on the API service.
+This feature stores customer receipt files in a **private Cloudflare R2 bucket**. Receipt metadata and review audit events stay in FlowPay Postgres. The API handles private object writes and issues only short-lived presigned download URLs when a customer or authorised reviewer opens a receipt; R2 access keys remain on the API service.
 
 ## 1. Create the R2 bucket
 
@@ -47,7 +47,7 @@ A designated, already verified administrator must be granted `role='super_admin'
 ## 5. Customer and reviewer flow
 
 1. Customer enters the NGN amount, optional bank reference/note, and uploads a JPG, PNG, WEBP, or PDF receipt (up to 5 MB).
-2. The API creates a user-owned pending receipt record and returns a short-lived PUT URL for a server-generated object key.
+2. The API creates a user-owned pending receipt record and returns the exact authenticated upload route for its server-generated object key.
 3. The customer sends the file to the authenticated FlowPay API. The API enforces the 5 MB byte limit, checks the claimed MIME type against the actual file signature, uploads it to the private R2 bucket, stores a SHA-256 digest and moves it to `pending_review`.
 4. An authenticated `super_admin` reviews it under `/admin`, compares the exact amount/reference against the receiving bank/provider statement, and enters the bank transaction reference.
 5. Approval is allowed only when the reviewer explicitly attests that the funds were independently received. The server posts one balanced, idempotent ledger transaction against the manual-receipt clearing account. A rejection creates no wallet credit.
@@ -57,7 +57,7 @@ A screenshot, receipt upload, or customer-supplied reference is **not** proof of
 ## 6. API routes
 
 - `GET /customer/deposit-receipts` — own receipt submission history.
-- `POST /customer/deposit-receipts` — create a pending upload and get a presigned PUT URL.
+- `POST /customer/deposit-receipts` — create a pending upload and get the exact authenticated file-upload route.
 - `PUT /customer/deposit-receipts/:id/file` — authenticated, size-limited upload and file-signature check; enqueue review.
 - `GET /customer/deposit-receipts/:id/file` — short-lived view URL for own receipt.
 - `GET /admin/session` — verifies the authenticated `super_admin` role.
@@ -73,7 +73,7 @@ The receipt handler fails closed when R2 or authentication configuration is miss
 - Run `npm run typecheck --prefix apps/api`.
 - Run `npm run test:deposit-receipts --prefix apps/api`.
 - Run the existing API tests and the web build.
-- After the R2 bucket, CORS and migration are configured, perform a small sandbox upload and verify: pending review does not change the wallet; rejection does not post a ledger entry; approval after independent settlement verification creates exactly two equal-and-opposite ledger entries; a repeated review cannot credit twice.
+- After the R2 bucket, migration and Render environment are configured, perform a small sandbox upload and verify: pending review does not change the wallet; rejection does not post a ledger entry; approval after independent settlement verification creates exactly two equal-and-opposite ledger entries; a repeated review cannot credit twice.
 - Verify the object is not accessible without an unexpired signed URL.
 
 ## Current setup limitation
