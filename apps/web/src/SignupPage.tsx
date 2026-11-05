@@ -125,7 +125,7 @@ export default function SignupPage() {
         <span className="fp-login-eyebrow">FLOWPAY ACCOUNT</span>
         <h2>{step === "verify" ? "Verify your email" : "Create account"}</h2>
         <p className="fp-login-subtitle">{step === "verify" ? <>Enter the numeric code sent to <strong>{email}</strong>.</> : "Enter your details to create your sign-in credentials."}</p>
-        <div className="fp-login-notice" role="note"><ShieldCheck size={17}/><span><strong>Cardholder and bank account setup</strong><br/>Use your full legal name as your registration name. After identity checks and provider approval, any issued card will show this verified cardholder name. Your NGN virtual account number will appear in View Account Number only after a bank provider confirms its assignment. Registration alone does not create a card or bank account.</span></div>
+        <div className="fp-login-notice" role="note"><ShieldCheck size={17}/><span><strong>Cardholder and bank account setup</strong><br/>Use your full legal name as your registration name. A card issuer must approve the cardholder details before issuing a card. Your NGN virtual account number will appear in View Account Number only after a bank provider confirms its assignment. Registration alone does not create a card or bank account.</span></div>
         {step === "signup" ? <form onSubmit={submit}>
           <label htmlFor="fp-signup-name">Full name</label>
           <input id="fp-signup-name" autoComplete="name" required minLength={2} maxLength={100} placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)}/>
