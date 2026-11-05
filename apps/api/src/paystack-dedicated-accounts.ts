@@ -126,6 +126,7 @@ function view(row: DedicatedAccountRow | null) {
 }
 
 export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: PaystackRecord) {
+  if (!sandboxEnabled()) return false;
   const eventName = typeof event.event === "string" ? event.event : "";
   if (![
     "dedicatedaccount.assign.success",
