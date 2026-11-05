@@ -208,7 +208,9 @@ const server = createServer(async (req, res) => {
       const bankPayoutsEnabled = payoutSchema.rows[0]?.available === true &&
         process.env.PAYSTACK_ENVIRONMENT === "test" &&
         (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
-        process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+        process.env.PAYSTACK_TRANSFERS_ENABLED === "true" &&
+        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+        process.env.NODE_ENV !== "production";
       const bankPayoutRows = payoutSchema.rows[0]?.available === true
         ? await pool.query(
             `SELECT t.id, t.transaction_type,
