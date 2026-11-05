@@ -31,7 +31,7 @@ function parseDeposit(value: unknown, index: number): Deposit | null {
   const rawAmount = row.amountMinor;
   if (
     !(typeof rawAmount === "string" || typeof rawAmount === "number") ||
-    !/^\\d+$/.test(String(rawAmount)) ||
+    !/^\d+$/.test(String(rawAmount)) ||
     !Number.isSafeInteger(Number(rawAmount))
   ) return null;
 
@@ -61,7 +61,7 @@ function formatDate(value: string | null): string {
 
 function amountToMinor(value: string): string | null {
   const raw = value.trim();
-  const match = /^(0|[1-9]\\d{0,11})(?:\\.(\\d{1,2}))?$/.exec(raw);
+  const match = /^(0|[1-9]\d{0,11})(?:\.(\d{1,2}))?$/.exec(raw);
   if (!match) return null;
   const amount = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
   return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER) ? amount.toString() : null;
@@ -92,7 +92,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
   const params = new URLSearchParams(window.location.search);
   const returnReference = paymentReturn ? (params.get("reference") || params.get("trxref") || "") : "";
 
