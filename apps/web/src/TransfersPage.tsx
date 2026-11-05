@@ -294,8 +294,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     } finally { setTransferBusy(false); }
   };
 
-  const reviewBankTransfer = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const reviewBankTransfer = () => {
     const amountMinor = amountToMinor(amount);
     const bankName = banks.find(bank => bank.code === bankCode)?.name ?? "";
     if (!activeNgnWallet) { setTransferError("An active NGN FlowPay wallet is required."); return; }
@@ -403,7 +402,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           <input id="fp-bank-transfer-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount}
             onChange={event => { setAmount(event.target.value); setBankPreview(null); setTransferError(""); }}/>
           {transferError && <div className="fp-preview-warning" role="alert">{transferError}</div>}
-          <button className="fp-outline" type="button" onClick={() => reviewBankTransfer({ preventDefault: () => undefined } as FormEvent<HTMLFormElement>)}
+          <button className="fp-outline" type="button" onClick={reviewBankTransfer}
             disabled={!activeNgnWallet || bankLookup !== "verified" || !amount.trim()}>Review bank transfer</button>
           {bankPreview && <div className="fp-preview-warning" role="status">
             <b>Bank recipient verified — transfer not submitted</b>
