@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -80,31 +80,6 @@ async function authenticate(
   return result.rowCount === 1 ? result.rows[0] : null;
 }
 
-async function ensureAccountNumber(pool: Pool, userId: string): Promise<string> {
-  const existing = await pool.query<{ account_number: string }>(
-    "SELECT account_number FROM public.fp_customer_account_numbers WHERE user_id = $1 LIMIT 1",
-    [userId]
-  );
-  if (existing.rowCount === 1) return existing.rows[0].account_number.trim();
-
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const candidate = String(randomInt(100_000_000_000, 1_000_000_000_000));
-    const inserted = await pool.query<{ account_number: string }>(
-      `INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING
-       RETURNING account_number`,
-      [userId, candidate]
-    );
-    if (inserted.rowCount === 1) return inserted.rows[0].account_number.trim();
-    const raced = await pool.query<{ account_number: string }>(
-      "SELECT account_number FROM public.fp_customer_account_numbers WHERE user_id = $1 LIMIT 1",
-      [userId]
-    );
-    if (raced.rowCount === 1) return raced.rows[0].account_number.trim();
-  }
-  throw new Error("FLOWPAY_ACCOUNT_NUMBER_ALLOCATION_FAILED");
-}
 
 async function verifyTransactionPin(
   client: PoolClient,
