@@ -218,11 +218,18 @@ const server = createServer(async (req, res) => {
              FROM public.fp_flutterwave_deposits AS d
             WHERE d.user_id = $1 AND d.status = 'posted'
             ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [userId]),
-        pool.query<{ available: boolean }>(
-          "SELECT to_regclass('public.fp_paystack_deposits') IS NOT NULL AS available")
+        pool.query<{ available: boolean; clearing_account_available: boolean }>(
+          `SELECT
+             to_regclass('public.fp_paystack_deposits') IS NOT NULL AS available,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
+             ) AS clearing_account_available`)
       ]);
-      const paystackAvailable = paystackTable.rows[0]?.available === true;
-      const paystackResult = paystackAvailable
+      const paystackAvailable = paystackTable.rows[0]?.available === true &&
+        paystackTable.rows[0]?.clearing_account_available === true;
+      const paystackResult = paystackTable.rows[0]?.available === true
         ? await pool.query(
             `SELECT d.transaction_id, d.reference, d.amount_minor::text AS amount_minor,
                     d.currency, d.status, d.created_at, d.verified_at
@@ -242,7 +249,8 @@ const server = createServer(async (req, res) => {
           status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
         }))
       ].sort((a, b) => new Date(b.verifiedAt ?? b.createdAt).getTime() - new Date(a.verifiedAt ?? a.createdAt).getTime()).slice(0, 100);
-      const paystackConfigured = process.env.PAYSTACK_ENVIRONMENT === "test" &&
+      const paystackConfigured = paystackAvailable &&
+        process.env.PAYSTACK_ENVIRONMENT === "test" &&
         (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
         (process.env.PAYSTACK_CALLBACK_URL ?? "").startsWith("https://") &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR)) &&
