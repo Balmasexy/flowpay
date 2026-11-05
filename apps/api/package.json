@@ -11,6 +11,7 @@
     "test:flutterwave-webhook": "tsx --test scripts/test-flutterwave-webhook.ts",
     "test:paystack-webhook": "tsx --test scripts/test-paystack-webhook.ts",
     "test:flowpay-transfers": "tsx --test scripts/test-flowpay-transfers.ts",
+    "test:customer-ai": "tsx --test scripts/test-customer-ai.ts",
     "test:customer-ai": "tsx --test scripts/test-customer-ai.ts"
   },
   "dependencies": {
