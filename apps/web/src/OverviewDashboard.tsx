@@ -137,16 +137,13 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
 
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
-  const accountCount = overview?.accounts.reduce((total, account) => total + account.count, 0) ?? 0;
-  const activeAccountCount = overview?.accounts.filter(account => account.status === "active").reduce((total, account) => total + account.count, 0) ?? 0;
-  const currencies = [...new Set(overview?.accounts.filter(account => account.status === "active").map(account => account.currency) ?? [])];
   const postedCount = overview?.transactionSummary?.postedCount ?? 0;
   const reversedCount = overview?.transactionSummary?.reversedCount ?? 0;
   const transactionCount = postedCount + reversedCount;
 
   return <>
     <section className="fp-balance">
-      <div className="fp-balance-top"><span>Available balance</span><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div>
+      <div className="fp-balance-top"><span>Wallet balance</span><div className="fp-balance-top-actions"><button type="button" className="fp-balance-history" onClick={() => go("/activity")}><Activity size={15}/> Transaction history <ChevronRight size={14}/></button><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div></div>
       {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
       <small>{error ? "We could not refresh your verified account data. No estimated or sample amount is displayed." : overview?.balance.available && overview.balance.balances.length > 0 ? isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service." : !loading && overview?.balance.available ? "No active customer account is available for balance calculation." : "Balance is unavailable until the ledger sign convention is confirmed. No estimated or sample amount is shown."}</small>
       <div className="fp-balance-actions">
@@ -157,14 +154,6 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
     </section>
 
     <section className="fp-overview-grid" aria-label="Account overview">
-      <article className="fp-overview-card fp-account-summary-card">
-        <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Wallet size={19}/></span><span>Account summary</span></div>
-        {loading ? <p className="fp-overview-muted">Loading your account records…</p> : error ? <p className="fp-overview-muted">Account summary is temporarily unavailable.</p> : <>
-          <div className="fp-overview-stat-row"><div><strong>{accountCount}</strong><span>Customer accounts</span></div><div><strong>{activeAccountCount}</strong><span>Active accounts</span></div></div>
-          <div className="fp-overview-currencies"><span>Active account currencies</span><b>{currencies.length ? currencies.join(" · ") : "No active account assigned"}</b></div>
-        </>}
-        <button className="fp-overview-link" onClick={() => go("/account-number")}>Account information <ChevronRight size={15}/></button>
-      </article>
       <article className="fp-overview-card fp-transaction-summary-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Activity size={19}/></span><span>Ledger activity summary</span></div>
         {loading ? <p className="fp-overview-muted">Loading posted and reversed transaction totals…</p> : error ? <p className="fp-overview-muted">Transaction totals are temporarily unavailable.</p> : overview?.transactionSummary ? <>

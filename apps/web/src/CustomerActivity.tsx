@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, AlertCircle, RefreshCw } from "lucide-react";
+import { Activity, AlertCircle, Download, RefreshCw } from "lucide-react";
 
 type Transaction = {
   id: string;
@@ -39,11 +39,18 @@ function parseTransactions(value: unknown): Transaction[] {
   });
 }
 
+function csvCell(value: string | number): string {
+  const safe = String(value).replace(/^[=+@]/, "'$&").replace(/^-/, "'-");
+  return '"' + safe.replace(/"/g, '""') + '"';
+}
+
 export default function CustomerActivity({ token }: { token: string }) {
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 
   useEffect(() => {
@@ -97,17 +104,56 @@ export default function CustomerActivity({ token }: { token: string }) {
     return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
   };
 
+  const filteredItems = items.filter(item => {
+    const rawDate = item.postedAt || item.createdAt;
+    const timestamp = new Date(rawDate).getTime();
+    if (!Number.isFinite(timestamp)) return false;
+    const day = new Date(timestamp).toISOString().slice(0, 10);
+    return (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
+  });
+  const invalidRange = Boolean(fromDate && toDate && fromDate > toDate);
+
+  const downloadCsv = () => {
+    if (invalidRange || filteredItems.length === 0) return;
+    const rows = [
+      ["Transaction ID", "Type", "Description", "Status", "Date", "Currency", "Ledger amount minor units", "Customer ledger entries"],
+      ...filteredItems.map(item => [
+        item.id, item.type, item.description, item.status, item.postedAt || item.createdAt,
+        item.currency, item.customerLedgerAmountMinor, item.customerEntryCount
+      ])
+    ];
+    const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "flowpay-transactions-" + (fromDate || "all") + "-to-" + (toDate || "all") + ".csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return <section className="fp-panel fp-detail-panel">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div><h2>Transaction history</h2><p className="fp-muted">Verified posted and reversed ledger activity linked to your customer account.</p></div>
       <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15}/> Refresh</button>
     </div>
-    <div className="fp-preview-warning"><Activity size={17}/> Amounts below are customer ledger-entry totals. Incoming/outgoing direction is not labelled until the ledger sign convention is verified.</div>
+    <div className="fp-activity-filters">
+      <label>From date<input type="date" value={fromDate} max={toDate || undefined} onChange={event => setFromDate(event.target.value)}/></label>
+      <label>To date<input type="date" value={toDate} min={fromDate || undefined} onChange={event => setToDate(event.target.value)}/></label>
+      <button type="button" className="fp-outline" onClick={downloadCsv} disabled={loading || Boolean(error) || invalidRange || filteredItems.length === 0}><Download size={15}/> Download CSV</button>
+      <button type="button" className="fp-activity-clear" onClick={() => { setFromDate(""); setToDate(""); }}>Clear dates</button>
+    </div>
+    {invalidRange && <div className="fp-preview-warning"><AlertCircle size={17}/> The start date must be on or before the end date.</div>}
+    <div className="fp-preview-warning"><Activity size={17}/> Amounts are customer ledger-entry totals. The export includes only verified records returned by FlowPay; no sample transactions are added.</div>
     {loading && <p className="fp-muted">Loading verified activity…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
     {!loading && !error && items.length === 0 && <div className="fp-empty"><Activity size={24}/><b>No posted transaction history yet</b><span>Only records confirmed by the FlowPay ledger appear here.</span></div>}
-    {!loading && !error && items.length > 0 && <div className="fp-feature-list">
-      {items.map(item => <div key={item.id} style={{alignItems:"flex-start",gap:12}}>
+    {!loading && !error && items.length > 0 && filteredItems.length === 0 && <div className="fp-empty"><Activity size={24}/><b>No transactions in this date range</b><span>Choose another date range or clear the filters.</span></div>}
+    {!loading && !error && filteredItems.length > 0 && <div className="fp-activity-result-count">Showing {filteredItems.length} of {items.length} loaded transactions</div>}
+    {!loading && !error && filteredItems.length > 0 && <div className="fp-feature-list">
+      {filteredItems.map(item => <div key={item.id} style={{alignItems:"flex-start",gap:12}}>
         <Activity size={18}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{item.description || item.type.replace(/_/g," ")}</b>
@@ -120,5 +166,6 @@ export default function CustomerActivity({ token }: { token: string }) {
         </div>
       </div>)}
     </div>}
+    {!loading && !error && <p className="fp-overview-footnote">Date filters and CSV downloads apply to the latest 100 transactions currently returned by the activity API. Older records are not included in this export.</p>}
   </section>;
 }

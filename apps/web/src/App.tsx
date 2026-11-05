@@ -157,7 +157,7 @@ export default function App() {
         <main className="fp-main">
           <div className="fp-page-heading">
             <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : active.label}</h1>
-              <p>{path === "/dashboard" ? "Your money, services and account—all in one place." : pageDescription(path)}</p>
+              {path !== "/dashboard" && <p>{pageDescription(path)}</p>}
             </div>
             {path === "/dashboard" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
           </div>
