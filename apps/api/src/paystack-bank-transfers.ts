@@ -133,7 +133,7 @@ async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKS
   );
   return result.rowCount === 1 ? result.rows[0] : null;
 }
-async function resolveRecipient(secret: string, accountNumber: string, bankCode: string): Promise<{ recipientCode: string; accountName: string }> {
+async function resolveRecipient(secret: string, accountNumber: string, bankCode: string): Promise<{ recipientCode: string; accountName: string; bankName: string }> {
   const resolveUrl = new URL("https://api.paystack.co/bank/resolve");
   resolveUrl.searchParams.set("account_number", accountNumber);
   resolveUrl.searchParams.set("bank_code", bankCode);
@@ -155,14 +155,15 @@ async function resolveRecipient(secret: string, accountNumber: string, bankCode:
   const data = record(recipient.body.data);
   const details = record(data.details);
   const recipientCode = typeof data.recipient_code === "string" ? data.recipient_code.trim() : "";
+  const bankName = typeof details.bank_name === "string" ? details.bank_name.trim() : "";
   if (!recipient.ok || data.domain !== "test" || data.active !== true ||
       data.type !== "nuban" || data.currency !== "NGN" ||
-      !/^RCP_[A-Za-z0-9]+$/.test(recipientCode) ||
+      !/^RCP_[A-Za-z0-9]+$/.test(recipientCode) || !bankName ||
       (typeof details.account_number === "string" && details.account_number !== accountNumber) ||
       (typeof details.bank_code === "string" && details.bank_code !== bankCode)) {
     throw new Error("PAYSTACK_RECIPIENT_CREATION_FAILED");
   }
-  return { recipientCode, accountName: name };
+  return { recipientCode, accountName: name, bankName };
 }
 
 type StoredPayout = {
@@ -429,7 +430,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       send(res, 503, { error: "BANK_TRANSFER_SERVICE_NOT_CONFIGURED" }); return true;
     }
     const secret = testPaystackSecret();
-    if (!secret || !payoutsEnabled()) {
+    if (!secret || (isSubmit && !payoutsEnabled())) {
       send(res, 503, {
         error: "PAYSTACK_TEST_BANK_PAYOUTS_NOT_ENABLED",
         environment: "test",
@@ -612,13 +613,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         [dbKey]
       );
       transactionId = created.rows[0].id;
-      const bank = await client.query<{ name: string }>(
-        `SELECT name FROM (
-           SELECT code, name FROM (SELECT $1::text AS code, $2::text AS name) AS selected_bank
-         ) AS verified_bank`,
-        [bankCode, typeof input.bankName === "string" ? input.bankName.slice(0, 120) : "Nigerian bank"]
-      );
-      const bankName = bank.rows[0]?.name ?? "Nigerian bank";
+      const bankName = recipient.bankName;
       await client.query(
         `INSERT INTO public.fp_paystack_bank_transfers
            (transaction_id, user_id, account_id, idempotency_key, reference,
@@ -668,7 +663,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       send(res, result.status === "success" ? 201 : 202, {
         transactionId, reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status),
         amountMinor: input.amountMinor, currency: "NGN", bankName: typeof input.bankName === "string" ? input.bankName : "Nigerian bank",
-        accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
+        accountName: recipient.accountName, bankName: recipient.bankName, accountNumberMasked: "******" + accountNumber.slice(-4),
         environment: "test", livePayoutsEnabled: false,
         message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
