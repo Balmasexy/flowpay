@@ -1,4 +1,4 @@
-import { createHash, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -538,7 +538,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       send(res, 400, { error: "INVALID_BANK_TRANSFER_DETAILS" }); return true;
     }
 
-    let recipient: { recipientCode: string; accountName: string };
+    let recipient: { recipientCode: string; accountName: string; bankName: string };
     try {
       recipient = await resolveRecipient(secret, accountNumber, bankCode);
     } catch (error) {
@@ -699,8 +699,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
       const result = await applyVerifiedStatus(pool, reference, verifiedData);
       send(res, result.status === "success" ? 201 : 202, {
         transactionId, reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status),
-        amountMinor: input.amountMinor, currency: "NGN", bankName: typeof input.bankName === "string" ? input.bankName : "Nigerian bank",
-        accountName: recipient.accountName, bankName: recipient.bankName, accountNumberMasked: "******" + accountNumber.slice(-4),
+        amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
+        accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
         environment: "test", livePayoutsEnabled: false,
         message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
