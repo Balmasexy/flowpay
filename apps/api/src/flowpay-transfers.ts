@@ -226,7 +226,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
-              AND customer.role = 'customer'
+              AND customer.role IN ('customer', 'super_admin')
               AND auth_user."emailVerified" = true
             LIMIT 1`,
           [input.accountNumber]
@@ -288,7 +288,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
-              AND customer.role = 'customer'
+              AND customer.role IN ('customer', 'super_admin')
               AND auth_user."emailVerified" = true
             LIMIT 1`,
           [input.recipientAccountNumber]
