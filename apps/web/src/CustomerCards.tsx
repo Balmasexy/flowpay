@@ -37,6 +37,7 @@ function parseCards(value: unknown): Card[] {
 
 export default function CustomerCards({ token }: { token: string }) {
   const [cards, setCards] = useState<Card[]>([]);
+  const [cardholderName, setCardholderName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
@@ -46,10 +47,12 @@ export default function CustomerCards({ token }: { token: string }) {
     let active = true;
     if (!token || !apiBase) {
       setCards([]);
+      setCardholderName(null);
       setError("Your authenticated cards service is not configured.");
       setLoading(false);
       return () => { active = false; };
     }
+    setCardholderName(null);
     setLoading(true);
     setError("");
     fetch(apiBase + "/customer/cards", {
@@ -64,12 +67,15 @@ export default function CustomerCards({ token }: { token: string }) {
       return data;
     }).then(data => {
       if (active) {
-        const payload = data && typeof data === "object" && "cards" in data ? data.cards : [];
-        setCards(parseCards(payload));
+        const responseBody = data && typeof data === "object" ? data as Record<string, unknown> : {};
+        setCardholderName(typeof responseBody.cardholderName === "string" && responseBody.cardholderName.trim()
+          ? responseBody.cardholderName.trim().slice(0, 100) : null);
+        setCards(parseCards(responseBody.cards));
       }
     }).catch(reason => {
       if (active) {
         setCards([]);
+        setCardholderName(null);
         setError(reason instanceof Error ? reason.message : "Unable to load cards.");
       }
     }).finally(() => { if (active) setLoading(false); });
@@ -81,7 +87,11 @@ export default function CustomerCards({ token }: { token: string }) {
       <div><h2>Cards</h2><p className="fp-muted">Your card records securely stored in FlowPay.</p></div>
       <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15}/> Refresh</button>
     </div>
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> Card creation, card-detail reveal, PIN changes and freeze/unfreeze actions are disabled until a verified card provider workflow is connected. Full card numbers and security codes are never shown here.</div>
+    <div className="fp-detail-list">
+      <div><span>Cardholder name</span><b>{cardholderName || "Not available on this profile"}</b></div>
+      <div><span>Card number</span><b>Available only after issuer-confirmed issuance</b></div>
+    </div>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> Cardholder name is read from your authenticated FlowPay registration profile. Card creation, full card-detail reveal, PIN changes and freeze/unfreeze actions remain unavailable until an approved card issuer is connected and confirms issuance. Full card numbers and security codes are never shown here.</div>
     {loading && <p className="fp-muted">Loading your card records…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
     {!loading && !error && cards.length === 0 && <div className="fp-empty"><CreditCard size={24}/><b>No card records yet</b><span>Your virtual or physical card will appear here after a verified card-issuing workflow creates it.</span></div>}
