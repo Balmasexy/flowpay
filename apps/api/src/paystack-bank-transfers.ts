@@ -745,6 +745,18 @@ export function createPaystackBankTransfersHandler(options: Options) {
       });
       const data = record(initiated.body.data);
       const status = safeStatus(data.status);
+      if (!initiated.ok && [400, 401, 403, 404, 422].includes(initiated.status)) {
+        await markFailedBeforeProviderAcceptance(
+          pool, reference,
+          "Paystack rejected the transfer request before accepting it. No FlowPay wallet debit was posted."
+        );
+        send(res, 202, {
+          transactionId, reference, status: "failed", final: true,
+          amountMinor: input.amountMinor, currency: "NGN", environment: "test",
+          message: "Paystack rejected this test transfer. No wallet debit was posted; review the bank and provider configuration."
+        });
+        return true;
+      }
       if (!initiated.ok || data.domain !== "test" || data.reference !== reference ||
           String(data.amount) !== input.amountMinor || data.currency !== "NGN") {
         await markUnknown(pool, reference, "Paystack did not return a matching transfer response.");
@@ -775,6 +787,46 @@ export function createPaystackBankTransfersHandler(options: Options) {
       return true;
     }
   };
+}
+
+async function markFailedBeforeProviderAcceptance(pool: Pool, reference: string, note: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const payout = await client.query<{ transaction_id: string }>(
+      `SELECT transaction_id FROM public.fp_paystack_bank_transfers
+        WHERE reference = $1 FOR UPDATE`,
+      [reference]
+    );
+    if (payout.rowCount !== 1) throw new Error("FLOWPAY_BANK_TRANSFER_NOT_FOUND");
+    const tx = await client.query<{ status: string }>(
+      "SELECT status FROM public.fp_ledger_transactions WHERE id = $1 FOR UPDATE",
+      [payout.rows[0].transaction_id]
+    );
+    if (tx.rowCount !== 1) throw new Error("FLOWPAY_LEDGER_TRANSACTION_NOT_FOUND");
+    if (tx.rows[0].status === "pending") {
+      const failed = await client.query(
+        "UPDATE public.fp_ledger_transactions SET status = 'failed' WHERE id = $1 AND status = 'pending'",
+        [payout.rows[0].transaction_id]
+      );
+      if (failed.rowCount !== 1) throw new Error("PAYOUT_LEDGER_FAIL_POST_FAILED");
+    } else if (tx.rows[0].status !== "failed") {
+      throw new Error("PAYOUT_LEDGER_STATE_REQUIRES_RECONCILIATION");
+    }
+    await client.query(
+      `UPDATE public.fp_paystack_bank_transfers
+          SET status = 'failed', provider_status = 'failed',
+              status_note = $2, verified_at = NOW(), updated_at = NOW()
+        WHERE transaction_id = $1`,
+      [payout.rows[0].transaction_id, note]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function markUnknown(pool: Pool, reference: string, note: string): Promise<void> {
