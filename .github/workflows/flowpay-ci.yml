@@ -64,6 +64,9 @@ jobs:
       - name: Test Paystack webhook verification and replay protection
         run: npm run test:paystack-webhook --prefix apps/api
 
+      - name: Test Paystack Nigerian bank directory and account resolution
+        run: npm run test:paystack-bank-lookup --prefix apps/api
+
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api
 
