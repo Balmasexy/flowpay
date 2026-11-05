@@ -257,19 +257,16 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       const initRoot = initData && typeof initData === "object" ? initData as Record<string, unknown> : {};
       if (!initResponse.ok) throw new Error(typeof initRoot.message === "string" ? initRoot.message : typeof initRoot.error === "string" ? initRoot.error : "Receipt upload could not be prepared.");
       const receiptId = typeof initRoot.receiptId === "string" ? initRoot.receiptId : "";
-      const uploadUrl = typeof initRoot.uploadUrl === "string" ? initRoot.uploadUrl : "";
-      const uploadHeaders = initRoot.uploadHeaders && typeof initRoot.uploadHeaders === "object" ? initRoot.uploadHeaders as Record<string, unknown> : {};
-      let safeUploadUrl = false;
-      try { const parsed = new URL(uploadUrl); safeUploadUrl = parsed.protocol === "https:" && parsed.hostname.endsWith(".r2.cloudflarestorage.com"); } catch { safeUploadUrl = false; }
-      if (!receiptId || !safeUploadUrl || uploadHeaders["Content-Type"] !== receiptFile.type) throw new Error("FlowPay returned an invalid private storage upload address.");
-      const uploadResponse = await fetch(uploadUrl, { method: "PUT", credentials: "omit", headers: { "Content-Type": receiptFile.type }, body: receiptFile });
-      if (!uploadResponse.ok) throw new Error("The receipt file could not be uploaded. Retry the submission.");
-      const completeResponse = await fetch(apiBase + "/customer/deposit-receipts/" + encodeURIComponent(receiptId) + "/complete", {
-        method: "POST", credentials: "omit", headers: { Authorization: "Bearer " + token }
+      const uploadPath = typeof initRoot.uploadPath === "string" ? initRoot.uploadPath : "";
+      if (!receiptId || uploadPath !== "/customer/deposit-receipts/" + receiptId + "/file") throw new Error("FlowPay returned an invalid private upload path.");
+      const uploadResponse = await fetch(apiBase + uploadPath, {
+        method: "PUT", credentials: "omit",
+        headers: { Authorization: "Bearer " + token, "Content-Type": receiptFile.type },
+        body: receiptFile
       });
-      const completeData: unknown = await completeResponse.json().catch(() => ({}));
-      const completeRoot = completeData && typeof completeData === "object" ? completeData as Record<string, unknown> : {};
-      if (!completeResponse.ok) throw new Error(typeof completeRoot.message === "string" ? completeRoot.message : typeof completeRoot.error === "string" ? completeRoot.error : "The uploaded receipt could not be confirmed. Retry or contact FlowPay support.");
+      const uploadData: unknown = await uploadResponse.json().catch(() => ({}));
+      const uploadRoot = uploadData && typeof uploadData === "object" ? uploadData as Record<string, unknown> : {};
+      if (!uploadResponse.ok) throw new Error(typeof uploadRoot.message === "string" ? uploadRoot.message : typeof uploadRoot.error === "string" ? uploadRoot.error : "The receipt file could not be uploaded. Retry the submission.");
       setReceiptMessage("Receipt uploaded and queued for review. Your wallet will only be credited after the funds are independently verified.");
       setReceiptAmount(""); setReceiptReference(""); setReceiptNote(""); setReceiptFile(null); setReceiptRequestId(null);
       setReceiptRefresh(value => value + 1);
