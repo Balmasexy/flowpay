@@ -8,7 +8,8 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test:face-verification": "tsx scripts/test-face-verification.ts",
-    "test:flutterwave-webhook": "tsx --test scripts/test-flutterwave-webhook.ts"
+    "test:flutterwave-webhook": "tsx --test scripts/test-flutterwave-webhook.ts",
+    "test:paystack-webhook": "tsx --test scripts/test-paystack-webhook.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
