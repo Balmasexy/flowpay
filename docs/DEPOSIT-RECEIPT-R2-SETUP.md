@@ -3,7 +3,7 @@
 ## What this adds
 
 - Customers can submit a manual NGN bank-transfer receipt from **Deposit / Add Money**.
-- File bytes go directly to a private Cloudflare R2 bucket using a five-minute presigned PUT URL. The R2 access key is never sent to the browser.
+- Customers upload to an authenticated FlowPay API `PUT` route. The API enforces the 5 MiB limit, content type and file signature, then forwards the validated bytes to a private Cloudflare R2 bucket using a short-lived presigned PUT request. R2 credentials and signed upload URLs are never sent to the browser.
 - Accepted files: JPEG, PNG, WEBP and PDF, maximum 5 MiB.
 - The API verifies the stored object's length, MIME type and file signature before moving it to the review queue.
 - Customer receipt history is private to the authenticated customer.
@@ -31,15 +31,9 @@ Set these variables on the **FlowPay API service in Render** after the bucket ex
 
 The server accepts either `R2_ENDPOINT` or `R2_ACCOUNT_ID`; the other four values are required. Restart/redeploy the API after saving the variables. Keep the credentials only in Render's encrypted environment-variable settings.
 
-## R2 CORS
+## Upload transport and CORS
 
-Configure the bucket's CORS policy to allow the exact FlowPay web origin (currently `https://flowpay-web-jx7i.onrender.com`) with:
-- Allowed method: `PUT`
-- Allowed header: `Content-Type`
-- Exposed header: `ETag`
-- Max age: `3600` seconds
-
-Add a separate exact origin only if the deployed web application actually uses it (for example, a confirmed custom domain). Do not use wildcard origins for authenticated customer uploads. The browser sends the content type that the server signed.
+The browser sends the receipt file to the authenticated FlowPay API, not directly to R2. The backend enforces the exact declared file size (maximum 5 MiB), checks the MIME type and file signature, then signs and performs the R2 `PUT` server-to-server. Consequently, **no browser-to-R2 CORS policy is required**. The FlowPay API's own CORS allowlist must include the deployed web origin and allow `PUT`, `Authorization` and `Content-Type` headers. Keep the R2 bucket private and do not enable public access or a public custom domain.
 
 ## Database migration
 
@@ -51,8 +45,8 @@ Do not apply this migration to production before the branch review, successful C
 
 Customer:
 - `GET /customer/deposit-receipts`
-- `POST /customer/deposit-receipts` — create a pending upload and return a five-minute presigned URL
-- `POST /customer/deposit-receipts/:id/complete` — verify uploaded bytes and submit for review
+- `POST /customer/deposit-receipts` — create a pending upload and return a customer-owned API upload path
+- `PUT /customer/deposit-receipts/:id/file` — upload bytes to FlowPay; the API validates and forwards them to R2, then submits the receipt for review
 - `GET /customer/deposit-receipts/:id/file` — return a short-lived private file URL for the owning customer
 
 Super Admin:
@@ -66,7 +60,7 @@ All routes require the existing Neon Auth JWT configuration. Admin routes additi
 
 1. Confirm `/health` and `/ready` on the target API.
 2. Apply migration 018 to Development and confirm there are no customer, wallet or ledger row-count changes.
-3. Configure the private R2 bucket, scoped key, exact-origin CORS and Render environment variables.
+3. Configure the private R2 bucket, scoped key and Render environment variables; verify the FlowPay API CORS allowlist includes the web app origin and `PUT`.
 4. Run API typecheck and `npm run test:deposit-receipts --prefix apps/api`, then the full CI workflow.
 5. Test customer upload, wrong-file rejection, missing-object rejection, ownership checks, customer history, Super Admin review, replayed approval, bank-reference uniqueness and balanced ledger entries.
 6. Verify uploaded objects are not publicly reachable and signed links expire.
