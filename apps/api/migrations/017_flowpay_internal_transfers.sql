@@ -15,6 +15,9 @@ AS $$
 DECLARE
   candidate TEXT;
 BEGIN
+  IF NEW.role <> 'customer' THEN
+    RETURN NEW;
+  END IF;
   LOOP
     candidate := (100000000000::BIGINT + floor(random() * 900000000000)::BIGINT)::TEXT;
     BEGIN
@@ -45,7 +48,7 @@ DECLARE
   candidate TEXT;
   assigned BOOLEAN;
 BEGIN
-  FOR customer IN SELECT id FROM public.fp_users ORDER BY id LOOP
+  FOR customer IN SELECT id FROM public.fp_users WHERE role = 'customer' ORDER BY id LOOP
     IF EXISTS (SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = customer.id) THEN
       CONTINUE;
     END IF;
