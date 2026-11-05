@@ -550,7 +550,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       const prior = await pool.query<StoredPayout>(
         `SELECT transaction_id, user_id, account_id, reference, recipient_code,
                 transfer_code, provider_transfer_id, amount_minor::text AS amount_minor,
-                currency, bank_code, bank_name, account_name, account_number_last4,
+                currency, bank_code, bank_name, account_name, account_number_last4, account_fingerprint,
                 status, provider_status
            FROM public.fp_paystack_bank_transfers
           WHERE idempotency_key = $1
@@ -634,7 +634,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       const prior = await client.query<StoredPayout>(
         `SELECT transaction_id, user_id, account_id, reference, recipient_code,
                 transfer_code, provider_transfer_id, amount_minor::text AS amount_minor,
-                currency, bank_code, bank_name, account_name, account_number_last4,
+                currency, bank_code, bank_name, account_name, account_number_last4, account_fingerprint,
                 status, provider_status
            FROM public.fp_paystack_bank_transfers
           WHERE idempotency_key = $1
@@ -709,8 +709,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
         `INSERT INTO public.fp_paystack_bank_transfers
            (transaction_id, user_id, account_id, idempotency_key, reference,
             recipient_code, amount_minor, currency, bank_code, bank_name,
-            account_name, account_number_last4, status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'NGN',$8,$9,$10,$11,'initiating')`,
+            account_name, account_number_last4, account_fingerprint, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'NGN',$8,$9,$10,$11,$12,'initiating')`,
         [transactionId, identity.id, walletId, dbKey, reference, recipient.recipientCode,
           input.amountMinor, bankCode, bankName, recipient.accountName, accountNumber.slice(-4),
           beneficiaryFingerprint(secret, accountNumber)]
