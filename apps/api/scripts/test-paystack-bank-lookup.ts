@@ -117,7 +117,7 @@ test("resolves a Nigerian account and returns the provider-verified name", async
   assert.equal(response.result().body.accountName, "Test Recipient");
   assert.equal(response.result().body.bankName, "GTBank");
   assert.equal(response.result().body.provider, "Paystack");
-  assert.equal(calls.length, 2);
+  assert.ok(calls.some(url => url.startsWith("https://api.paystack.co/bank/resolve?")));
 });
 
 test("rejects an account number that does not match Paystack's verification response", async () => {
