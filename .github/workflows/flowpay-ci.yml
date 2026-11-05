@@ -97,8 +97,14 @@ jobs:
             sleep 1
           done
           if [ "$ready" -ne 1 ]; then
+            echo "API health endpoint did not become available; final diagnostic probe follows." >&2
+            curl --verbose --connect-timeout 2 --max-time 5 http://127.0.0.1:3000/health || true
+            echo "Listening sockets:" >&2
+            ss -ltnp || true
+            echo "API process:" >&2
+            ps -o pid,ppid,stat,cmd -p "$api_pid" || true
+            echo "API startup log:" >&2
             cat "$RUNNER_TEMP/flowpay-api.log"
-            echo "API health endpoint did not become available" >&2
             exit 1
           fi
           node --input-type=module -e '
