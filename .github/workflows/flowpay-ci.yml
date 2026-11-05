@@ -6,6 +6,7 @@ on:
       - main
       - feat/api-foundation
       - feat/customer-banking-routes-no-sidebar
+      - feat/to-bank-paystack-sandbox-payouts
     paths:
       - "apps/**"
       - ".github/workflows/**"
