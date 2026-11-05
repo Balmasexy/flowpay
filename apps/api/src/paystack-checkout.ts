@@ -1,4 +1,4 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -91,7 +91,7 @@ export function createPaystackCheckoutHandler(options: Options) {
     if (amountMinor < min || amountMinor > max) { send(res, 400, { error: "DEPOSIT_AMOUNT_OUT_OF_RANGE", minimumMinor: min, maximumMinor: max }); return true; }
 
     const dbKey = `paystack-deposit:${identity.id}:${idempotencyKey}`;
-    const reference = `flowpay_ps_${randomUUID().replace(/-/g, "")}`;
+    const reference = `flowpay-ps-${randomUUID().replace(/-/g, "")}`;
     let transactionId = "";
     let existingUrl: string | null = null;
     let created = false;
