@@ -5,6 +5,7 @@ import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
+import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -28,6 +29,7 @@ const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issu
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
+const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -50,9 +52,10 @@ const server = createServer(async (req, res) => {
   if (await flutterwaveWebhookHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
   if (await supportRequestsHandler(req, res)) return;
+  if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
