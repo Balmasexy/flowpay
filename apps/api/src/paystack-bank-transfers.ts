@@ -305,34 +305,71 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
         return { status: "unknown", duplicate: false };
       }
       const reversalKey = `paystack-bank-reversal:${payout.transaction_id}`;
-      const reversal = await client.query<{ id: string }>(
-        `INSERT INTO public.fp_ledger_transactions
-           (idempotency_key, transaction_type, status, description)
-         VALUES ($1, 'paystack_bank_transfer_reversal', 'pending', 'Paystack NGN bank payout reversal')
-         ON CONFLICT (idempotency_key) DO NOTHING
-         RETURNING id`,
+      const priorReversal = await client.query<{ id: string; status: string }>(
+        `SELECT id, status FROM public.fp_ledger_transactions
+          WHERE idempotency_key = $1 FOR UPDATE`,
         [reversalKey]
       );
-      if (reversal.rowCount === 1) {
-        const clearing = await client.query<{ id: string }>(
-          `SELECT id FROM public.fp_accounts
-            WHERE account_type = 'system' AND currency = 'NGN'
-              AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
-            FOR UPDATE`
+      let reversalId: string;
+      const duplicateReversal = priorReversal.rowCount === 1;
+      if (duplicateReversal) {
+        reversalId = priorReversal.rows[0].id;
+      } else {
+        const createdReversal = await client.query<{ id: string }>(
+          `INSERT INTO public.fp_ledger_transactions
+             (idempotency_key, transaction_type, status, description)
+           VALUES ($1, 'paystack_bank_transfer_reversal', 'pending', 'Paystack NGN bank payout reversal')
+           RETURNING id`,
+          [reversalKey]
         );
-        if (clearing.rowCount !== 1) throw new Error("PAYSTACK_CLEARING_ACCOUNT_NOT_CONFIGURED");
+        reversalId = createdReversal.rows[0].id;
+      }
+
+      const clearing = await client.query<{ id: string }>(
+        `SELECT id FROM public.fp_accounts
+          WHERE account_type = 'system' AND currency = 'NGN'
+            AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
+          FOR UPDATE`
+      );
+      if (clearing.rowCount !== 1) throw new Error("PAYSTACK_CLEARING_ACCOUNT_NOT_CONFIGURED");
+      const reversalEntries = await client.query<{
+        account_id: string; amount_minor: string; entry_count: number;
+      }>(
+        `SELECT account_id::text AS account_id, SUM(amount_minor)::text AS amount_minor,
+                COUNT(*)::int AS entry_count
+           FROM public.fp_ledger_entries WHERE transaction_id = $1
+          GROUP BY account_id`,
+        [reversalId]
+      );
+      if (reversalEntries.rowCount === 0) {
+        if (priorReversal.rowCount === 1 && priorReversal.rows[0].status !== "pending") {
+          throw new Error("PAYOUT_REVERSAL_ENTRIES_MISSING");
+        }
         await client.query(
           `INSERT INTO public.fp_ledger_entries (transaction_id, account_id, amount_minor, currency)
            VALUES ($1, $2, $3, 'NGN'), ($1, $4, $5, 'NGN')`,
-          [reversal.rows[0].id, payout.account_id, payout.amount_minor, clearing.rows[0].id, (-BigInt(payout.amount_minor)).toString()]
+          [reversalId, payout.account_id, payout.amount_minor, clearing.rows[0].id, (-BigInt(payout.amount_minor)).toString()]
         );
-        const posted = await client.query(
+      } else {
+        const customerEntry = reversalEntries.rows.find(row => row.account_id === payout.account_id);
+        const clearingEntry = reversalEntries.rows.find(row => row.account_id === clearing.rows[0].id);
+        if (reversalEntries.rowCount !== 2 || !customerEntry || !clearingEntry ||
+            customerEntry.entry_count !== 1 || clearingEntry.entry_count !== 1 ||
+            customerEntry.amount_minor !== payout.amount_minor ||
+            clearingEntry.amount_minor !== (-BigInt(payout.amount_minor)).toString()) {
+          throw new Error("PAYOUT_REVERSAL_LEDGER_REQUIRES_RECONCILIATION");
+        }
+      }
+      if (priorReversal.rowCount === 0 || priorReversal.rows[0].status === "pending") {
+        const postedReversal = await client.query(
           `UPDATE public.fp_ledger_transactions
               SET status = 'posted', posted_at = NOW()
             WHERE id = $1 AND status = 'pending'`,
-          [reversal.rows[0].id]
+          [reversalId]
         );
-        if (posted.rowCount !== 1) throw new Error("PAYOUT_REVERSAL_POST_FAILED");
+        if (postedReversal.rowCount !== 1) throw new Error("PAYOUT_REVERSAL_POST_FAILED");
+      } else if (priorReversal.rows[0].status !== "posted") {
+        throw new Error("PAYOUT_REVERSAL_STATE_REQUIRES_RECONCILIATION");
       }
       await client.query(
         `UPDATE public.fp_paystack_bank_transfers
@@ -345,7 +382,7 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
         [payout.transaction_id, providerTransferId, transferCode]
       );
       await client.query("COMMIT");
-      return { status: "reversed", duplicate: reversal.rowCount === 0 };
+      return { status: "reversed", duplicate: duplicateReversal };
     }
 
     if (["failed", "blocked", "abandoned", "rejected"].includes(providerStatus)) {
