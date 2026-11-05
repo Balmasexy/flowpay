@@ -10,6 +10,7 @@ import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
+import { createPaystackBankTransfersHandler } from "./paystack-bank-transfers.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 
@@ -40,6 +41,7 @@ const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, 
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
+const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, audience });
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
 
@@ -70,6 +72,7 @@ const server = createServer(async (req, res) => {
   if (await supportRequestsHandler(req, res)) return;
   if (await customerAiHandler(req, res)) return;
   if (await flowPayTransfersHandler(req, res)) return;
+  if (await paystackBankTransfersHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
@@ -199,11 +202,35 @@ const server = createServer(async (req, res) => {
            JOIN public.fp_ledger_transactions AS t ON t.id = d.transaction_id
           WHERE d.sender_user_id = $1
           ORDER BY created_at DESC LIMIT 100`, [identity.rows[0].id]);
-      send(res, 200, { transfers: result.rows.map(row => ({
+      const payoutSchema = await pool.query<{ available: boolean }>(
+        "SELECT to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS available"
+      );
+      const bankPayoutsEnabled = payoutSchema.rows[0]?.available === true &&
+        process.env.PAYSTACK_ENVIRONMENT === "test" &&
+        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
+        process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+      const bankPayoutRows = payoutSchema.rows[0]?.available === true
+        ? await pool.query(
+            `SELECT t.id, t.transaction_type,
+                    CASE WHEN d.status = 'success' THEN 'posted'
+                         WHEN d.status IN ('failed','blocked','abandoned','rejected') THEN 'failed'
+                         ELSE d.status END AS status,
+                    d.created_at, d.account_number_last4 AS destination_account
+               FROM public.fp_paystack_bank_transfers AS d
+               JOIN public.fp_ledger_transactions AS t ON t.id = d.transaction_id
+              WHERE d.user_id = $1
+              ORDER BY d.created_at DESC LIMIT 100`,
+            [identity.rows[0].id]
+          )
+        : { rows: [] as Array<Record<string, unknown>> };
+      const transfers = [...result.rows, ...bankPayoutRows.rows]
+        .sort((a, b) => new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime())
+        .slice(0, 100);
+      send(res, 200, { transfers: transfers.map(row => ({
         id: row.id, type: row.transaction_type, status: row.status,
         createdAt: row.created_at,
         destinationAccountMasked: "******" + String(row.destination_account).slice(-4)
-      })), simulationOnly: false, liveTransfersEnabled: false, internalWalletTransfersEnabled: true, bankPayoutsEnabled: false });
+      })), simulationOnly: false, liveTransfersEnabled: false, internalWalletTransfersEnabled: true, bankPayoutsEnabled, bankPayoutEnvironment: "test" });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay money sent request failed:", error instanceof Error ? error.message : "unknown money sent error");
