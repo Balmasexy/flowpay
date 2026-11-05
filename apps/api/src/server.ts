@@ -415,6 +415,15 @@ const server = createServer(async (req, res) => {
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
+      await pool.query(
+        `INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
+         SELECT $1, nextval('public.fp_customer_account_number_seq')::TEXT
+         WHERE NOT EXISTS (
+           SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = $1
+         )
+         ON CONFLICT DO NOTHING`,
+        [identity.rows[0].id]
+      );
       const [accounts, flowpayAccount] = await Promise.all([
         pool.query(
           `SELECT currency, status, created_at
