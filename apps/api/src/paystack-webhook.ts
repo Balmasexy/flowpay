@@ -35,14 +35,14 @@ async function readRaw(req: IncomingMessage): Promise<Buffer> {
 function amountMinor(value: unknown): string | null {
   if (typeof value !== "number" && typeof value !== "string") return null;
   const raw = String(value);
-  if (!/^\\d{1,15}$/.test(raw)) return null;
+  if (!/^\d{1,15}$/.test(raw)) return null;
   const number = Number(raw);
   return Number.isSafeInteger(number) && number > 0 ? raw : null;
 }
 
 function providerId(value: unknown): string | null {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return String(value);
-  if (typeof value === "string" && /^\\d{1,30}$/.test(value)) return value;
+  if (typeof value === "string" && /^\d{1,30}$/.test(value)) return value;
   return null;
 }
 
@@ -73,7 +73,7 @@ function balancedDepositLedger(
 
 export function createPaystackWebhookHandler({ pool }: Options) {
   return async function handlePaystackWebhook(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\\/+$/, "") || "/";
+    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/webhooks/paystack") return false;
 
     const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
