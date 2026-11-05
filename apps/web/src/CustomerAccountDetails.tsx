@@ -3,6 +3,7 @@ import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
+  flowpayAccountNumber: string | null;
   walletAccounts: WalletAccount[];
   virtualBankAccount: { assigned: boolean; accountNumber: string | null; bankName: string | null; accountName: string | null };
   message: string;
@@ -28,6 +29,7 @@ function parseAccountDetails(value: unknown): AccountDetails | null {
   const accountName = optionalText(virtual.accountName, 120);
   if (virtual.assigned && (!accountNumber || !bankName || !accountName)) return null;
   return {
+    flowpayAccountNumber: optionalText(body.flowpayAccountNumber, 12),
     walletAccounts,
     virtualBankAccount: { assigned: virtual.assigned, accountNumber, bankName, accountName },
     message: typeof body.message === "string" ? body.message.slice(0, 300) : "Account information is read-only.",
@@ -83,6 +85,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
     <p className="fp-muted">Your FlowPay wallet ledger account and any verified virtual bank account assignment.</p>
     {loading ? <p className="fp-overview-muted" role="status">Loading your account records…</p> : error ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
       <div className="fp-detail-list">
+        <div><span>FlowPay account number</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.flowpayAccountNumber || "Not yet assigned"}</b>{data?.flowpayAccountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)}><Copy size={14}/> Copy</button>}</span></div>
         <div><span>Virtual bank account number</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.assigned ? data.virtualBankAccount.accountNumber : "Not yet assigned"}</b>{data?.virtualBankAccount.assigned && data.virtualBankAccount.accountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("Account number", data.virtualBankAccount.accountNumber)}><Copy size={14}/> Copy</button>}</span></div>
         <div><span>Bank / provider</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.bankName || "Not yet assigned"}</b>{data?.virtualBankAccount.bankName && <button type="button" className="fp-outline" onClick={() => void copyValue("Bank name", data.virtualBankAccount.bankName)}><Copy size={14}/> Copy</button>}</span></div>
         <div><span>Account name</span><span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><b>{data?.virtualBankAccount.accountName || "Not yet linked"}</b>{data?.virtualBankAccount.accountName && <button type="button" className="fp-outline" onClick={() => void copyValue("Account name", data.virtualBankAccount.accountName)}><Copy size={14}/> Copy</button>}</span></div>

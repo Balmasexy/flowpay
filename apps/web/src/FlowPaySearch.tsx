@@ -4,9 +4,10 @@ import { Search, ArrowRight, Compass } from "lucide-react";
 type Props = { go: (path: string) => void };
 const entries = [
   { label: "Overview", path: "/dashboard", description: "Your FlowPay dashboard and account summary", terms: "home dashboard balance" },
-  { label: "Money Received", path: "/money-received", description: "View recorded incoming payments", terms: "received deposits incoming" },
-  { label: "Money Sent", path: "/money-sent", description: "Review recorded outgoing activity", terms: "sent outgoing transfers" },
-  { label: "Transfers", path: "/transfers", description: "Prepare a transfer preview", terms: "bank transfer beneficiary" },
+  { label: "Deposit / Add Money", path: "/money-received", description: "Add money and review verified wallet deposits", terms: "received deposits funding add money paystack flutterwave" },
+  { label: "Transfer History", path: "/money-sent", description: "Review your outgoing wallet transfers", terms: "sent outgoing transfers history" },
+  { label: "To FlowPay", path: "/transfers?mode=flowpay", description: "Send money to another FlowPay wallet", terms: "internal wallet account number customer transfer" },
+  { label: "To Bank", path: "/transfers?mode=bank", description: "Verify a Nigerian bank recipient and review a transfer", terms: "bank transfer beneficiary account number bank search" },
   { label: "Cards", path: "/cards", description: "View linked card records", terms: "debit virtual card card issuing provider" },
   { label: "Activity", path: "/activity", description: "Review account activity", terms: "history transactions statement" },
   { label: "Security", path: "/security", description: "Review available account security information", terms: "passkey device security" },
@@ -23,7 +24,7 @@ const entries = [
   { label: "Fixed Savings", path: "/fixed-savings", description: "Plan a possible fixed-savings term", terms: "lock maturity term" },
   { label: "Spend & Save", path: "/spend-save", description: "Plan monthly spending and savings", terms: "budget income expenses" },
   { label: "Customer Profile", path: "/profile", description: "View and update your customer profile", terms: "personal details photo avatar" },
-  { label: "View Account Number", path: "/account-number", description: "Check verified account assignment status", terms: "bank nuban virtual account dedicated account number" },
+  { label: "View Account Number", path: "/account-number", description: "Copy your 12-digit FlowPay transfer account number and check virtual bank assignment", terms: "FlowPay internal account number bank nuban virtual account" },
   { label: "Documents", path: "/documents", description: "View required account documents", terms: "nin bvn identity statement" },
   { label: "Invitations", path: "/invitations", description: "Referral services availability", terms: "invite referral friends" },
   { label: "More", path: "/more", description: "Open additional customer services and account shortcuts", terms: "more services shortcuts" },

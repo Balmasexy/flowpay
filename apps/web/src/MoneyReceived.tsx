@@ -239,7 +239,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
 
   return <section className="fp-panel fp-detail-panel">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div><h2>Money Received</h2><p className="fp-muted">Review your provider deposits and verified wallet credits.</p></div>
+      <div><h2>Deposit / Add Money</h2><p className="fp-muted">Add money to your FlowPay wallet and review verified provider deposits.</p></div>
       <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading || returnLoading}><RefreshCw size={15}/> Refresh</button>
     </div>
 

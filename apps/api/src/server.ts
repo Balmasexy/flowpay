@@ -9,6 +9,7 @@ import { createPaystackWebhookHandler } from "./paystack-webhook.js";
 import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
+import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -36,6 +37,7 @@ const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
 const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, jwks, issuer, audience });
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
+const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -61,10 +63,11 @@ const server = createServer(async (req, res) => {
   if (await paystackCheckoutHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
   if (await supportRequestsHandler(req, res)) return;
+  if (await flowPayTransfersHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -176,19 +179,25 @@ const server = createServer(async (req, res) => {
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
       const result = await pool.query(
-        `SELECT DISTINCT t.id, t.transaction_type, t.status, t.created_at,
+        `SELECT t.id, t.transaction_type, t.status, t.created_at,
                 d.destination_account
            FROM public.fp_simulated_transfer_details AS d
            JOIN public.fp_ledger_transactions AS t ON t.id = d.transaction_id
            JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
            JOIN public.fp_accounts AS a ON a.id = e.account_id
           WHERE a.user_id = $1 AND a.account_type = 'customer'
-          ORDER BY t.created_at DESC LIMIT 100`, [identity.rows[0].id]);
+          UNION ALL
+         SELECT t.id, t.transaction_type, t.status, t.created_at,
+                d.recipient_account_number AS destination_account
+           FROM public.fp_internal_transfer_details AS d
+           JOIN public.fp_ledger_transactions AS t ON t.id = d.transaction_id
+          WHERE d.sender_user_id = $1
+          ORDER BY created_at DESC LIMIT 100`, [identity.rows[0].id]);
       send(res, 200, { transfers: result.rows.map(row => ({
         id: row.id, type: row.transaction_type, status: row.status,
         createdAt: row.created_at,
         destinationAccountMasked: "******" + String(row.destination_account).slice(-4)
-      })), simulationOnly: true, liveTransfersEnabled: false });
+      })), simulationOnly: false, liveTransfersEnabled: false, internalWalletTransfersEnabled: true, bankPayoutsEnabled: false });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay money sent request failed:", error instanceof Error ? error.message : "unknown money sent error");
@@ -406,17 +415,32 @@ const server = createServer(async (req, res) => {
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
       if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
-      const accounts = await pool.query(
-        `SELECT currency, status, created_at
-           FROM public.fp_accounts
-          WHERE user_id = $1 AND account_type = 'customer'
-          ORDER BY currency, created_at`, [identity.rows[0].id]);
+      await pool.query(
+        `INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
+         SELECT $1, nextval('public.fp_customer_account_number_seq')::TEXT
+         WHERE NOT EXISTS (
+           SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = $1
+         )
+         ON CONFLICT DO NOTHING`,
+        [identity.rows[0].id]
+      );
+      const [accounts, flowpayAccount] = await Promise.all([
+        pool.query(
+          `SELECT currency, status, created_at
+             FROM public.fp_accounts
+            WHERE user_id = $1 AND account_type = 'customer'
+            ORDER BY currency, created_at`, [identity.rows[0].id]),
+        pool.query(
+          `SELECT account_number FROM public.fp_customer_account_numbers
+            WHERE user_id = $1 LIMIT 1`, [identity.rows[0].id])
+      ]);
       send(res, 200, {
         walletAccounts: accounts.rows.map(row => ({
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
+        flowpayAccountNumber: flowpayAccount.rows[0]?.account_number?.trim() ?? null,
         virtualBankAccount: { assigned: false, accountNumber: null, bankName: null, accountName: null },
-        message: "Wallet ledger accounts are not bank account numbers. A virtual bank account will appear only after a verified provider assignment is recorded."
+        message: "Your FlowPay account number is for wallet-to-wallet transfers. It is not a provider-issued virtual bank account number."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }

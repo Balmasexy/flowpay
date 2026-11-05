@@ -36,8 +36,8 @@ type Route = {
 const routes: Route[] = [
   { path: "/dashboard", label: "Overview", icon: Home, group: "main" },
   { path: "/search", label: "Search", icon: Search, group: "main" },
-  { path: "/money-received", label: "Money Received", icon: ArrowDownLeft, group: "main" },
-  { path: "/money-sent", label: "Money Sent", icon: ArrowUpRight, group: "main" },
+  { path: "/money-received", label: "Deposit / Add Money", icon: ArrowDownLeft, group: "main" },
+  { path: "/money-sent", label: "Transfer History", icon: ArrowUpRight, group: "main" },
   { path: "/transfers", label: "Transfers", icon: ArrowLeftRight, group: "main" },
   { path: "/cards", label: "Cards", icon: CreditCard, group: "main" },
   { path: "/activity", label: "Activity", icon: Activity, group: "main" },
@@ -69,6 +69,7 @@ function routeFor(path: string) {
 
 export default function App() {
   const [path, setPath] = useState(() => window.location.pathname);
+  const [query, setQuery] = useState(() => window.location.search);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
@@ -100,7 +101,22 @@ export default function App() {
   }, [authSession.data?.session?.token, authSession.data?.user?.id]);
 
   useEffect(() => {
-    const onPop = () => setPath(window.location.pathname);
+    const token = authSession.data?.session?.token;
+    const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
+    const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
+    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
+    const controller = new AbortController();
+    void fetch(apiBase + "/customer/account-details", {
+      method: "GET",
+      credentials: "omit",
+      signal: controller.signal,
+      headers: { Authorization: "Bearer " + token }
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+
+  useEffect(() => {
+    const onPop = () => { setPath(window.location.pathname); setQuery(window.location.search); };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -111,8 +127,12 @@ export default function App() {
     activeItem?.scrollIntoView({ block: "nearest" });
   }, [path]);
   const go = (next: string) => {
-    if (next !== window.location.pathname) window.history.pushState({}, "", next);
-    setPath(next);
+    const target = new URL(next, window.location.origin);
+    const nextPath = target.pathname;
+    const nextQuery = target.search;
+    if (nextPath !== window.location.pathname || nextQuery !== window.location.search) window.history.pushState({}, "", nextPath + nextQuery);
+    setPath(nextPath);
+    setQuery(nextQuery);
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: "auto" });
   };
@@ -172,7 +192,7 @@ export default function App() {
           ) : servicePage ? (
             <ServicePreview path={path}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
@@ -204,9 +224,9 @@ export default function App() {
 function pageDescription(path: string) {
   const descriptions: Record<string,string> = {
     "/search":"Search your FlowPay account and available services.",
-    "/money-received":"Review incoming money and verified credits.",
+    "/money-received":"Add money and review verified wallet deposits.",
     "/payment-return/paystack":"Check the verified status of your Paystack test deposit.",
-    "/money-sent":"Review outgoing money and verified debits.",
+    "/money-sent":"Review your recorded outgoing transfer history.",
     "/bulk-payments":"Bulk payment tools are restricted until approved business services are connected.",
     "/bulk-verification":"Customer verification tools require approved verification services.",
     "/account-number":"View your assigned FlowPay account number and bank assignment.",
@@ -216,7 +236,7 @@ function pageDescription(path: string) {
     "/spend-save":"Manage spend-and-save goals.",
     "/invitations":"Invite people to FlowPay when referral services are available.",
     "/more":"More FlowPay account services.",
-    "/transfers":"Send money and manage transfer requests.",
+    "/transfers":"Send money to another FlowPay wallet or a Nigerian bank account.",
     "/cards":"Manage your virtual and physical card services.",
     "/activity":"Search and review your account transaction history.",
     "/airtime":"Recharge MTN, Airtel, Glo and 9mobile numbers.",
@@ -233,7 +253,7 @@ function pageDescription(path: string) {
   return descriptions[path] ?? "Manage your FlowPay account.";
 }
 
-function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};token:string;onPhotoChange:(photo:string|null)=>void}) {
+function RouteContent({path,go,user,token,onPhotoChange,transferMode}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};token:string;onPhotoChange:(photo:string|null)=>void;transferMode:"flowpay"|"bank"}) {
   if (path === "/search") return <FlowPaySearch go={go}/>;
   if (path === "/money-received") return <MoneyReceived token={token}/>;
   if (path === "/payment-return/paystack") return <MoneyReceived token={token} paymentReturn/>;
@@ -245,7 +265,7 @@ function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:s
   if (path === "/bulk-payments" || path === "/bulk-verification") return <section className="fp-panel fp-detail-panel"><h2>{routeFor(path).label}</h2><p className="fp-muted">{pageDescription(path)}</p><div className="fp-preview-warning"><ShieldCheck size={17}/> This section is visible for navigation continuity, but the required provider or approved backend workflow is not connected. No payments, verification requests or account changes can be submitted.</div></section>;
   if (path === "/profile") return <CustomerProfile go={go} user={user} onPhotoChange={onPhotoChange}/>;
   if (path === "/documents") return <DocumentsPage token={token} go={go}/>;
-  if (path === "/transfers") return <TransfersPage token={token}/>;
+  if (path === "/transfers") return <TransfersPage token={token} initialMode={transferMode}/>;
   if (path === "/cards") return <CustomerCards token={token}/>;
   if (path === "/activity") return <CustomerActivity token={token}/>;
   if (path === "/savings") return <SavingsPage mode="savings"/>;

@@ -1,180 +1,430 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeftRight, Building2, Clock3, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import {
+  ArrowLeftRight, Building2, CheckCircle2, Clock3, RefreshCw, Search,
+  ShieldCheck, Wallet
+} from "lucide-react";
 
+type Mode = "flowpay" | "bank";
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type TransferRecord = { id: string; type: string; status: string; createdAt: string; destinationAccountMasked: string };
-type Preview = { destination: string; amount: string; currency: string; bankName: string; accountName: string };
 type Bank = { code: string; name: string };
+type LookupState = "idle" | "loading" | "verified" | "failed";
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 function isWalletAccount(value: unknown): value is WalletAccount {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
+  const item = asRecord(value);
   return typeof item.currency === "string" && /^[A-Z]{3}$/.test(item.currency)
-    && typeof item.status === "string" && item.status.length <= 40
-    && typeof item.createdAt === "string" && Number.isFinite(Date.parse(item.createdAt));
+    && typeof item.status === "string" && typeof item.createdAt === "string"
+    && Number.isFinite(Date.parse(item.createdAt));
 }
-
 function isTransferRecord(value: unknown): value is TransferRecord {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Record<string, unknown>;
-  return typeof item.id === "string" && item.id.length > 0 && item.id.length <= 160
-    && typeof item.type === "string" && item.type.length <= 80
-    && typeof item.status === "string" && item.status.length <= 40
-    && typeof item.createdAt === "string" && Number.isFinite(Date.parse(item.createdAt))
-    && typeof item.destinationAccountMasked === "string" && item.destinationAccountMasked.length <= 80;
+  const item = asRecord(value);
+  return typeof item.id === "string" && !!item.id && typeof item.type === "string"
+    && typeof item.status === "string" && typeof item.createdAt === "string"
+    && Number.isFinite(Date.parse(item.createdAt))
+    && typeof item.destinationAccountMasked === "string";
+}
+function amountToMinor(value: string): string | null {
+  const match = /^(0|[1-9]\d{0,11})(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return null;
+  const minor = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
+  return minor > 0n && minor <= BigInt(Number.MAX_SAFE_INTEGER) ? minor.toString() : null;
+}
+function formatAmount(minor: string, currency = "NGN") {
+  const amount = Number(minor) / 100;
+  try { return new Intl.NumberFormat("en-NG", { style: "currency", currency }).format(amount); }
+  catch { return currency + " " + amount.toFixed(2); }
+}
+function dateLabel(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
+}
+function apiAddress() {
+  return String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 }
 
-export default function TransfersPage({ token }: { token: string }) {
+export default function TransfersPage({ token, initialMode = "flowpay" }: { token: string; initialMode?: Mode }) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [wallets, setWallets] = useState<WalletAccount[]>([]);
   const [history, setHistory] = useState<TransferRecord[]>([]);
-  const [destination, setDestination] = useState("");
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [bankCode, setBankCode] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "verified" | "failed">("idle");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("NGN");
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [flowpayAccountNumber, setFlowpayAccountNumber] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [pageError, setPageError] = useState("");
+
+  const [recipientNumber, setRecipientNumber] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientCanTransfer, setRecipientCanTransfer] = useState(false);
+  const [recipientLookup, setRecipientLookup] = useState<LookupState>("idle");
+
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [banksLoading, setBanksLoading] = useState(true);
+  const [banksError, setBanksError] = useState("");
+  const [bankSearch, setBankSearch] = useState("");
+  const [bankCode, setBankCode] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountName, setBankAccountName] = useState("");
+  const [bankLookup, setBankLookup] = useState<LookupState>("idle");
+
+  const [amount, setAmount] = useState("");
+  const [transactionPin, setTransactionPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinSet, setPinSet] = useState(false);
+  const [pinStatusLoading, setPinStatusLoading] = useState(true);
+  const [pinSetupBusy, setPinSetupBusy] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferError, setTransferError] = useState("");
+  const [transferResult, setTransferResult] = useState<{ reference: string; amountMinor: string; recipientName: string } | null>(null);
+  const [bankPreview, setBankPreview] = useState<{ bankName: string; accountName: string; accountNumber: string; amountMinor: string } | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+
+  useEffect(() => { setMode(initialMode); }, [initialMode]);
 
   const load = useCallback(async () => {
     if (!token || token.split(".").length !== 3) {
-      setError("Your secure session is not ready. Sign in again and retry."); setLoading(false); return;
+      setPageError("Your secure session is not ready. Sign in again and retry.");
+      setLoading(false);
+      return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-    if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
-    setLoading(true); setError("");
+    const apiBase = apiAddress();
+    if (!apiBase) {
+      setPageError("FlowPay API address is not configured.");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setPageError("");
     try {
       const headers = { Authorization: "Bearer " + token };
-      const [accountResponse, historyResponse] = await Promise.all([
+      const [accountResponse, historyResponse, pinResponse] = await Promise.all([
         fetch(apiBase + "/customer/account-details", { method: "GET", credentials: "omit", headers }),
-        fetch(apiBase + "/customer/money-sent", { method: "GET", credentials: "omit", headers })
+        fetch(apiBase + "/customer/money-sent", { method: "GET", credentials: "omit", headers }),
+        fetch(apiBase + "/customer/transaction-pin/status", { method: "GET", credentials: "omit", headers })
       ]);
-      const [accountBody, historyBody] = await Promise.all([
-        accountResponse.json().catch(() => ({})), historyResponse.json().catch(() => ({}))
+      const [accountBody, historyBody, pinBody] = await Promise.all([
+        accountResponse.json().catch(() => ({})),
+        historyResponse.json().catch(() => ({})),
+        pinResponse.json().catch(() => ({}))
       ]);
-      if (!accountResponse.ok) throw new Error(typeof accountBody.error === "string" ? accountBody.error : "Unable to load your wallet accounts.");
-      if (!historyResponse.ok) throw new Error(typeof historyBody.error === "string" ? historyBody.error : "Unable to load transfer history.");
-      const accountList: WalletAccount[] = Array.isArray(accountBody.walletAccounts) ? (accountBody.walletAccounts as unknown[]).filter(isWalletAccount) : [];
-      const transferList: TransferRecord[] = Array.isArray(historyBody.transfers) ? (historyBody.transfers as unknown[]).filter(isTransferRecord) : [];
+      if (!accountResponse.ok) throw new Error(typeof accountBody.error === "string" ? accountBody.error : "Unable to load your wallet account.");
+      if (!historyResponse.ok) throw new Error(typeof historyBody.error === "string" ? historyBody.error : "Unable to load your transfer history.");
+      if (!pinResponse.ok) throw new Error(typeof pinBody.error === "string" ? pinBody.error : "Unable to check transaction security.");
+      const accountList = Array.isArray(accountBody.walletAccounts) ? accountBody.walletAccounts.filter(isWalletAccount) : [];
+      const transferList = Array.isArray(historyBody.transfers) ? historyBody.transfers.filter(isTransferRecord) : [];
       setWallets(accountList);
       setHistory(transferList);
-      if (accountList.some(a => a.currency === "NGN")) setCurrency("NGN");
-      else if (accountList[0]?.currency) setCurrency(accountList[0].currency);
-      else setCurrency("NGN");
+      setFlowpayAccountNumber(typeof accountBody.flowpayAccountNumber === "string" ? accountBody.flowpayAccountNumber : null);
+      setPinSet(pinBody.transactionPinSet === true);
       if ((Array.isArray(accountBody.walletAccounts) && accountList.length !== accountBody.walletAccounts.length)
         || (Array.isArray(historyBody.transfers) && transferList.length !== historyBody.transfers.length)) {
-        setError("Some transfer records could not be displayed because their data was incomplete.");
+        setPageError("Some transfer details were incomplete and could not be displayed.");
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load transfer information.");
-    } finally { setLoading(false); }
+      setPageError(cause instanceof Error ? cause.message : "Unable to load transfer information.");
+    } finally {
+      setLoading(false);
+      setPinStatusLoading(false);
+    }
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    if (!token || token.split(".").length !== 3) return;
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-    if (!apiBase) return;
+    if (!token || !apiAddress()) { setBanksLoading(false); return; }
     const controller = new AbortController();
-    fetch(apiBase + "/customer/banks", { method: "GET", credentials: "omit", signal: controller.signal,
-      headers: { Authorization: "Bearer " + token } })
-      .then(async response => {
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error("BANK_LIST_UNAVAILABLE");
-        const items = Array.isArray(body.banks) ? body.banks.filter((item: unknown): item is Bank =>
-          !!item && typeof item === "object" && typeof (item as Bank).code === "string" && typeof (item as Bank).name === "string") : [];
-        setBanks(items);
-      }).catch(() => { if (!controller.signal.aborted) setLookupStatus("failed"); });
+    setBanksLoading(true);
+    setBanksError("");
+    fetch(apiAddress() + "/customer/banks", {
+      method: "GET", credentials: "omit", signal: controller.signal,
+      headers: { Authorization: "Bearer " + token }
+    }).then(async response => {
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok || !Array.isArray(body.banks)) {
+        const key = typeof body.error === "string" ? body.error : "BANK_LIST_UNAVAILABLE";
+        throw new Error(key);
+      }
+      const items = body.banks.filter((item: unknown): item is Bank => {
+        const bank = asRecord(item);
+        return typeof bank.code === "string" && !!bank.code && typeof bank.name === "string" && !!bank.name;
+      });
+      if (!items.length) throw new Error("BANK_LIST_EMPTY");
+      setBanks(items);
+    }).catch(cause => {
+      if (!controller.signal.aborted) {
+        setBanks([]);
+        setBanksError(cause instanceof Error ? cause.message : "BANK_LIST_UNAVAILABLE");
+      }
+    }).finally(() => { if (!controller.signal.aborted) setBanksLoading(false); });
     return () => controller.abort();
   }, [token]);
 
   useEffect(() => {
-    setAccountName("");
-    if (destination.length !== 10 || !bankCode) { setLookupStatus("idle"); return; }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-    if (!apiBase || !token) return;
+    if (mode !== "flowpay") { setRecipientLookup("idle"); return; }
+    setRecipientName("");
+    setRecipientCanTransfer(false);
+    setTransferResult(null);
+    if (!/^\d{12}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
     const controller = new AbortController();
-    setLookupStatus("loading");
     const timer = window.setTimeout(async () => {
+      setRecipientLookup("loading");
       try {
-        const response = await fetch(apiBase + "/customer/bank-account-lookup", {
+        const response = await fetch(apiAddress() + "/customer/flowpay/recipients/lookup", {
           method: "POST", credentials: "omit", signal: controller.signal,
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-          body: JSON.stringify({ accountNumber: destination, bankCode })
+          body: JSON.stringify({ accountNumber: recipientNumber })
         });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok || body.verified !== true || body.accountNumber !== destination || body.bankCode !== bankCode || typeof body.accountName !== "string") throw new Error("ACCOUNT_NAME_NOT_VERIFIED");
-        setAccountName(body.accountName); setLookupStatus("verified");
+        const body = asRecord(await response.json().catch(() => ({})));
+        if (!response.ok || body.verified !== true || body.accountNumber !== recipientNumber || typeof body.recipientName !== "string") {
+          throw new Error(typeof body.error === "string" ? body.error : "FLOWPAY_RECIPIENT_NOT_FOUND");
+        }
+        setRecipientName(body.recipientName);
+        setRecipientCanTransfer(body.canTransfer === true);
+        setRecipientLookup("verified");
       } catch {
-        if (!controller.signal.aborted) { setAccountName(""); setLookupStatus("failed"); }
+        if (!controller.signal.aborted) { setRecipientName(""); setRecipientCanTransfer(false); setRecipientLookup("failed"); }
       }
-    }, 500);
+    }, 400);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [destination, bankCode, token]);
+  }, [mode, recipientNumber, token]);
 
-  const makePreview = () => {
-    setPreview(null);
-    const cleanDestination = destination.replace(/\s+/g, "");
-    const cleanAmount = amount.trim();
-    const numericAmount = Number(cleanAmount);
-    if (!/^\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number."); return; }
-    if (lookupStatus !== "verified" || !accountName || !bankCode) { setError("Verify the destination account name with its bank before previewing."); return; }
-    if (!/^\d+(?:\.\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
-      setError("Enter a valid amount greater than zero, using up to two decimal places."); return;
+  useEffect(() => {
+    if (mode !== "bank") { setBankLookup("idle"); return; }
+    setBankAccountName("");
+    setBankPreview(null);
+    if (!/^\d{10}$/.test(bankAccountNumber) || !bankCode) { setBankLookup("idle"); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setBankLookup("loading");
+      try {
+        const response = await fetch(apiAddress() + "/customer/bank-account-lookup", {
+          method: "POST", credentials: "omit", signal: controller.signal,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ accountNumber: bankAccountNumber, bankCode })
+        });
+        const body = asRecord(await response.json().catch(() => ({})));
+        if (!response.ok || body.verified !== true || body.accountNumber !== bankAccountNumber ||
+            body.bankCode !== bankCode || typeof body.accountName !== "string") {
+          throw new Error(typeof body.error === "string" ? body.error : "ACCOUNT_NAME_NOT_VERIFIED");
+        }
+        setBankAccountName(body.accountName);
+        setBankLookup("verified");
+      } catch {
+        if (!controller.signal.aborted) { setBankAccountName(""); setBankLookup("failed"); }
+      }
+    }, 400);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [mode, bankAccountNumber, bankCode, token]);
+
+  const filteredBanks = useMemo(() => {
+    const term = bankSearch.trim().toLowerCase();
+    return term ? banks.filter(bank => bank.name.toLowerCase().includes(term) || bank.code.toLowerCase().includes(term)) : banks;
+  }, [banks, bankSearch]);
+
+  const activeNgnWallet = wallets.some(wallet => wallet.currency === "NGN" && wallet.status.toLowerCase() === "active");
+
+  const setupPin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (pinSetupBusy) return;
+    if (!/^\d{6}$/.test(transactionPin) || transactionPin !== pinConfirm) {
+      setTransferError("Create and confirm a matching 6-digit transaction PIN.");
+      return;
     }
-    if (!wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")) {
-      setError("An active source wallet in the selected currency is required."); return;
+    setPinSetupBusy(true);
+    setTransferError("");
+    try {
+      const response = await fetch(apiAddress() + "/customer/transaction-pin/setup", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ pin: transactionPin, confirmPin: pinConfirm })
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "TRANSACTION_PIN_SETUP_UNAVAILABLE");
+      setPinSet(true);
+      setTransactionPin("");
+      setPinConfirm("");
+    } catch (cause) {
+      setTransferError(cause instanceof Error ? cause.message : "Unable to set your transaction PIN.");
+    } finally { setPinSetupBusy(false); }
+  };
+
+  const submitFlowPayTransfer = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (transferBusy) return;
+    const amountMinor = amountToMinor(amount);
+    if (!amountMinor) { setTransferError("Enter a valid NGN amount greater than zero."); return; }
+    if (recipientLookup !== "verified" || !recipientCanTransfer || !recipientName) {
+      setTransferError("Verify an eligible FlowPay recipient before continuing.");
+      return;
     }
-    setError("");
-    setPreview({ destination: cleanDestination, amount: numericAmount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), currency, bankName: banks.find(bank => bank.code === bankCode)?.name ?? "", accountName });
+    if (!activeNgnWallet) { setTransferError("An active NGN FlowPay wallet is required."); return; }
+    if (!/^\d{6}$/.test(transactionPin)) { setTransferError("Enter your 6-digit transaction PIN."); return; }
+
+    setTransferBusy(true);
+    setTransferError("");
+    setTransferResult(null);
+    try {
+      const response = await fetch(apiAddress() + "/customer/transfers/flowpay", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          recipientAccountNumber: recipientNumber,
+          amountMinor,
+          currency: "NGN",
+          idempotencyKey,
+          transactionPin
+        })
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok || body.status !== "posted" || typeof body.reference !== "string") {
+        throw new Error(typeof body.error === "string" ? body.error : "FLOWPAY_TRANSFER_NOT_POSTED");
+      }
+      setTransferResult({
+        reference: body.reference,
+        amountMinor,
+        recipientName
+      });
+      setAmount("");
+      setTransactionPin("");
+      setIdempotencyKey(crypto.randomUUID());
+      await load();
+    } catch (cause) {
+      setTransferError(cause instanceof Error ? cause.message : "FlowPay transfer could not be completed.");
+    } finally { setTransferBusy(false); }
+  };
+
+  const reviewBankTransfer = () => {
+    const amountMinor = amountToMinor(amount);
+    const bankName = banks.find(bank => bank.code === bankCode)?.name ?? "";
+    if (!activeNgnWallet) { setTransferError("An active NGN FlowPay wallet is required."); return; }
+    if (bankLookup !== "verified" || !bankAccountName || !bankName) {
+      setTransferError("Verify the recipient with the selected bank before reviewing.");
+      return;
+    }
+    if (!amountMinor) { setTransferError("Enter a valid NGN amount greater than zero."); return; }
+    setTransferError("");
+    setBankPreview({ bankName, accountName: bankAccountName, accountNumber: bankAccountNumber, amountMinor });
+  };
+
+  const changeMode = (next: Mode) => {
+    setMode(next);
+    setAmount("");
+    setTransferError("");
+    setTransferResult(null);
+    setBankPreview(null);
   };
 
   return <section className="fp-panel fp-detail-panel">
-    <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ArrowLeftRight size={19}/></span><span>Transfers</span></div>
-    <p className="fp-muted">Prepare a transfer preview and review previous simulated transfers. No funds can be moved from this page.</p>
-    {loading ? <p className="fp-overview-muted" role="status">Loading your wallet and transfer records…</p> : error && !wallets.length && !history.length ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
+    <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ArrowLeftRight size={19}/></span><span>Send money from FlowPay</span></div>
+    <p className="fp-muted">Choose a destination. Deposits and Add Money remain separate under Deposit History.</p>
+
+    <div className="fp-transfer-mode-switch" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"16px 0"}}>
+      <button type="button" role="tab" aria-selected={mode === "flowpay"} className={mode === "flowpay" ? "fp-primary" : "fp-outline"} onClick={() => changeMode("flowpay")}>To FlowPay</button>
+      <button type="button" role="tab" aria-selected={mode === "bank"} className={mode === "bank" ? "fp-primary" : "fp-outline"} onClick={() => changeMode("bank")}>To Bank</button>
+    </div>
+
+    {loading ? <p className="fp-overview-muted" role="status">Loading your wallet and transfer security…</p> : <>
+      {pageError && <div className="fp-preview-warning" role="alert">{pageError}</div>}
       <div className="fp-detail-list">
-        <div><span>Transfer execution</span><b>Disabled</b></div>
-        <div><span>Provider verification</span><b>Not connected</b></div>
-        <div><span>Live transfers</span><b>Off</b></div>
+        <div><span>Source wallet</span><b>{activeNgnWallet ? "NGN wallet active" : "NGN wallet unavailable"}</b></div>
+        <div><span>Transaction PIN</span><b>{pinStatusLoading ? "Checking…" : pinSet ? "Configured" : "Setup required"}</b></div>
       </div>
-      <h3 className="fp-account-section-title"><Wallet size={17}/> Prepare a transfer preview</h3>
-      <label htmlFor="fp-transfer-currency">Source wallet currency</label>
-      <select id="fp-transfer-currency" value={currency} onChange={e => { setCurrency(e.target.value); setPreview(null); setError(""); }}>
-        {Array.from(new Set(wallets.map(w => w.currency))).map(code => <option key={code} value={code}>{code}</option>)}
-        {!wallets.length && <option value="NGN">NGN</option>}
-      </select>
-      <label htmlFor="fp-transfer-bank">Beneficiary bank</label>
-      <select id="fp-transfer-bank" value={bankCode} onChange={e => { setBankCode(e.target.value); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }}>
-        <option value="">Select bank</option>
-        {banks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
-      </select>
-      <label htmlFor="fp-transfer-destination">Destination account number</label>
-      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\D/g, "").slice(0, 10)); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
-      {lookupStatus === "loading" && <p className="fp-overview-muted" role="status">Verifying account with the selected bank…</p>}
-      {lookupStatus === "verified" && <div className="fp-detail-list" role="status"><div><span>Verified account name</span><b>{accountName}</b></div><div><span>Bank</span><b>{banks.find(bank => bank.code === bankCode)?.name}</b></div></div>}
-      {lookupStatus === "failed" && destination.length === 10 && bankCode && <div className="fp-preview-warning" role="alert">Account name could not be verified. Check the bank and account number and try again.</div>}
-      <label htmlFor="fp-transfer-amount">Amount</label>
-      <input id="fp-transfer-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount((decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole).slice(0, 15)); setPreview(null); setError(""); }} inputMode="decimal" placeholder="0.00" maxLength={15}/>
-      {error && <div className="fp-preview-warning" role="alert">{error}</div>}
-      <button className="fp-outline" type="button" onClick={makePreview} disabled={loading || lookupStatus !== "verified" || !wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")}>Preview only</button>
-      {preview && <div className="fp-preview-warning" role="status">
-        <b>Local preview only — not submitted</b>
-        <div>Beneficiary: {preview.accountName}</div>
-        <div>Bank: {preview.bankName}</div>
-        <div>Account: ••••{preview.destination.slice(-4)}</div>
-        <div>Amount: {preview.currency} {preview.amount}</div>
-        <div>Name enquiry was performed in Flutterwave sandbox only. No wallet debit or transfer request was made.</div>
-      </div>}
-      <div className="fp-preview-warning"><ShieldCheck size={17}/> Transfers remain disabled until beneficiary verification, available-balance calculation, transaction authorization, ledger posting and reconciliation are implemented and tested. Never share your PIN or passkey.</div>
+
+      {mode === "flowpay" ? <>
+        <h3 className="fp-account-section-title"><Wallet size={17}/> Transfer to another FlowPay customer</h3>
+        {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
+        <label htmlFor="fp-flowpay-recipient">Recipient FlowPay account number</label>
+        <input id="fp-flowpay-recipient" value={recipientNumber}
+          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 12)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
+          inputMode="numeric" autoComplete="off" placeholder="Enter 12-digit FlowPay account number" maxLength={12}/>
+        {recipientLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying FlowPay recipient…</p>}
+        {recipientLookup === "verified" && <div className="fp-detail-list" role="status">
+          <div><span>Verified recipient name</span><b>{recipientName}</b></div>
+          <div><span>Account number</span><b>{recipientNumber}</b></div>
+          {!recipientCanTransfer && <div><span>Transfer status</span><b>Cannot transfer to your own account</b></div>}
+        </div>}
+        {recipientLookup === "failed" && <div className="fp-preview-warning" role="alert">No active verified FlowPay customer was found for that account number.</div>}
+
+        {!pinStatusLoading && !pinSet ? <form onSubmit={setupPin} style={{display:"grid",gap:10,marginTop:16,border:"1px solid var(--fp-border, #d8dce3)",borderRadius:12,padding:14}}>
+          <b>Set your transaction PIN</b>
+          <p className="fp-muted">A 6-digit PIN is required to authorize FlowPay wallet transfers. It is stored as a salted password hash, not as plain text.</p>
+          <label htmlFor="fp-transfer-pin-new">Create 6-digit PIN</label>
+          <input id="fp-transfer-pin-new" type="password" inputMode="numeric" autoComplete="new-password" pattern="[0-9]{6}" maxLength={6} value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+          <label htmlFor="fp-transfer-pin-confirm">Confirm transaction PIN</label>
+          <input id="fp-transfer-pin-confirm" type="password" inputMode="numeric" autoComplete="new-password" pattern="[0-9]{6}" maxLength={6} value={pinConfirm} onChange={event => setPinConfirm(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+          <button className="fp-primary" type="submit" disabled={pinSetupBusy}>{pinSetupBusy ? "Saving PIN…" : "Save transaction PIN"}</button>
+        </form> : <form onSubmit={submitFlowPayTransfer} style={{display:"grid",gap:10,marginTop:16}}>
+          <label htmlFor="fp-flowpay-amount">Amount (NGN)</label>
+          <input id="fp-flowpay-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={event => { setAmount(event.target.value); setTransferError(""); setTransferResult(null); setIdempotencyKey(crypto.randomUUID()); }}/>
+          <label htmlFor="fp-flowpay-transaction-pin">Transaction PIN</label>
+          <input id="fp-flowpay-transaction-pin" type="password" inputMode="numeric" autoComplete="current-password" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit transaction PIN" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+          <div className="fp-preview-warning"><ShieldCheck size={17}/> FlowPay verifies the recipient, checks your available posted NGN ledger balance, then records the sender debit and recipient credit together in one database transaction. Transfers cannot overdraw the wallet.</div>
+          {transferError && <div className="fp-preview-warning" role="alert">{transferError}</div>}
+          <button className="fp-primary" type="submit" disabled={transferBusy || !activeNgnWallet || recipientLookup !== "verified" || !recipientCanTransfer || !pinSet}>
+            {transferBusy ? "Posting secure transfer…" : "Confirm FlowPay transfer"}
+          </button>
+        </form>}
+        {transferResult && <div className="fp-preview-warning" role="status" aria-live="polite">
+          <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> FlowPay transfer posted successfully</b>
+          <div>Recipient: {transferResult.recipientName}</div>
+          <div>Amount: {formatAmount(transferResult.amountMinor)}</div>
+          <div>Reference: {transferResult.reference}</div>
+          <div>Both customer ledger entries were committed together.</div>
+        </div>}
+      </> : <>
+        <h3 className="fp-account-section-title"><Building2 size={17}/> Transfer to a Nigerian bank</h3>
+        {banksLoading ? <p className="fp-overview-muted" role="status">Loading Flutterwave's bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Confirm the FlowPay backend has Flutterwave test-mode configuration, then refresh.</div> : <>
+          <label htmlFor="fp-transfer-bank-search">Search bank name</label>
+          <div style={{position:"relative"}}>
+            <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
+            <input id="fp-transfer-bank-search" type="search" value={bankSearch} onChange={event => setBankSearch(event.target.value)}
+              placeholder="Search all available Nigerian banks" style={{paddingLeft:36}}/>
+          </div>
+          <small className="fp-muted">{filteredBanks.length} of {banks.length} provider-listed banks shown</small>
+          <label htmlFor="fp-transfer-bank">Select beneficiary bank</label>
+          <select id="fp-transfer-bank" value={bankCode} onChange={event => { setBankCode(event.target.value); setBankAccountName(""); setBankPreview(null); setTransferError(""); }}>
+            <option value="">Choose a bank</option>
+            {filteredBanks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
+          </select>
+          {filteredBanks.length === 0 && <p className="fp-muted">No bank matches that search. Try another spelling.</p>}
+          <label htmlFor="fp-transfer-bank-account">10-digit beneficiary account number</label>
+          <input id="fp-transfer-bank-account" value={bankAccountNumber}
+            onChange={event => { setBankAccountNumber(event.target.value.replace(/\D/g, "").slice(0, 10)); setBankPreview(null); setTransferError(""); }}
+            inputMode="numeric" autoComplete="off" placeholder="Enter bank account number" maxLength={10}/>
+          {bankLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying the account name with the selected bank…</p>}
+          {bankLookup === "verified" && <div className="fp-detail-list" role="status">
+            <div><span>Verified account name</span><b>{bankAccountName}</b></div>
+            <div><span>Selected bank</span><b>{banks.find(bank => bank.code === bankCode)?.name}</b></div>
+          </div>}
+          {bankLookup === "failed" && <div className="fp-preview-warning" role="alert">The bank could not verify this account number. Check the account number and selected bank.</div>}
+          <label htmlFor="fp-bank-transfer-amount">Amount (NGN)</label>
+          <input id="fp-bank-transfer-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount}
+            onChange={event => { setAmount(event.target.value); setBankPreview(null); setTransferError(""); }}/>
+          {transferError && <div className="fp-preview-warning" role="alert">{transferError}</div>}
+          <button className="fp-outline" type="button" onClick={reviewBankTransfer}
+            disabled={!activeNgnWallet || bankLookup !== "verified" || !amount.trim()}>Review bank transfer</button>
+          {bankPreview && <div className="fp-preview-warning" role="status">
+            <b>Bank recipient verified — transfer not submitted</b>
+            <div>Beneficiary: {bankPreview.accountName}</div>
+            <div>Bank: {bankPreview.bankName}</div>
+            <div>Account: ••••{bankPreview.accountNumber.slice(-4)}</div>
+            <div>Amount: {formatAmount(bankPreview.amountMinor)}</div>
+            <div>Bank payouts are not enabled yet. Flutterwave payout funding, server IP whitelisting, transfer-status reconciliation and payout authorization must be configured and verified before FlowPay can submit bank transfers.</div>
+          </div>}
+        </>}
+      </>}
+
+      <div className="fp-preview-warning" style={{marginTop:18}}><ShieldCheck size={17}/> Never share your transaction PIN, login password or one-time code. FlowPay deposits remain separate and this transfer page does not change deposit records.</div>
     </>}
-    <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Clock3 size={19}/></span><span>Recent transfer records</span></div>
-    {loading ? <p className="fp-overview-muted">Loading records…</p> : history.length ? <div className="fp-detail-list">
-      {history.map(item => <div key={item.id}><span>{item.type} · {item.destinationAccountMasked}<small>{new Date(item.createdAt).toLocaleString()}</small></span><b>{item.status}</b></div>)}
-    </div> : <div className="fp-empty"><Building2 size={22}/><b>No simulated transfers recorded</b><span>When a test transfer is recorded, its status will appear here.</span></div>}
-    <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh transfer records</button>
+
+    <div className="fp-overview-card-heading" style={{marginTop:24}}><span className="fp-overview-icon"><Clock3 size={19}/></span><span>Transfer history</span></div>
+    {loading ? <p className="fp-overview-muted">Loading transfer records…</p> : history.length ? <div className="fp-detail-list">
+      {history.map(item => <div key={item.id}>
+        <span>{item.type.replace(/[_-]/g, " ")} · {item.destinationAccountMasked}<small>{dateLabel(item.createdAt)}</small></span>
+        <b>{item.status}</b>
+      </div>)}
+    </div> : <div className="fp-empty"><Building2 size={22}/><b>No transfers recorded yet</b><span>Completed FlowPay wallet transfers will appear here. Bank payout history will appear after payout processing is connected.</span></div>}
+    <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh transfer details</button>
   </section>;
 }
