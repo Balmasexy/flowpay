@@ -124,6 +124,7 @@ function presignedUrl(config: StorageConfig, method: "PUT" | "GET", key: string,
   const signedHeaders = method === "PUT" ? "content-type;host" : "host";
   const query = canonicalQuery([
     ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"],
+    ["X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD"],
     ["X-Amz-Credential", config.accessKeyId + "/" + scope],
     ["X-Amz-Date", date.full],
     ["X-Amz-Expires", String(expires)],
