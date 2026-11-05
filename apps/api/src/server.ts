@@ -343,6 +343,9 @@ const server = createServer(async (req, res) => {
         pool.query(
           `SELECT t.id, t.transaction_type, t.description, t.status, t.created_at, t.posted_at,
                   e.currency, SUM(e.amount_minor)::text AS customer_ledger_amount_minor,
+                  CASE WHEN SUM(e.amount_minor) > 0 THEN 'received'
+                       WHEN SUM(e.amount_minor) < 0 THEN 'sent'
+                       ELSE 'neutral' END AS direction,
                   COUNT(e.id)::int AS customer_entry_count
              FROM public.fp_ledger_transactions AS t
              JOIN public.fp_ledger_entries AS e ON e.transaction_id = t.id
@@ -375,11 +378,12 @@ const server = createServer(async (req, res) => {
           status: row.status, createdAt: row.created_at, postedAt: row.posted_at,
           currency: String(row.currency).trim(),
           customerLedgerAmountMinor: row.customer_ledger_amount_minor,
+          direction: row.direction,
           customerEntryCount: row.customer_entry_count
         })),
         limit, offset, nextOffset: offset + result.rows.length, total, hasMore: offset + result.rows.length < total,
-        directionAvailable: false,
-        directionNote: "Incoming/outgoing direction is not inferred until the ledger sign convention is configured."
+        directionAvailable: true,
+        directionNote: "Direction is calculated from the signed customer ledger entries: positive is received, negative is sent, and zero is neutral."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
