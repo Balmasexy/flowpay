@@ -64,6 +64,8 @@ function beneficiaryFingerprint(secret: string, accountNumber: string): string {
 }
 function safeStatus(value: unknown): PayoutStatus {
   const status = typeof value === "string" ? value.toLowerCase() : "";
+  // Paystack's "received" state is still awaiting merchant approval.
+  if (status === "received") return "pending";
   return ["initiating", "pending", "otp", "unknown", "success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(status)
     ? status as PayoutStatus : "unknown";
 }
