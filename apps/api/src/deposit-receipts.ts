@@ -342,7 +342,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
           `SELECT id, user_id, amount_minor::text, currency, reference_text, customer_note,
                   object_key, file_name, content_type, size_bytes, status, created_at,
                   reviewed_at, review_note, review_bank_reference, ledger_transaction_id
-             FROM public.fp_deposit_receipts WHERE id=$1 AND user_id=$2 FOR UPDATE`,
+             FROM public.fp_deposit_receipts WHERE id=$1 AND user_id=$2 LIMIT 1`,
           [receiptId, identity.id]
         );
         if (found.rowCount !== 1) { send(res, 404, { error: "RECEIPT_NOT_FOUND" }); return true; }
@@ -358,24 +358,63 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
         }
         const getUrl = presignedUrl(config, "GET", receipt.object_key, undefined, 120);
         const fileResponse = await fetch(getUrl, { signal: AbortSignal.timeout(12_000) });
-        if (!fileResponse.ok) { send(res, 503, { error: "RECEIPT_FILE_INSPECTION_UNAVAILABLE" }); return true; }
-        const fileBytes = Buffer.from(await fileResponse.arrayBuffer());
+        if (!fileResponse.ok || !fileResponse.body) { send(res, 503, { error: "RECEIPT_FILE_INSPECTION_UNAVAILABLE" }); return true; }
+        const reader = fileResponse.body.getReader();
+        const chunks: Buffer[] = [];
+        let totalBytes = 0;
+        try {
+          while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            totalBytes += part.value.byteLength;
+            if (totalBytes > MAX_FILE_BYTES) {
+              await reader.cancel().catch(() => undefined);
+              send(res, 413, { error: "RECEIPT_FILE_TOO_LARGE" });
+              return true;
+            }
+            chunks.push(Buffer.from(part.value));
+          }
+        } finally { reader.releaseLock(); }
+        const fileBytes = Buffer.concat(chunks);
         if (fileBytes.length !== objectSize || !hasExpectedMagic(fileBytes, receipt.content_type)) {
           send(res, 400, { error: "RECEIPT_FILE_CONTENT_INVALID" }); return true;
         }
         const digest = createHash("sha256").update(fileBytes).digest("hex");
-        await pool.query(
-          `UPDATE public.fp_deposit_receipts SET status='pending_review', content_sha256=$2, uploaded_at=NOW(), updated_at=NOW()
-            WHERE id=$1 AND user_id=$3 AND status='pending_upload'`,
-          [receipt.id, digest, identity.id]
-        );
-        await pool.query(
-          `INSERT INTO public.fp_deposit_receipt_audit_events
-             (receipt_id, actor_user_id, actor_role, action, details)
-           VALUES ($1,$2,'customer','uploaded',$3::jsonb)`,
-          [receipt.id, identity.id, JSON.stringify({ sizeBytes: objectSize, sha256: digest })]
-        );
-        send(res, 200, { completed: true, status: "pending_review", message: "Receipt uploaded. It will be reviewed; no wallet credit is created until an authorised reviewer verifies the funds were received." });
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const changed = await client.query(
+            `UPDATE public.fp_deposit_receipts
+                SET status='pending_review', content_sha256=$2, uploaded_at=NOW(), updated_at=NOW()
+              WHERE id=$1 AND user_id=$3 AND status='pending_upload'
+              RETURNING id`,
+            [receipt.id, digest, identity.id]
+          );
+          if (changed.rowCount !== 1) {
+            const current = await client.query<{ status: string }>(
+              "SELECT status FROM public.fp_deposit_receipts WHERE id=$1 AND user_id=$2",
+              [receipt.id, identity.id]
+            );
+            await client.query("ROLLBACK");
+            if (current.rows[0]?.status === "pending_review") {
+              send(res, 200, { completed: true, status: "pending_review" });
+              return true;
+            }
+            send(res, 409, { error: "RECEIPT_STATUS_CHANGED", status: current.rows[0]?.status ?? "not_found" });
+            return true;
+          }
+          await client.query(
+            `INSERT INTO public.fp_deposit_receipt_audit_events
+               (receipt_id, actor_user_id, actor_role, action, details)
+             VALUES ($1,$2,'customer','uploaded',$3::jsonb)`,
+            [receipt.id, identity.id, JSON.stringify({ sizeBytes: objectSize, sha256: digest })]
+          );
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK").catch(() => undefined);
+          throw error;
+        } finally { client.release(); }
+        send(res, 200, { completed: true, status: "pending_review", message: "Receipt uploaded. It will be reviewed; no wallet credit is created until an authorised reviewer independently verifies the funds were received." });
         return true;
       }
 
@@ -459,8 +498,8 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
           if (decision === "approve") {
             const wallet = await client.query<{ id: string }>(
               `SELECT id FROM public.fp_accounts
-                WHERE id IN (SELECT id FROM public.fp_accounts WHERE user_id=$1 AND account_type='customer'
-                  AND currency='NGN' AND status='active')
+                WHERE user_id=$1 AND account_type='customer'
+                  AND currency='NGN' AND status='active'
                 FOR UPDATE`,
               [receipt.user_id]
             );
