@@ -21,7 +21,7 @@ type Overview = {
 const services = [
   { label: "Airtime", path: "/airtime", icon: Phone, detail: "Review airtime options (preview only)" },
   { label: "Data", path: "/data", icon: Wifi, detail: "Review available bundles (preview only)" },
-  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Prepare a transfer preview" },
+  { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Send to a FlowPay wallet or Nigerian bank" },
   { label: "Cards", path: "/cards", icon: CreditCard, detail: "Review linked card records" },
   { label: "Electricity", path: "/bills", icon: Zap, detail: "Review bill-payment options (preview only)" },
   { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Review TV subscription options (preview only)" },
