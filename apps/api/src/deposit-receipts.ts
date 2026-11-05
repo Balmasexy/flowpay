@@ -76,7 +76,7 @@ export function createDepositReceiptHandler(options: Options) {
                FROM neon_auth."user" AS auth_user
                JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
               WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
-                AND app_user.status = 'active' AND app_user.role = 'super_admin'
+                AND app_user.status = 'active' AND app_user.role IN ('admin', 'super_admin')
               LIMIT 1`,
             [payload.sub]
           )
