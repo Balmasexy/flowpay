@@ -251,7 +251,7 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
       throw new Error("PAYSTACK_TRANSFER_AMOUNT_MISMATCH");
     }
     if (verifiedRecipientCode !== payout.recipient_code ||
-        !/^\\d{10}$/.test(verifiedAccountNumber) ||
+        !/^[0-9]{10}$/.test(verifiedAccountNumber) ||
         verifiedBankCode !== payout.bank_code ||
         beneficiaryFingerprint(secret, verifiedAccountNumber) !== payout.account_fingerprint) {
       await client.query("ROLLBACK");
