@@ -76,7 +76,7 @@ export default function TransfersPage({ token }: { token: string }) {
 
   useEffect(() => {
     if (!token || token.split(".").length !== 3) return;
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) return;
     const controller = new AbortController();
     fetch(apiBase + "/customer/banks", { method: "GET", credentials: "omit", signal: controller.signal,
@@ -94,7 +94,7 @@ export default function TransfersPage({ token }: { token: string }) {
   useEffect(() => {
     setAccountName("");
     if (destination.length !== 10 || !bankCode) { setLookupStatus("idle"); return; }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase || !token) return;
     const controller = new AbortController();
     setLookupStatus("loading");
@@ -117,12 +117,12 @@ export default function TransfersPage({ token }: { token: string }) {
 
   const makePreview = () => {
     setPreview(null);
-    const cleanDestination = destination.replace(/\\s+/g, "");
+    const cleanDestination = destination.replace(/\s+/g, "");
     const cleanAmount = amount.trim();
     const numericAmount = Number(cleanAmount);
-    if (!/^\\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number."); return; }
+    if (!/^\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number."); return; }
     if (lookupStatus !== "verified" || !accountName || !bankCode) { setError("Verify the destination account name with its bank before previewing."); return; }
-    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!/^\d+(?:\.\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       setError("Enter a valid amount greater than zero, using up to two decimal places."); return;
     }
     if (!wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")) {
@@ -153,7 +153,7 @@ export default function TransfersPage({ token }: { token: string }) {
         {banks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
       </select>
       <label htmlFor="fp-transfer-destination">Destination account number</label>
-      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\\D/g, "").slice(0, 10)); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
+      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\D/g, "").slice(0, 10)); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
       {lookupStatus === "loading" && <p className="fp-overview-muted" role="status">Verifying account with the selected bank…</p>}
       {lookupStatus === "verified" && <div className="fp-detail-list" role="status"><div><span>Verified account name</span><b>{accountName}</b></div><div><span>Bank</span><b>{banks.find(bank => bank.code === bankCode)?.name}</b></div></div>}
       {lookupStatus === "failed" && destination.length === 10 && bankCode && <div className="fp-preview-warning" role="alert">Account name could not be verified. Check the bank and account number and try again.</div>}
