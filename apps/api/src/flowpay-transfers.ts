@@ -73,6 +73,7 @@ async function authenticate(
       WHERE auth_user.id::text = $1
         AND auth_user."emailVerified" = true
         AND app_user.status = 'active'
+        AND app_user.role = 'customer'
       LIMIT 1`,
     [payload.sub]
   );
@@ -250,6 +251,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
+              AND customer.role = 'customer'
               AND auth_user."emailVerified" = true
             LIMIT 1`,
           [input.accountNumber]
