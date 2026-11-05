@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, BookOpen, CircleHelp, LockKeyhole, MessageSquareText, Search, ShieldAlert } from "lucide-react";
+import { ArrowRight, BookOpen, CircleHelp, FileText, LockKeyhole, MessageSquareText, Search, ShieldAlert } from "lucide-react";
 
 type Props = { go: (path: string) => void; token: string };
 type Topic = { title: string; category: string; detail: string; path: string; keywords: string };
