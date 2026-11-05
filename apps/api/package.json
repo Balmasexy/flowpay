@@ -12,6 +12,7 @@
     "test:paystack-webhook": "tsx --test scripts/test-paystack-webhook.ts",
     "test:flowpay-transfers": "tsx --test scripts/test-flowpay-transfers.ts",
     "test:paystack-bank-lookup": "tsx --test scripts/test-paystack-bank-lookup.ts",
+    "test:paystack-bank-transfers": "tsx --test scripts/test-paystack-bank-transfers.ts",
     "test:customer-ai": "tsx --test scripts/test-customer-ai.ts",
     "test:deposit-receipts": "tsx --test scripts/test-deposit-receipts.ts"
   },
