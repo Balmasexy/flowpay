@@ -43,7 +43,7 @@ export default function SignupPage() {
         return;
       }
       if (result.data?.user && result.data.user.emailVerified) {
-        setMessage("Your email is verified. You can now sign in.");
+        setMessage("Your email is verified. Sign in to finish onboarding. Your unique FlowPay transfer number will be assigned automatically and shown under View Account Number.");
         setPassword("");
         setConfirmPassword("");
         return;
@@ -78,7 +78,7 @@ export default function SignupPage() {
         return;
       }
       setCode("");
-      setMessage("Email verified successfully. Please sign in to continue.");
+      setMessage("Email verified successfully. Please sign in to continue. Your FlowPay transfer number will be assigned during your first authenticated session.");
       window.location.assign("/login");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to verify this email. Please try again.");
@@ -117,7 +117,7 @@ export default function SignupPage() {
     <section className="fp-login-shell">
       <div className="fp-login-aside">
         <a className="fp-public-brand" href="/"><span className="fp-public-logo">F</span>Flow<span>Pay</span></a>
-        <div><span>GET STARTED</span><h1>A clearer way<br/><em>to move forward.</em></h1><p>Create your secure sign-in credentials to begin FlowPay onboarding.</p></div>
+        <div><span>GET STARTED</span><h1>A clearer way<br/><em>to move forward.</em></h1><p>Create your secure sign-in credentials to begin FlowPay onboarding. Your FlowPay transfer number is automatically assigned after email verification and your first sign-in.</p></div>
         <div className="fp-login-assurance"><ShieldCheck size={18}/> Your credentials are handled by the configured authentication service.</div>
       </div>
       <div className="fp-login-form-wrap">
@@ -125,7 +125,7 @@ export default function SignupPage() {
         <span className="fp-login-eyebrow">FLOWPAY ACCOUNT</span>
         <h2>{step === "verify" ? "Verify your email" : "Create account"}</h2>
         <p className="fp-login-subtitle">{step === "verify" ? <>Enter the numeric code sent to <strong>{email}</strong>.</> : "Enter your details to create your sign-in credentials."}</p>
-        <div className="fp-login-notice" role="note"><ShieldCheck size={17}/><span><strong>Cardholder and bank account setup</strong><br/>Use your full legal name as your registration name. A card issuer must approve the cardholder details before issuing a card. Your NGN virtual account number will appear in View Account Number only after a bank provider confirms its assignment. Registration alone does not create a card or bank account.</span></div>
+        <div className="fp-login-notice" role="note"><ShieldCheck size={17}/><span><strong>Cardholder and bank account setup</strong><br/>Use your full legal name for your FlowPay profile. After you verify your email and sign in for the first time, FlowPay automatically assigns your unique 12-digit FlowPay transfer number. This number receives transfers from other FlowPay customers; it is not a bank NUBAN. A dedicated bank account and card are separate provider services and appear only after the provider confirms issuance and eligibility.</span></div>
         {step === "signup" ? <form onSubmit={submit}>
           <label htmlFor="fp-signup-name">Full name</label>
           <input id="fp-signup-name" autoComplete="name" required minLength={2} maxLength={100} placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)}/>

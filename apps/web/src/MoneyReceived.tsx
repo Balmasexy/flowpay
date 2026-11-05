@@ -237,57 +237,56 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
     }
   };
 
-  return <section className="fp-panel fp-detail-panel">
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div><h2>Deposit / Add Money</h2><p className="fp-muted">Add money to your FlowPay wallet and review verified provider deposits.</p></div>
-      <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading || returnLoading}><RefreshCw size={15}/> Refresh</button>
+  return <section className="fp-panel fp-detail-panel fp-money-page">
+    <div className="fp-money-hero">
+      <div className="fp-money-hero-top">
+        <span className="fp-money-brand-mark"><ArrowDownLeft size={22}/></span>
+        <span className="fp-money-hero-tag"><ShieldCheck size={13}/> SECURE WALLET FUNDING</span>
+        <button type="button" className="fp-money-refresh" onClick={() => setRefresh(value => value + 1)} disabled={loading || returnLoading} aria-label="Refresh deposits"><RefreshCw size={16}/></button>
+      </div>
+      <span className="fp-money-eyebrow">FLOWPAY · MONEY IN</span>
+      <h2>Add money to your wallet</h2>
+      <p>Fund your NGN wallet through a protected checkout and track every payment against your verified FlowPay ledger.</p>
+      <div className="fp-money-steps"><div><span>01</span><b>Choose amount</b></div><div><span>02</span><b>Pay securely</b></div><div><span>03</span><b>Verify & receive</b></div></div>
     </div>
-
-    {paymentReturn && <div className="fp-preview-warning" role="status" aria-live="polite" style={{display:"grid",gap:7}}>
-      <b>{returnLoading ? "Checking Paystack payment…" : returnDeposit?.status === "posted" ? "Paystack test deposit credited" : returnDeposit?.status === "failed" ? "Paystack payment not completed" : "Paystack payment returned"}</b>
-      {returnError ? <span><AlertCircle size={15} style={{verticalAlign:"middle"}}/> {returnError}</span> :
-        returnDeposit ? <span>{formatAmount(returnDeposit.amountMinor, returnDeposit.currency)} · {statusLabel(returnDeposit.status)}. {returnDeposit.status === "pending" ? "The signed webhook has not yet confirmed the wallet credit. Refresh this page to check again." : returnDeposit.status === "posted" ? "The signed provider verification and balanced FlowPay ledger posting are complete." : "No wallet credit was posted for this attempt."}</span> :
-        <span>{returnLoading ? "FlowPay is checking the authenticated transaction reference." : "Use refresh to check the latest verified status."}</span>}
-      {returnReference && <small>Reference: {returnReference}</small>}
+    {paymentReturn && <div className={`fp-money-result ${returnDeposit?.status === "posted" ? "is-success" : returnDeposit?.status === "failed" ? "is-failed" : "is-pending"}`} role="status" aria-live="polite">
+      <div className="fp-money-result-icon">{returnLoading ? <RefreshCw size={20}/> : returnDeposit?.status === "posted" ? <CheckCircle2 size={21}/> : returnDeposit?.status === "failed" ? <AlertCircle size={21}/> : <Clock3 size={21}/>}</div>
+      <div className="fp-money-result-copy">
+        <b>{returnLoading ? "Checking your payment" : returnDeposit?.status === "posted" ? "Deposit confirmed" : returnDeposit?.status === "failed" ? "Payment not completed" : "Payment received by checkout"}</b>
+        {returnError ? <span>{returnError}</span> : returnDeposit ? <span>{formatAmount(returnDeposit.amountMinor, returnDeposit.currency)} · {statusLabel(returnDeposit.status)}. {returnDeposit.status === "pending" ? "The signed provider webhook has not confirmed the wallet credit yet. Refresh to check again." : returnDeposit.status === "posted" ? "Provider verification and the balanced FlowPay ledger posting are complete." : "No wallet credit was posted for this attempt."}</span> : <span>{returnLoading ? "FlowPay is checking the authenticated transaction reference." : "Refresh to check the latest verified status."}</span>}
+        {returnReference && <small>Reference: {returnReference}</small>}
+      </div>
     </div>}
-
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> Paystack is connected in test mode only. Deposits are credited only after the signed webhook and independent provider verification succeed. No live payment collection is enabled.</div>
-
-    {paystackEnabled ? (
-      <form onSubmit={startPaystackCheckout} style={{display:"grid",gap:12,border:"1px solid var(--fp-border, #d8dce3)",borderRadius:14,padding:16,margin:"16px 0"}}>
-        <div style={{display:"flex",alignItems:"center",gap:9}}><Wallet size={19}/><b>Add money with Paystack test checkout</b></div>
-        <label style={{display:"grid",gap:6,fontWeight:600}}>
-          Amount (NGN)
-          <input
-            type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="Enter amount in naira"
-            value={amount} onChange={event => setAmount(event.target.value)}
-            disabled={depositing} required
-            style={{width:"100%",padding:"12px 13px",borderRadius:9,border:"1px solid var(--fp-border, #cbd1dc)",background:"var(--fp-input-bg, transparent)",color:"inherit",font:"inherit"}}
-          />
-        </label>
-        <small className="fp-muted">You will be redirected to Paystack's hosted checkout. Only a verified test-mode payment can be credited.</small>
-        {checkoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {checkoutError}</div>}
-        <button type="submit" className="fp-primary" disabled={depositing || !amount.trim()}>
-          {depositing ? "Connecting to Paystack…" : <>Continue to Paystack <ExternalLink size={16}/></>}
-        </button>
-      </form>
-    ) : (
-      <div className="fp-preview-warning" role="status">
-        <AlertCircle size={17}/> Paystack checkout is temporarily unavailable until the test credentials, deposit database migration, and Paystack clearing account are configured on the FlowPay backend.
+    <div className="fp-money-content-grid">
+      <div className="fp-money-main-column">
+        <div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">01 / FUND YOUR WALLET</span><h3>Choose your deposit amount</h3></div><span className="fp-money-currency">NGN ₦</span></div>
+        {paystackEnabled ? <form onSubmit={startPaystackCheckout} className="fp-money-checkout">
+          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">TEST MODE</span></div>
+          <label htmlFor="fp-deposit-amount">How much would you like to add?</label>
+          <div className="fp-money-amount-input"><span>₦</span><input id="fp-deposit-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={event => setAmount(event.target.value)} disabled={depositing} required/></div>
+          <div className="fp-money-quick-amounts" aria-label="Suggested deposit amounts">{["1000","5000","10000","20000"].map(value => <button key={value} type="button" className={amount === value ? "selected" : ""} onClick={() => { setAmount(value); setCheckoutError(""); }} disabled={depositing}>₦{Number(value).toLocaleString("en-NG")}</button>)}</div>
+          <div className="fp-money-checkout-note"><ShieldCheck size={16}/><span>You will complete payment on Paystack's secure hosted checkout. FlowPay credits your wallet only after the signed webhook and independent provider verification both succeed.</span></div>
+          {checkoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {checkoutError}</div>}
+          <button type="submit" className="fp-primary fp-money-submit" disabled={depositing || !amount.trim()}>{depositing ? "Connecting to Paystack…" : <>Continue securely <ExternalLink size={16}/></>}</button>
+          <small className="fp-money-minor-note">Sandbox transaction · No live customer funds are collected in this environment.</small>
+        </form> : <div className="fp-money-unavailable" role="status"><span><AlertCircle size={20}/></span><div><b>Deposit checkout is not available right now</b><p>Paystack test checkout requires the test secret, callback URL, deposit limits, database migration and clearing account to be correctly configured on the FlowPay backend.</p></div></div>}
       </div>
-    )}
-
-    {loading && <p className="fp-muted">Loading deposits…</p>}
-    {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
-    {!loading && !error && items.length === 0 && <div className="fp-empty"><ArrowDownLeft size={24}/><b>No deposits recorded yet</b><span>Verified Paystack and Flutterwave deposits will appear here. Pending and failed Paystack attempts are also shown for clear tracking.</span></div>}
-    {!loading && !error && items.length > 0 && <div className="fp-feature-list">{items.map(item => <div key={item.id} style={{alignItems:"center",gap:12}}>
-      {item.status === "posted" ? <CheckCircle2 size={19}/> : item.status === "pending" ? <Clock3 size={19}/> : <AlertCircle size={19}/>}
-      <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
-        <b>{formatAmount(item.amountMinor,item.currency)}</b>
-        <small>{item.provider} · {item.reference}</small>
-        <small>{item.verifiedAt ? "Verified " + formatDate(item.verifiedAt) : "Created " + formatDate(item.createdAt)}</small>
-      </div>
-      <span>{statusLabel(item.status)}</span>
-    </div>)}</div>}
+      <aside className="fp-money-side-column">
+        <div className="fp-money-security-card"><span className="fp-money-side-icon"><ShieldCheck size={19}/></span><b>Wallet credit protection</b><p>Payment screenshots or checkout redirects are not proof of payment. A signed provider event and matching transaction verification are required before funds can appear in your available balance.</p><ul><li>Verified provider reference</li><li>Exact amount and currency match</li><li>Duplicate-credit protection</li><li>Balanced ledger posting</li></ul></div>
+        <div className="fp-money-help-card"><b>Need help with a deposit?</b><p>Keep your provider reference and contact FlowPay support if a completed checkout is still pending.</p></div>
+      </aside>
+    </div>
+    <div className="fp-money-history">
+      <div className="fp-money-history-heading"><div><span className="fp-money-eyebrow">02 / YOUR RECORDS</span><h3>Deposit history</h3><p>Only records linked to your authenticated FlowPay account are shown.</p></div><span className="fp-money-count">{items.length} {items.length === 1 ? "record" : "records"}</span></div>
+      {loading && <p className="fp-muted" role="status">Loading your deposit records…</p>}
+      {error && <div className="fp-preview-warning" role="alert"><AlertCircle size={17}/> {error}</div>}
+      {!loading && !error && items.length === 0 && <div className="fp-empty fp-money-empty"><ArrowDownLeft size={24}/><b>No deposits yet</b><span>Your Paystack and Flutterwave deposit records will appear here with their verified status and reference.</span></div>}
+      {!loading && !error && items.length > 0 && <div className="fp-money-history-list">{items.map(item => <article className="fp-money-history-item" key={item.id}>
+        <span className={`fp-money-history-icon ${item.status}`}>{item.status === "posted" ? <CheckCircle2 size={18}/> : item.status === "pending" ? <Clock3 size={18}/> : <AlertCircle size={18}/>}</span>
+        <div className="fp-money-history-copy"><b>{formatAmount(item.amountMinor,item.currency)}</b><span>{item.provider} · {item.reference}</span><small>{item.verifiedAt ? "Verified " + formatDate(item.verifiedAt) : "Created " + formatDate(item.createdAt)}</small></div>
+        <span className={`fp-money-status ${item.status}`}>{statusLabel(item.status)}</span>
+      </article>)}</div>}
+    </div>
+    <div className="fp-money-bottom-note"><ShieldCheck size={15}/> FlowPay does not treat uploaded receipt images as automatic proof of payment. A secure receipt-submission and staff-review service must be connected before receipt uploads can be accepted; wallet credits remain subject to verified provider records.</div>
   </section>;
 }
