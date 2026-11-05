@@ -209,7 +209,7 @@ export function createDepositReceiptHandler(options: Options) {
         await client.query("BEGIN");
         const deposit = await client.query<{ transaction_id: string; status: string }>(
           `SELECT transaction_id, status FROM public.fp_paystack_deposits
-            WHERE user_id = $1 AND reference = $2 FOR SHARE`,
+            WHERE user_id = $1 AND reference = $2 FOR UPDATE`,
           [session.identity.id, reference]
         );
         if (deposit.rowCount !== 1 || !deposit.rows[0]) {
