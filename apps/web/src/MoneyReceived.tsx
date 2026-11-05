@@ -94,6 +94,8 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
+  const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
+  const [receiptNotices, setReceiptNotices] = useState<Record<string, string>>({});
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
   const params = new URLSearchParams(window.location.search);
   const returnReference = paymentReturn ? (params.get("reference") || params.get("trxref") || "") : "";
@@ -190,6 +192,67 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
     return () => { active = false; };
   }, [paymentReturn, returnReference, token, apiBase, refresh]);
 
+  const uploadDepositReceipt = async (file: File, deposit: Deposit) => {
+    if (receiptBusy) return;
+    if (!/^flowpay-ps-[0-9a-f]{32}$/i.test(deposit.reference) || deposit.provider.toLowerCase() !== "paystack") {
+      setReceiptNotices(current => ({ ...current, [deposit.reference]: "Receipt upload is available only for a matching Paystack deposit reference." }));
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setReceiptNotices(current => ({ ...current, [deposit.reference]: "Choose a JPG, PNG or WebP receipt image." }));
+      return;
+    }
+    if (file.size < 1 || file.size > 4 * 1024 * 1024) {
+      setReceiptNotices(current => ({ ...current, [deposit.reference]: "Receipt images must be 4 MB or smaller." }));
+      return;
+    }
+    if (!token || !apiBase) {
+      setReceiptNotices(current => ({ ...current, [deposit.reference]: "Your authenticated FlowPay session is unavailable. Sign in again." }));
+      return;
+    }
+    setReceiptBusy(deposit.reference);
+    setReceiptNotices(current => ({ ...current, [deposit.reference]: "Uploading receipt securely…" }));
+    try {
+      const imageDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("The selected receipt image could not be read."));
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The selected receipt image could not be encoded."));
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch(apiBase + "/customer/paystack/deposits/receipt", {
+        method: "POST",
+        credentials: "omit",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({ reference: deposit.reference, fileName: file.name, imageDataUrl })
+      });
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string"
+          ? data.error.replaceAll("_", " ").toLowerCase()
+          : "Receipt upload failed. Please try again.";
+        throw new Error(message);
+      }
+      const result = data && typeof data === "object" ? data as Record<string, unknown> : {};
+      const isDuplicate = result.duplicate === true;
+      setReceiptNotices(current => ({
+        ...current,
+        [deposit.reference]: isDuplicate
+          ? "This exact receipt image has already been submitted. It remains in the existing review record."
+          : "Receipt uploaded for FlowPay review. This does not confirm payment or credit your wallet."
+      }));
+    } catch (reason) {
+      setReceiptNotices(current => ({
+        ...current,
+        [deposit.reference]: reason instanceof Error ? reason.message : "Receipt upload could not be completed."
+      }));
+    } finally {
+      setReceiptBusy(null);
+    }
+  };
+
   const startPaystackCheckout = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (depositing) return;
@@ -283,10 +346,15 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       {!loading && !error && items.length === 0 && <div className="fp-empty fp-money-empty"><ArrowDownLeft size={24}/><b>No deposits yet</b><span>Your Paystack and Flutterwave deposit records will appear here with their verified status and reference.</span></div>}
       {!loading && !error && items.length > 0 && <div className="fp-money-history-list">{items.map(item => <article className="fp-money-history-item" key={item.id}>
         <span className={`fp-money-history-icon ${item.status}`}>{item.status === "posted" ? <CheckCircle2 size={18}/> : item.status === "pending" ? <Clock3 size={18}/> : <AlertCircle size={18}/>}</span>
-        <div className="fp-money-history-copy"><b>{formatAmount(item.amountMinor,item.currency)}</b><span>{item.provider} · {item.reference}</span><small>{item.verifiedAt ? "Verified " + formatDate(item.verifiedAt) : "Created " + formatDate(item.createdAt)}</small></div>
+        <div className="fp-money-history-copy"><b>{formatAmount(item.amountMinor,item.currency)}</b><span>{item.provider} · {item.reference}</span><small>{item.verifiedAt ? "Verified " + formatDate(item.verifiedAt) : "Created " + formatDate(item.createdAt)}</small>
+          {item.provider.toLowerCase() === "paystack" && /^flowpay-ps-[0-9a-f]{32}$/i.test(item.reference) && <div className="fp-money-receipt-actions">
+            <label className="fp-money-receipt-upload">{receiptBusy === item.reference ? "Uploading receipt…" : "Upload receipt"}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={receiptBusy !== null} onChange={event => { const file = event.currentTarget.files?.[0]; if (file) void uploadDepositReceipt(file, item); event.currentTarget.value = ""; }}/></label>
+            {receiptNotices[item.reference] && <small className="fp-money-receipt-notice" role="status">{receiptNotices[item.reference]}</small>}
+          </div>}
+        </div>
         <span className={`fp-money-status ${item.status}`}>{statusLabel(item.status)}</span>
       </article>)}</div>}
     </div>
-    <div className="fp-money-bottom-note"><ShieldCheck size={15}/> FlowPay does not treat uploaded receipt images as automatic proof of payment. A secure receipt-submission and staff-review service must be connected before receipt uploads can be accepted; wallet credits remain subject to verified provider records.</div>
+    <div className="fp-money-bottom-note"><ShieldCheck size={15}/> Receipt images are private supporting evidence for administrator investigation only. Uploading a receipt never confirms a payment or credits your balance; all wallet credits still require provider verification and the balanced ledger posting.</div>
   </section>;
 }
