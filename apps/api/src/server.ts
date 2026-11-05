@@ -10,6 +10,7 @@ import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
+import { createCustomerAiHandler } from "./customer-ai.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -38,6 +39,7 @@ const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, 
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
+const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -63,11 +65,12 @@ const server = createServer(async (req, res) => {
   if (await paystackCheckoutHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
   if (await supportRequestsHandler(req, res)) return;
+  if (await customerAiHandler(req, res)) return;
   if (await flowPayTransfersHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
