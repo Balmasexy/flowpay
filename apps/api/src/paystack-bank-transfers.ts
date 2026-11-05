@@ -207,7 +207,7 @@ async function loadPayout(pool: Pool, reference: string, userId?: string): Promi
   );
   return result.rowCount === 1 ? result.rows[0] : null;
 }
-async function applyVerifiedStatus(pool: Pool, reference: string, verified: PaystackData): Promise<{ status: PayoutStatus; duplicate: boolean }> {
+async function applyVerifiedStatus(pool: Pool, secret: string, reference: string, verified: PaystackData): Promise<{ status: PayoutStatus; duplicate: boolean }> {
   const verifiedReference = typeof verified.reference === "string" ? verified.reference : "";
   const verifiedAmount = typeof verified.amount === "number" || typeof verified.amount === "string" ? String(verified.amount) : "";
   const verifiedCurrency = typeof verified.currency === "string" ? verified.currency : "";
@@ -476,7 +476,7 @@ export async function processPaystackTransferWebhook(pool: Pool, secret: string,
     if (!verified.ok || verifiedData.reference !== reference) {
       return { status: 503, body: { error: "PAYSTACK_TRANSFER_VERIFICATION_UNAVAILABLE" } };
     }
-    const result = await applyVerifiedStatus(pool, reference, verifiedData);
+    const result = await applyVerifiedStatus(pool, secret, reference, verifiedData);
     return { status: 200, body: { received: true, processed: true, status: result.status, duplicate: result.duplicate } };
   } catch (error) {
     console.error("FlowPay Paystack transfer webhook reconciliation failed:", error instanceof Error ? error.message : "database error");
@@ -786,7 +786,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         send(res, 202, { transactionId, reference, status: status === "otp" ? "otp" : "pending", final: false, amountMinor: input.amountMinor, currency: "NGN", message: "Paystack is processing this test transfer. Funds remain reserved until the provider confirms the final status." });
         return true;
       }
-      const result = await applyVerifiedStatus(pool, reference, verifiedData);
+      const result = await applyVerifiedStatus(pool, secret, reference, verifiedData);
       send(res, result.status === "success" ? 201 : 202, {
         transactionId, reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status),
         amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
