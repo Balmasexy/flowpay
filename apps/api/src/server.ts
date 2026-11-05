@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { randomInt } from "node:crypto";
 import { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createFaceVerificationHandler } from "./face-verification.js";
@@ -445,20 +446,32 @@ const server = createServer(async (req, res) => {
       const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
-        `SELECT app_user.id FROM neon_auth."user" AS auth_user
+        `SELECT app_user.id, app_user.role
+           FROM neon_auth."user" AS auth_user
            JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
             AND app_user.status = 'active' LIMIT 1`, [payload.sub]);
-      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_CUSTOMER_ACCOUNT_REQUIRED" }); return; }
-      await pool.query(
-        `INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
-         SELECT $1, nextval('public.fp_customer_account_number_seq')::TEXT
-         WHERE NOT EXISTS (
-           SELECT 1 FROM public.fp_customer_account_numbers WHERE user_id = $1
-         )
-         ON CONFLICT DO NOTHING`,
-        [identity.rows[0].id]
-      );
+      if (identity.rowCount !== 1) { send(res, 403, { error: "ACTIVE_FLOWPAY_PROFILE_REQUIRED" }); return; }
+
+      // Allocate a non-sequential 10-digit wallet-transfer number to the
+      // existing authenticated profile. The unique constraint is the final
+      // collision guard; retries use a cryptographically secure RNG.
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const candidate = String(randomInt(1_000_000_000, 10_000_000_000));
+        await pool.query(
+          `INSERT INTO public.fp_customer_account_numbers (user_id, account_number)
+           VALUES ($1, $2)
+           ON CONFLICT DO NOTHING`,
+          [identity.rows[0].id, candidate]
+        );
+        const assigned = await pool.query(
+          `SELECT account_number FROM public.fp_customer_account_numbers
+            WHERE user_id = $1 LIMIT 1`,
+          [identity.rows[0].id]
+        );
+        if (assigned.rowCount === 1) break;
+      }
+
       const [accounts, flowpayAccount] = await Promise.all([
         pool.query(
           `SELECT currency, status, created_at
@@ -469,13 +482,36 @@ const server = createServer(async (req, res) => {
           `SELECT account_number FROM public.fp_customer_account_numbers
             WHERE user_id = $1 LIMIT 1`, [identity.rows[0].id])
       ]);
+      if (flowpayAccount.rowCount !== 1 || !/^[1-9][0-9]{9}$/.test(String(flowpayAccount.rows[0].account_number))) {
+        throw new Error("FLOWPAY_ACCOUNT_NUMBER_ASSIGNMENT_FAILED");
+      }
+
+      const virtualAccountSchema = await pool.query<{ available: boolean }>(
+        "SELECT to_regclass('public.fp_paystack_dedicated_accounts') IS NOT NULL AS available"
+      );
+      const virtualAccount = virtualAccountSchema.rows[0]?.available === true
+        ? await pool.query(
+            `SELECT account_number, bank_name, account_name, status
+               FROM public.fp_paystack_dedicated_accounts
+              WHERE user_id = $1 AND status = 'assigned'
+              LIMIT 1`,
+            [identity.rows[0].id]
+          )
+        : { rows: [] as Array<Record<string, unknown>> };
+      const assignedVirtualAccount = virtualAccount.rows[0] ?? null;
       send(res, 200, {
         walletAccounts: accounts.rows.map(row => ({
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
-        flowpayAccountNumber: flowpayAccount.rows[0]?.account_number?.trim() ?? null,
-        virtualBankAccount: { assigned: false, accountNumber: null, bankName: null, accountName: null },
-        message: "Your FlowPay account number is for wallet-to-wallet transfers. It is not a provider-issued virtual bank account number."
+        flowpayAccountNumber: String(flowpayAccount.rows[0].account_number).trim(),
+        virtualBankAccount: assignedVirtualAccount ? {
+          assigned: true,
+          accountNumber: String(assignedVirtualAccount.account_number),
+          bankName: String(assignedVirtualAccount.bank_name),
+          accountName: String(assignedVirtualAccount.account_name)
+        } : { assigned: false, accountNumber: null, bankName: null, accountName: null },
+        profileRole: identity.rows[0].role,
+        message: "Your 10-digit FlowPay number is for wallet-to-wallet transfers. The separate bank virtual account appears only after Paystack confirms assignment."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
