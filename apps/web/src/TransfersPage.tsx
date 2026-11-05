@@ -440,12 +440,12 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       <div className="fp-transfer-form-card" style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
         <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
-        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 12-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
+        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 10-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
         {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
         <label htmlFor="fp-flowpay-recipient">Recipient FlowPay account number</label>
         <input id="fp-flowpay-recipient" value={recipientNumber}
-          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 12)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
-          inputMode="numeric" autoComplete="off" placeholder="Enter 12-digit FlowPay account number" maxLength={12}/>
+          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 10)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
+          inputMode="numeric" autoComplete="off" placeholder="Enter 10-digit FlowPay account number" maxLength={10}/>
         {recipientLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying FlowPay recipient…</p>}
         {recipientLookup === "verified" && <div className="fp-detail-list" role="status">
           <div><span>Verified recipient name</span><b>{recipientName}</b></div>
