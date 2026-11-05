@@ -51,8 +51,13 @@ function testPaystackSecret(): string | null {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
   return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
 }
+function sandboxRuntimeEnabled(): boolean {
+  return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+    process.env.NODE_ENV !== "production";
+}
 function payoutsEnabled(): boolean {
-  return process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+  return sandboxRuntimeEnabled() &&
+    process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
 }
 function beneficiaryFingerprint(secret: string, accountNumber: string): string {
   return createHmac("sha256", secret).update(accountNumber, "utf8").digest("hex");
@@ -438,6 +443,9 @@ async function applyVerifiedStatus(pool: Pool, reference: string, verified: Pays
 }
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
+  if (!sandboxRuntimeEnabled()) {
+    return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_SANDBOX_RUNTIME_DISABLED" } };
+  }
   const eventType = typeof event.event === "string" ? event.event : "";
   if (!["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
     return { status: 200, body: { received: true, ignored: true } };
@@ -471,7 +479,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
       send(res, 503, { error: "BANK_TRANSFER_SERVICE_NOT_CONFIGURED" }); return true;
     }
     const secret = testPaystackSecret();
-    if (!secret || (isSubmit && !payoutsEnabled())) {
+    if (!secret || !sandboxRuntimeEnabled() || (isSubmit && !payoutsEnabled())) {
       send(res, 503, {
         error: "PAYSTACK_TEST_BANK_PAYOUTS_NOT_ENABLED",
         environment: "test",
