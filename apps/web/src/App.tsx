@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AdminPage from "./AdminPage";
 import BulkOperations from "./BulkOperations";
 import LandingPage from "./LandingPage";
+import BalmzAiAssistant from "./BalmzAiAssistant";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
 import CustomerProfile from "./CustomerProfile";
@@ -216,6 +217,8 @@ export default function App() {
           </div>)}
         </section>
       </div>}
+
+      <BalmzAiAssistant token={authSession.data.session?.token ?? ""}/>
 
     </div>
   );
