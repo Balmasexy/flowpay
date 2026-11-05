@@ -538,6 +538,65 @@ export function createPaystackBankTransfersHandler(options: Options) {
       send(res, 400, { error: "INVALID_BANK_TRANSFER_DETAILS" }); return true;
     }
 
+    const dbKey = `paystack-bank-transfer:${identity.id}:${input.idempotencyKey}`;
+
+    // Return an existing request before contacting Paystack again. This makes
+    // retries safe when the browser loses the original HTTP response.
+    try {
+      const prior = await pool.query<StoredPayout>(
+        `SELECT transaction_id, user_id, account_id, reference, recipient_code,
+                transfer_code, provider_transfer_id, amount_minor::text AS amount_minor,
+                currency, bank_code, bank_name, account_name, account_number_last4,
+                status, provider_status
+           FROM public.fp_paystack_bank_transfers
+          WHERE idempotency_key = $1
+          LIMIT 1`,
+        [dbKey]
+      );
+      if (prior.rowCount === 1) {
+        const saved = prior.rows[0];
+        const matches = saved.user_id === identity.id &&
+          saved.amount_minor === input.amountMinor &&
+          saved.bank_code === bankCode &&
+          saved.account_number_last4.trim() === accountNumber.slice(-4);
+        if (!matches) {
+          send(res, 409, { error: "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_TRANSFER" }); return true;
+        }
+        send(res, 200, {
+          transactionId: saved.transaction_id, reference: saved.reference,
+          status: saved.status, amountMinor: saved.amount_minor, currency: "NGN",
+          bankName: saved.bank_name, accountName: saved.account_name,
+          accountNumberMasked: "******" + saved.account_number_last4.trim(),
+          duplicate: true, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(saved.status)
+        });
+        return true;
+      }
+    } catch (error) {
+      console.error("FlowPay bank payout idempotency lookup failed:", error instanceof Error ? error.message : "database error");
+      send(res, 503, { error: "BANK_TRANSFER_IDEMPOTENCY_UNAVAILABLE" }); return true;
+    }
+
+    // Validate the transaction PIN before creating a Paystack beneficiary.
+    let pinClient: PoolClient;
+    try { pinClient = await pool.connect(); }
+    catch { send(res, 503, { error: "BANK_TRANSFER_DATABASE_UNAVAILABLE" }); return true; }
+    try {
+      await pinClient.query("BEGIN");
+      const pinState = await verifyTransactionPin(pinClient, identity.id, input.transactionPin);
+      await pinClient.query("COMMIT");
+      if (pinState !== "verified") {
+        const code = pinState === "missing" ? "TRANSACTION_PIN_SETUP_REQUIRED"
+          : pinState === "locked" ? "TRANSACTION_PIN_TEMPORARILY_LOCKED" : "INVALID_TRANSACTION_PIN";
+        send(res, pinState === "missing" ? 403 : pinState === "locked" ? 429 : 401, { error: code }); return true;
+      }
+    } catch (error) {
+      await pinClient.query("ROLLBACK").catch(() => undefined);
+      console.error("FlowPay bank payout PIN verification failed:", error instanceof Error ? error.message : "database error");
+      send(res, 503, { error: "TRANSACTION_PIN_VERIFICATION_UNAVAILABLE" }); return true;
+    } finally {
+      pinClient.release();
+    }
+
     let recipient: { recipientCode: string; accountName: string; bankName: string };
     try {
       recipient = await resolveRecipient(secret, accountNumber, bankCode);
@@ -548,10 +607,8 @@ export function createPaystackBankTransfersHandler(options: Options) {
       return true;
     }
 
-    const dbKey = `paystack-bank-transfer:${identity.id}:${input.idempotencyKey}`;
     const reference = "flowpay-bnk-" + randomUUID().replace(/-/g, "");
     let transactionId = "";
-    let existing: StoredPayout | null = null;
     let client: PoolClient;
     try { client = await pool.connect(); }
     catch { send(res, 503, { error: "BANK_TRANSFER_DATABASE_UNAVAILABLE" }); return true; }
@@ -580,32 +637,23 @@ export function createPaystackBankTransfersHandler(options: Options) {
         [dbKey]
       );
       if (prior.rowCount === 1) {
-        existing = prior.rows[0];
-        const matches = existing.user_id === identity.id &&
-          existing.amount_minor === input.amountMinor &&
-          existing.bank_code === bankCode &&
-          existing.account_number_last4.trim() === accountNumber.slice(-4) &&
-          existing.recipient_code === recipient.recipientCode;
+        const saved = prior.rows[0];
+        const matches = saved.user_id === identity.id &&
+          saved.amount_minor === input.amountMinor &&
+          saved.bank_code === bankCode &&
+          saved.account_number_last4.trim() === accountNumber.slice(-4);
         await client.query("COMMIT");
         if (!matches) {
           send(res, 409, { error: "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_TRANSFER" }); return true;
         }
         send(res, 200, {
-          transactionId: existing.transaction_id, reference: existing.reference,
-          status: existing.status, amountMinor: existing.amount_minor, currency: "NGN",
-          bankName: existing.bank_name, accountName: existing.account_name,
-          accountNumberMasked: "******" + existing.account_number_last4.trim(),
-          duplicate: true, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(existing.status)
+          transactionId: saved.transaction_id, reference: saved.reference,
+          status: saved.status, amountMinor: saved.amount_minor, currency: "NGN",
+          bankName: saved.bank_name, accountName: saved.account_name,
+          accountNumberMasked: "******" + saved.account_number_last4.trim(),
+          duplicate: true, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(saved.status)
         });
         return true;
-      }
-
-      const pinState = await verifyTransactionPin(client, identity.id, input.transactionPin);
-      if (pinState !== "verified") {
-        await client.query("COMMIT");
-        const code = pinState === "missing" ? "TRANSACTION_PIN_SETUP_REQUIRED"
-          : pinState === "locked" ? "TRANSACTION_PIN_TEMPORARILY_LOCKED" : "INVALID_TRANSACTION_PIN";
-        send(res, pinState === "missing" ? 403 : pinState === "locked" ? 429 : 401, { error: code }); return true;
       }
 
       const clearing = await client.query<{ id: string }>(
@@ -668,8 +716,6 @@ export function createPaystackBankTransfersHandler(options: Options) {
     } finally {
       client.release();
     }
-
-    if (existing) return true;
 
     try {
       const initiated = await paystackRequest(secret, "/transfer", "POST", {
