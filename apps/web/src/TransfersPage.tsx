@@ -316,12 +316,25 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   };
 
   return <section className="fp-panel fp-detail-panel">
-    <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ArrowLeftRight size={19}/></span><span>Send money from FlowPay</span></div>
-    <p className="fp-muted">Choose a destination. Deposits and Add Money remain separate under Deposit History.</p>
-
-    <div className="fp-transfer-mode-switch" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"16px 0"}}>
-      <button type="button" role="tab" aria-selected={mode === "flowpay"} className={mode === "flowpay" ? "fp-primary" : "fp-outline"} onClick={() => changeMode("flowpay")}>To FlowPay</button>
-      <button type="button" role="tab" aria-selected={mode === "bank"} className={mode === "bank" ? "fp-primary" : "fp-outline"} onClick={() => changeMode("bank")}>To Bank</button>
+    <div style={{background:"linear-gradient(135deg,#111827 0%,#252a34 100%)",color:"#fff",borderRadius:20,padding:20,marginBottom:20,boxShadow:"0 16px 36px rgba(15,23,42,.16)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{width:42,height:42,borderRadius:14,display:"grid",placeItems:"center",background:"rgba(249,115,22,.18)",color:"#fb923c"}}><ArrowLeftRight size={21}/></span>
+          <div><div style={{fontSize:11,letterSpacing:1.5,fontWeight:800,color:"#fdba74"}}>FLOWPAY TRANSFERS</div><h2 style={{fontSize:23,lineHeight:1.15,margin:"4px 0 0",color:"#fff"}}>Send money</h2></div>
+        </div>
+        <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,padding:"7px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#f8fafc"}}>NGN WALLET</span>
+      </div>
+      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>Choose a trusted destination. Your wallet balance and transaction history stay in FlowPay.</p>
+      <div className="fp-transfer-mode-switch" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
+        <button type="button" role="tab" aria-selected={mode === "flowpay"} onClick={() => changeMode("flowpay")}
+          style={{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"13px 14px",borderRadius:14,border:mode === "flowpay" ? "2px solid #fb923c" : "1px solid rgba(255,255,255,.18)",background:mode === "flowpay" ? "#f97316" : "rgba(255,255,255,.07)",color:"#fff",cursor:"pointer",minHeight:72}}>
+          <Wallet size={22}/><span style={{display:"grid",gap:3}}><b style={{fontSize:14}}>To FlowPay</b><small style={{fontSize:11,color:mode === "flowpay" ? "#fff7ed" : "#cbd5e1"}}>Another FlowPay wallet</small></span>
+        </button>
+        <button type="button" role="tab" aria-selected={mode === "bank"} onClick={() => changeMode("bank")}
+          style={{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"13px 14px",borderRadius:14,border:mode === "bank" ? "2px solid #fb923c" : "1px solid rgba(255,255,255,.18)",background:mode === "bank" ? "#f97316" : "rgba(255,255,255,.07)",color:"#fff",cursor:"pointer",minHeight:72}}>
+          <Building2 size={22}/><span style={{display:"grid",gap:3}}><b style={{fontSize:14}}>To Bank</b><small style={{fontSize:11,color:mode === "bank" ? "#fff7ed" : "#cbd5e1"}}>Nigerian bank account</small></span>
+        </button>
+      </div>
     </div>
 
     {loading ? <p className="fp-overview-muted" role="status">Loading your wallet and transfer security…</p> : <>
@@ -331,8 +344,10 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         <div><span>Transaction PIN</span><b>{pinStatusLoading ? "Checking…" : pinSet ? "Configured" : "Setup required"}</b></div>
       </div>
 
+      <div style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
-        <h3 className="fp-account-section-title"><Wallet size={17}/> Transfer to another FlowPay customer</h3>
+        <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
+        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 12-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
         {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
         <label htmlFor="fp-flowpay-recipient">Recipient FlowPay account number</label>
         <input id="fp-flowpay-recipient" value={recipientNumber}
@@ -373,8 +388,12 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           <div>Both customer ledger entries were committed together.</div>
         </div>}
       </> : <>
-        <h3 className="fp-account-section-title"><Building2 size={17}/> Transfer to a Nigerian bank</h3>
-        {banksLoading ? <p className="fp-overview-muted" role="status">Loading Flutterwave's bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Confirm the FlowPay backend has Flutterwave test-mode configuration, then refresh.</div> : <>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
+          <h3 className="fp-account-section-title" style={{margin:0}}><Building2 size={17}/> To a Nigerian bank</h3>
+          <span style={{fontSize:11,fontWeight:800,color:"#c2410c",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:999,padding:"6px 10px"}}>PAYSTACK · TEST MODE</span>
+        </div>
+        <p className="fp-muted" style={{marginTop:0}}>Verify the recipient's account name before reviewing the bank transfer.</p>
+        {banksLoading ? <p className="fp-overview-muted" role="status">Loading Paystack's bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Check PAYSTACK_ENVIRONMENT=test and the Paystack test secret in Render, then refresh.</div> : <>
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
             <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
@@ -402,20 +421,21 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           <input id="fp-bank-transfer-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount}
             onChange={event => { setAmount(event.target.value); setBankPreview(null); setTransferError(""); }}/>
           {transferError && <div className="fp-preview-warning" role="alert">{transferError}</div>}
-          <button className="fp-outline" type="button" onClick={reviewBankTransfer}
+          <button className="fp-primary" type="button" onClick={reviewBankTransfer}
             disabled={!activeNgnWallet || bankLookup !== "verified" || !amount.trim()}>Review bank transfer</button>
           {bankPreview && <div className="fp-preview-warning" role="status">
-            <b>Bank recipient verified — transfer not submitted</b>
+            <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> Recipient verified · Review only</b>
             <div>Beneficiary: {bankPreview.accountName}</div>
             <div>Bank: {bankPreview.bankName}</div>
             <div>Account: ••••{bankPreview.accountNumber.slice(-4)}</div>
             <div>Amount: {formatAmount(bankPreview.amountMinor)}</div>
-            <div>Bank payouts are not enabled yet. Flutterwave payout funding, server IP whitelisting, transfer-status reconciliation and payout authorization must be configured and verified before FlowPay can submit bank transfers.</div>
+            <div>This is a review only. Paystack bank payout activation, transfer recipient creation, provider balance checks, approval controls and final-status reconciliation must be verified before FlowPay can submit a payout.</div>
           </div>}
         </>}
       </>}
 
       <div className="fp-preview-warning" style={{marginTop:18}}><ShieldCheck size={17}/> Never share your transaction PIN, login password or one-time code. FlowPay deposits remain separate and this transfer page does not change deposit records.</div>
+    </div>
     </>}
 
     <div className="fp-overview-card-heading" style={{marginTop:24}}><span className="fp-overview-icon"><Clock3 size={19}/></span><span>Transfer history</span></div>
