@@ -228,7 +228,7 @@ const server = createServer(async (req, res) => {
       const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
-        `SELECT app_user.id
+        `SELECT app_user.id, auth_user.name AS cardholder_name
            FROM neon_auth."user" AS auth_user
            JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
@@ -239,12 +239,18 @@ const server = createServer(async (req, res) => {
            FROM public.fp_cards
           WHERE user_id = $1
           ORDER BY created_at DESC`, [identity.rows[0].id]);
-      send(res, 200, { cards: result.rows.map(row => ({
-        id: row.id, provider: row.provider, type: row.card_type, status: row.status,
-        last4: row.last4 ? String(row.last4).trim() : null,
-        expiryMonth: row.expiry_month, expiryYear: row.expiry_year,
-        createdAt: row.created_at, updatedAt: row.updated_at
-      })), actionsEnabled: false });
+      send(res, 200, {
+        cardholderName: typeof identity.rows[0].cardholder_name === "string" && identity.rows[0].cardholder_name.trim()
+          ? identity.rows[0].cardholder_name.trim() : null,
+        cards: result.rows.map(row => ({
+          id: row.id, provider: row.provider, type: row.card_type, status: row.status,
+          last4: row.last4 ? String(row.last4).trim() : null,
+          expiryMonth: row.expiry_month, expiryYear: row.expiry_year,
+          createdAt: row.created_at, updatedAt: row.updated_at
+        })),
+        actionsEnabled: false,
+        cardIssuanceAvailable: false
+      });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay customer cards request failed:", error instanceof Error ? error.message : "unknown cards error");
