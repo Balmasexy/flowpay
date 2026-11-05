@@ -130,6 +130,7 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
     const verifiedId = typeof verified.id === "number" && Number.isSafeInteger(verified.id)
       ? String(verified.id)
       : typeof verified.id === "string" && /^\d{1,30}$/.test(verified.id) ? verified.id : null;
+    // Flutterwave may return transaction IDs as strings; accept decimal digits only.
     const verifiedAmount = amountToMinor(verified.amount);
     const eventAmount = amountToMinor(data.amount);
     if (
