@@ -24,7 +24,7 @@ const entries = [
   { label: "Fixed Savings", path: "/fixed-savings", description: "Plan a possible fixed-savings term", terms: "lock maturity term" },
   { label: "Spend & Save", path: "/spend-save", description: "Plan monthly spending and savings", terms: "budget income expenses" },
   { label: "Customer Profile", path: "/profile", description: "View and update your customer profile", terms: "personal details photo avatar" },
-  { label: "View Account Number", path: "/account-number", description: "Copy your 12-digit FlowPay transfer account number and check virtual bank assignment", terms: "FlowPay internal account number bank nuban virtual account" },
+  { label: "View Account Number", path: "/account-number", description: "Copy your 10-digit FlowPay transfer account number and check virtual bank assignment", terms: "FlowPay internal account number bank nuban virtual account" },
   { label: "Documents", path: "/documents", description: "View required account documents", terms: "nin bvn identity statement" },
   { label: "Invitations", path: "/invitations", description: "Referral services availability", terms: "invite referral friends" },
   { label: "More", path: "/more", description: "Open additional customer services and account shortcuts", terms: "more services shortcuts" },

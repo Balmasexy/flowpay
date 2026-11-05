@@ -44,7 +44,7 @@ function setup(options: {
           account_id: "00000000-0000-4000-8000-000000000003",
           reference: "flowpay-ps-00000000000000000000000000000001",
           provider_transaction_id: null,
-          amount_minor: "250000",
+          amount_minor: String(options.amount ?? 250000),
           currency: "NGN",
           status: "pending"
         }] };
@@ -68,8 +68,8 @@ function setup(options: {
       }
       if (sql.includes("SELECT account_id::text AS account_id, SUM(amount_minor)")) {
         return { rowCount: options.transactionStatus === "posted" ? 2 : 0, rows: [
-          { account_id: "00000000-0000-4000-8000-000000000003", amount_minor: "250000", entry_count: 1 },
-          { account_id: "00000000-0000-4000-8000-000000000004", amount_minor: "-250000", entry_count: 1 }
+          { account_id: "00000000-0000-4000-8000-000000000003", amount_minor: String(options.amount ?? 250000), entry_count: 1 },
+          { account_id: "00000000-0000-4000-8000-000000000004", amount_minor: String(-(options.amount ?? 250000)), entry_count: 1 }
         ] };
       }
       if (sql.includes("SELECT COUNT(*)::int AS entry_count")) {
@@ -124,6 +124,18 @@ test("valid Paystack test charge posts one balanced customer/clearing ledger tra
   assert.equal(response.result().body.walletCredited, true);
   assert.ok(context.queries.some(query => query.includes("INSERT INTO public.fp_ledger_entries")));
   assert.ok(context.queries.some(query => query.includes("UPDATE public.fp_ledger_transactions")));
+  assert.ok(context.queries.some(query => query.includes("UPDATE public.fp_paystack_deposits")));
+});
+
+test("credits a verified NGN 50,000 Paystack sandbox deposit exactly once", async () => {
+  const context = setup({ amount: 5_000_000, verifiedAmount: 5_000_000 });
+  const response = context.response();
+  await createPaystackWebhookHandler({ pool: context.pool })(context.request(), response.res);
+  assert.equal(response.result().status, 200);
+  assert.equal(response.result().body.providerVerified, true);
+  assert.equal(response.result().body.status, "posted");
+  assert.equal(response.result().body.walletCredited, true);
+  assert.ok(context.queries.some(query => query.includes("INSERT INTO public.fp_ledger_entries")));
   assert.ok(context.queries.some(query => query.includes("UPDATE public.fp_paystack_deposits")));
 });
 

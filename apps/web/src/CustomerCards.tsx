@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { CreditCard, RefreshCw, ShieldCheck, AlertCircle } from "lucide-react";
+import {
+  AlertCircle, Building2, Check, Copy, CreditCard, RefreshCw, ShieldCheck
+} from "lucide-react";
 
 type Card = {
   id: string;
@@ -11,33 +13,70 @@ type Card = {
   expiryYear: number | null;
   createdAt: string;
 };
+type VirtualBankAccount = {
+  assigned: boolean;
+  status: string;
+  accountNumber: string | null;
+  bankName: string | null;
+  accountName: string | null;
+};
 
-const CARD_STATUSES = new Set<Card["status"]>(["pending", "active", "frozen", "blocked", "closed", "failed"]);
+const CARD_STATUSES = new Set<Card["status"]>([
+  "pending", "active", "frozen", "blocked", "closed", "failed"
+]);
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : {};
+}
 function parseCards(value: unknown): Card[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item): Card[] => {
-    if (!item || typeof item !== "object") return [];
-    const raw = item as Record<string, unknown>;
+    const raw = asRecord(item);
     if (typeof raw.id !== "string" || !raw.id.trim()) return [];
-    const month = typeof raw.expiryMonth === "number" && Number.isInteger(raw.expiryMonth) && raw.expiryMonth >= 1 && raw.expiryMonth <= 12 ? raw.expiryMonth : null;
-    const year = typeof raw.expiryYear === "number" && Number.isInteger(raw.expiryYear) && raw.expiryYear >= 2000 && raw.expiryYear <= 2200 ? raw.expiryYear : null;
+    const month = typeof raw.expiryMonth === "number" && Number.isInteger(raw.expiryMonth) &&
+      raw.expiryMonth >= 1 && raw.expiryMonth <= 12 ? raw.expiryMonth : null;
+    const year = typeof raw.expiryYear === "number" && Number.isInteger(raw.expiryYear) &&
+      raw.expiryYear >= 2000 && raw.expiryYear <= 2200 ? raw.expiryYear : null;
     return [{
       id: raw.id,
       provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider : "Card provider",
       type: raw.type === "physical" ? "physical" : "virtual",
-      status: typeof raw.status === "string" && CARD_STATUSES.has(raw.status as Card["status"]) ? raw.status as Card["status"] : "pending",
-      last4: typeof raw.last4 === "string" && /^\d{4}$/.test(raw.last4) ? raw.last4 : null,
+      status: typeof raw.status === "string" && CARD_STATUSES.has(raw.status as Card["status"])
+        ? raw.status as Card["status"] : "pending",
+      last4: typeof raw.last4 === "string" && /^[0-9]{4}$/.test(raw.last4) ? raw.last4 : null,
       expiryMonth: month,
       expiryYear: year,
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : ""
     }];
   });
 }
+function parseVirtualBankAccount(value: unknown): VirtualBankAccount {
+  const raw = asRecord(value);
+  const assigned = raw.assigned === true &&
+    typeof raw.accountNumber === "string" && /^[0-9]{10}$/.test(raw.accountNumber) &&
+    typeof raw.bankName === "string" && !!raw.bankName.trim() &&
+    typeof raw.accountName === "string" && !!raw.accountName.trim();
+  return {
+    assigned,
+    status: typeof raw.status === "string" ? raw.status : assigned ? "assigned" : "not_requested",
+    accountNumber: assigned ? raw.accountNumber as string : null,
+    bankName: assigned ? raw.bankName as string : null,
+    accountName: assigned ? raw.accountName as string : null
+  };
+}
 
 export default function CustomerCards({ token }: { token: string }) {
   const [cards, setCards] = useState<Card[]>([]);
   const [cardholderName, setCardholderName] = useState<string | null>(null);
+  const [virtualBankAccount, setVirtualBankAccount] = useState<VirtualBankAccount>({
+    assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+  });
+  const [accountConsent, setAccountConsent] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [accountMessage, setAccountMessage] = useState("");
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
@@ -48,11 +87,13 @@ export default function CustomerCards({ token }: { token: string }) {
     if (!token || !apiBase) {
       setCards([]);
       setCardholderName(null);
+      setVirtualBankAccount({
+        assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+      });
       setError("Your authenticated cards service is not configured.");
       setLoading(false);
       return () => { active = false; };
     }
-    setCardholderName(null);
     setLoading(true);
     setError("");
     fetch(apiBase + "/customer/cards", {
@@ -60,47 +101,147 @@ export default function CustomerCards({ token }: { token: string }) {
       headers: { Authorization: "Bearer " + token }
     }).then(async response => {
       const data: unknown = await response.json().catch(() => ({}));
+      const body = asRecord(data);
       if (!response.ok) {
-        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string" ? data.error : "Unable to load cards.";
-        throw new Error(message);
+        throw new Error(typeof body.error === "string" ? body.error : "Unable to load cards.");
       }
-      return data;
-    }).then(data => {
-      if (active) {
-        const responseBody = data && typeof data === "object" ? data as Record<string, unknown> : {};
-        setCardholderName(typeof responseBody.cardholderName === "string" && responseBody.cardholderName.trim()
-          ? responseBody.cardholderName.trim().slice(0, 100) : null);
-        setCards(parseCards(responseBody.cards));
-      }
-    }).catch(reason => {
-      if (active) {
-        setCards([]);
-        setCardholderName(null);
-        setError(reason instanceof Error ? reason.message : "Unable to load cards.");
-      }
+      return body;
+    }).then(body => {
+      if (!active) return;
+      setCardholderName(typeof body.cardholderName === "string" && body.cardholderName.trim()
+        ? body.cardholderName.trim().slice(0, 100) : null);
+      setCards(parseCards(body.cards));
+      setVirtualBankAccount(parseVirtualBankAccount(body.virtualBankAccount));
+    }).catch(cause => {
+      if (!active) return;
+      setCards([]);
+      setCardholderName(null);
+      setVirtualBankAccount({
+        assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+      });
+      setError(cause instanceof Error ? cause.message : "Unable to load cards.");
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, apiBase, refresh]);
 
+  const requestVirtualBankAccount = async () => {
+    if (accountBusy || !accountConsent || !apiBase) return;
+    setAccountBusy(true);
+    setAccountError("");
+    setAccountMessage("");
+    try {
+      const response = await fetch(apiBase + "/customer/dedicated-bank-account", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ consent: true })
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok && response.status !== 202) {
+        throw new Error(typeof body.message === "string" ? body.message :
+          typeof body.error === "string" ? body.error : "Unable to request a virtual bank account.");
+      }
+      setVirtualBankAccount(parseVirtualBankAccount(body.virtualBankAccount));
+      setAccountMessage(typeof body.message === "string" ? body.message :
+        body.status === "pending" ? "Paystack is processing the test account request." :
+          "Paystack returned the account assignment status.");
+      setAccountConsent(false);
+      setRefresh(value => value + 1);
+    } catch (cause) {
+      setAccountError(cause instanceof Error ? cause.message : "Unable to request a virtual bank account.");
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const copyVirtualAccount = async () => {
+    if (!virtualBankAccount.accountNumber) return;
+    try {
+      await navigator.clipboard.writeText(virtualBankAccount.accountNumber);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setAccountError("Clipboard unavailable. Select and copy the account number manually.");
+    }
+  };
+
   return <section className="fp-panel fp-detail-panel">
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div><h2>Cards</h2><p className="fp-muted">Your card records securely stored in FlowPay.</p></div>
-      <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading}><RefreshCw size={15}/> Refresh</button>
+      <div>
+        <h2>Cards</h2>
+        <p className="fp-muted">View issuer-confirmed card records and your provider-issued bank account.</p>
+      </div>
+      <button type="button" className="fp-outline" onClick={() => setRefresh(value => value + 1)} disabled={loading}>
+        <RefreshCw size={15}/> Refresh
+      </button>
     </div>
+
     <div className="fp-detail-list">
       <div><span>Cardholder name</span><b>{cardholderName || "Not available on this profile"}</b></div>
       <div><span>Card number</span><b>Available only after issuer-confirmed issuance</b></div>
     </div>
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> Cardholder name is read from your authenticated FlowPay registration profile. Card creation, full card-detail reveal, PIN changes and freeze/unfreeze actions remain unavailable until an approved card issuer is connected and confirms issuance. Full card numbers and security codes are never shown here.</div>
+
+    <div style={{marginTop:20,border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:16,padding:16,display:"grid",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:9}}>
+        <Building2 size={19}/><b>Virtual bank account</b>
+        <span style={{marginLeft:"auto",fontSize:11,fontWeight:800,color:virtualBankAccount.assigned ? "#15803d" : "#9a3412"}}>
+          {virtualBankAccount.assigned ? "ASSIGNED" : virtualBankAccount.status.toUpperCase().replace(/_/g," ")}
+        </span>
+      </div>
+      {virtualBankAccount.assigned ? <>
+        <div className="fp-detail-list">
+          <div><span>Bank</span><b>{virtualBankAccount.bankName}</b></div>
+          <div><span>Account name</span><b>{virtualBankAccount.accountName}</b></div>
+          <div><span>10-digit account number</span><b style={{fontSize:20,letterSpacing:1.2}}>{virtualBankAccount.accountNumber}</b></div>
+        </div>
+        <button type="button" className="fp-outline" onClick={() => void copyVirtualAccount()}>
+          {copied ? <Check size={15}/> : <Copy size={15}/>} {copied ? "Copied" : "Copy virtual account number"}
+        </button>
+      </> : <>
+        <p className="fp-muted" style={{margin:0}}>
+          This Paystack-issued account is for receiving NGN bank transfers. It is separate from your 10-digit FlowPay wallet number and from your card number.
+        </p>
+        <label style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:13,lineHeight:1.45}}>
+          <input type="checkbox" checked={accountConsent} onChange={event => setAccountConsent(event.target.checked)} style={{marginTop:3}}/>
+          <span>I consent to FlowPay sending my registered full name, email address and phone number to Paystack to request a dedicated NGN virtual bank account for this profile.</span>
+        </label>
+        <button type="button" className="fp-primary" disabled={!accountConsent || accountBusy || loading}
+          onClick={() => void requestVirtualBankAccount()}>
+          {accountBusy ? "Requesting with Paystack…" : "Request test virtual bank account"}
+        </button>
+        <small className="fp-muted">
+          Sandbox only. Paystack must accept and confirm the assignment before a number is shown. Financial-services eligibility or identity validation may be required.
+        </small>
+      </>}
+      {accountMessage && <div className="fp-preview-warning" role="status">{accountMessage}</div>}
+      {accountError && <div className="fp-preview-warning" role="alert">{accountError}</div>}
+    </div>
+
+    <div style={{marginTop:16,border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:16,padding:16,display:"grid",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:9}}><CreditCard size={18}/><b>Virtual card credentials</b></div>
+      <p className="fp-muted" style={{margin:0}}>
+        No issuer-confirmed virtual card is linked yet. Full card number, CVV/CVC, expiry date and card PIN can appear only through an approved secure issuer flow. FlowPay will not generate or store fake card credentials.
+      </p>
+      <div className="fp-preview-warning">
+        <ShieldCheck size={17}/> Flutterwave's published virtual-card API requires provider approval before use. Card issuance and secure credential reveal remain unavailable until Flutterwave authorizes this FlowPay integration.
+      </div>
+    </div>
+
     {loading && <p className="fp-muted">Loading your card records…</p>}
-    {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
-    {!loading && !error && cards.length === 0 && <div className="fp-empty"><CreditCard size={24}/><b>No card records yet</b><span>Your virtual or physical card will appear here after a verified card-issuing workflow creates it.</span></div>}
+    {error && <div className="fp-preview-warning" role="alert"><AlertCircle size={17}/> {error}</div>}
+    {!loading && !error && cards.length === 0 && <div className="fp-empty">
+      <CreditCard size={24}/><b>No card records yet</b>
+      <span>Your virtual or physical card will appear here after an approved issuer confirms creation.</span>
+    </div>}
     {!loading && !error && cards.length > 0 && <div className="fp-feature-list">
       {cards.map(card => <div key={card.id} style={{alignItems:"center",gap:12}}>
         <CreditCard size={20}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{card.type === "virtual" ? "Virtual card" : "Physical card"}{card.last4 ? " •••• " + card.last4 : ""}</b>
-          <small>{card.provider.replace(/_/g," ")}{card.expiryMonth && card.expiryYear ? " · Expires " + String(card.expiryMonth).padStart(2,"0") + "/" + card.expiryYear : ""}</small>
+          <small>{card.provider.replace(/_/g," ")}</small>
+          <small>Card number: {card.last4 ? "•••• •••• •••• " + card.last4 : "Not issued"}</small>
+          <small>Expiry: {card.expiryMonth && card.expiryYear
+            ? String(card.expiryMonth).padStart(2,"0") + "/" + card.expiryYear : "Not available"}</small>
+          <small>CVV/CVC: Not stored · Card PIN: issuer-managed; use issuer reset if needed</small>
         </div>
         <span>{card.status}</span>
       </div>)}

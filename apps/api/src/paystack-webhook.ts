@@ -1,3 +1,5 @@
+import { processPaystackDedicatedAccountWebhook } from "./paystack-dedicated-accounts.js";
+import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
@@ -105,6 +107,24 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       event = parsed as Record<string, unknown>;
     } catch {
       send(res, 400, { error: "INVALID_JSON" });
+      return true;
+    }
+    if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
+      const result = await processPaystackTransferWebhook(pool, secret, event);
+      send(res, result.status, result.body);
+      return true;
+    }
+    if ([
+      "dedicatedaccount.assign.success", "dedicatedaccount.assign.failed",
+      "customeridentification.success", "customeridentification.failed"
+    ].includes(String(event.event))) {
+      try {
+        const handled = await processPaystackDedicatedAccountWebhook(pool, event);
+        send(res, 200, { received: true, processed: handled });
+      } catch (error) {
+        console.error("FlowPay Paystack dedicated-account webhook failed:", error instanceof Error ? error.message : "database error");
+        send(res, 503, { error: "DEDICATED_ACCOUNT_WEBHOOK_RECONCILIATION_UNAVAILABLE" });
+      }
       return true;
     }
     if (event.event !== "charge.success") {

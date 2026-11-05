@@ -45,7 +45,7 @@ function derivePin(pin: string, salt: Buffer): Promise<Buffer> {
 }
 
 function validAccountNumber(value: unknown): value is string {
-  return typeof value === "string" && /^\d{12}$/.test(value);
+  return typeof value === "string" && /^[1-9]\d{9}$/.test(value);
 }
 
 function validUuid(value: unknown): value is string {
@@ -226,7 +226,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
-              AND customer.role = 'customer'
+              AND customer.role IN ('customer', 'super_admin')
               AND auth_user."emailVerified" = true
             LIMIT 1`,
           [input.accountNumber]
@@ -288,7 +288,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
             WHERE account_number.account_number = $1
               AND customer.status = 'active'
-              AND customer.role = 'customer'
+              AND customer.role IN ('customer', 'super_admin')
               AND auth_user."emailVerified" = true
             LIMIT 1`,
           [input.recipientAccountNumber]
@@ -309,7 +309,7 @@ export function createFlowPayTransfersHandler(options: Options) {
         // direction transfers from deadlocking each other.
         const eligibleUsers = await client.query<{ id: string }>(
           `SELECT id FROM public.fp_users
-            WHERE id = ANY($1::uuid[]) AND role = 'customer' AND status = 'active'
+            WHERE id = ANY($1::uuid[]) AND role IN ('customer', 'super_admin') AND status = 'active'
             ORDER BY id FOR UPDATE`,
           [[identity.id, recipient.id]]
         );

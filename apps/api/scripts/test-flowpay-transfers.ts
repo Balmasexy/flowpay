@@ -12,7 +12,7 @@ const recipientId = "00000000-0000-4000-8000-000000000002";
 const senderWalletId = "00000000-0000-4000-8000-000000000003";
 const recipientWalletId = "00000000-0000-4000-8000-000000000004";
 const transactionId = "00000000-0000-4000-8000-000000000005";
-const recipientAccountNumber = "123456789012";
+const recipientAccountNumber = "1234567890";
 const idempotencyKey = "00000000-0000-4000-8000-000000000006";
 const accountName = "Test Recipient";
 const pinSalt = Buffer.from("0123456789abcdef");
@@ -73,7 +73,7 @@ async function makeContext(options: SetupOptions = {}) {
             id: transactionId, status: "posted", sender_user_id: senderId,
             recipient_user_id: options.priorRecipient ?? recipientId,
             recipient_account_number: recipientAccountNumber,
-            amount_minor: options.priorAmount ?? "12345", currency: "NGN",
+            amount_minor: options.priorAmount ?? "5000000", currency: "NGN",
             reference: "FPW-TEST-REFERENCE"
           }]
         };
@@ -101,7 +101,7 @@ async function makeContext(options: SetupOptions = {}) {
         };
       }
       if (sql.includes("COALESCE(SUM(entry.amount_minor)")) {
-        return { rowCount: 1, rows: [{ balance_minor: options.balance ?? "500000" }] };
+        return { rowCount: 1, rows: [{ balance_minor: options.balance ?? "20000000" }] };
       }
       if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
         return { rowCount: 1, rows: [{ id: transactionId }] };
@@ -151,7 +151,7 @@ async function makeContext(options: SetupOptions = {}) {
 function transferBody(overrides: Record<string, unknown> = {}) {
   return {
     recipientAccountNumber,
-    amountMinor: "12345",
+    amountMinor: "5000000",
     currency: "NGN",
     idempotencyKey,
     transactionPin: "123456",
@@ -159,7 +159,7 @@ function transferBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("posts exactly one balanced sender debit and recipient credit", async () => {
+test("posts a ₦50,000 transfer with one balanced sender debit and recipient credit", async () => {
   const context = await makeContext();
   const response = context.response();
   assert.equal(await context.handler(context.request(transferBody()), response.res), true);
@@ -169,7 +169,7 @@ test("posts exactly one balanced sender debit and recipient credit", async () =>
   assert.equal(result.body.recipientName, accountName);
   assert.equal(context.ledgerValues.length, 1);
   assert.deepEqual(context.ledgerValues[0], [
-    transactionId, senderWalletId, "-12345", recipientWalletId, "12345"
+    transactionId, senderWalletId, "-5000000", recipientWalletId, "5000000"
   ]);
   assert.ok(context.statements.some(item => item.sql === "COMMIT"));
   assert.ok(context.statements.some(item => item.sql.includes("SET status = 'posted'")));

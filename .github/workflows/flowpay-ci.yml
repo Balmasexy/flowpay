@@ -6,6 +6,7 @@ on:
       - main
       - feat/api-foundation
       - feat/customer-banking-routes-no-sidebar
+      - feat/to-bank-paystack-sandbox-payouts
     paths:
       - "apps/**"
       - ".github/workflows/**"
@@ -64,8 +65,17 @@ jobs:
       - name: Test Paystack webhook verification and replay protection
         run: npm run test:paystack-webhook --prefix apps/api
 
+      - name: Test NGN 50,000 Paystack sandbox deposit checkout
+        run: npm run test:paystack-checkout-50000 --prefix apps/api
+
       - name: Test Paystack Nigerian bank directory and account resolution
         run: npm run test:paystack-bank-lookup --prefix apps/api
+
+      - name: Test Paystack sandbox bank payout, idempotency and ledger safeguards
+        run: npm run test:paystack-bank-transfers --prefix apps/api
+
+      - name: Test Paystack dedicated bank account consent and assignment
+        run: npm run test:paystack-dedicated-accounts --prefix apps/api
 
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api

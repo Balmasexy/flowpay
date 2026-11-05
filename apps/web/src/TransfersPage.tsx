@@ -78,6 +78,11 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   const [transferError, setTransferError] = useState("");
   const [transferResult, setTransferResult] = useState<{ reference: string; amountMinor: string; recipientName: string } | null>(null);
   const [bankPreview, setBankPreview] = useState<{ bankName: string; accountName: string; accountNumber: string; amountMinor: string } | null>(null);
+  const [bankTransferBusy, setBankTransferBusy] = useState(false);
+  const [bankTransferResult, setBankTransferResult] = useState<{
+    reference: string; status: string; final: boolean; amountMinor: string;
+    bankName: string; accountName: string; accountNumberMasked: string; message: string;
+  } | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => { setMode(initialMode); }, [initialMode]);
@@ -165,7 +170,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setRecipientName("");
     setRecipientCanTransfer(false);
     setTransferResult(null);
-    if (!/^\d{12}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
+    if (!/^[1-9]\d{9}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setRecipientLookup("loading");
@@ -304,7 +309,92 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     }
     if (!amountMinor) { setTransferError("Enter a valid NGN amount greater than zero."); return; }
     setTransferError("");
+    setBankTransferResult(null);
     setBankPreview({ bankName, accountName: bankAccountName, accountNumber: bankAccountNumber, amountMinor });
+  };
+
+  const submitBankTransfer = async () => {
+    if (bankTransferBusy || !bankPreview) return;
+    if (!pinSet) { setTransferError("Set your 6-digit transaction PIN before sending to a bank."); return; }
+    if (!/^\d{6}$/.test(transactionPin)) { setTransferError("Enter your 6-digit transaction PIN."); return; }
+    if (bankLookup !== "verified" || bankPreview.accountNumber !== bankAccountNumber) {
+      setTransferError("Re-verify the beneficiary bank account before sending."); return;
+    }
+    setBankTransferBusy(true);
+    setTransferError("");
+    try {
+      const response = await fetch(apiAddress() + "/customer/transfers/bank", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          accountNumber: bankPreview.accountNumber,
+          bankCode,
+          amountMinor: bankPreview.amountMinor,
+          idempotencyKey,
+          transactionPin
+        })
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok || typeof body.reference !== "string" || typeof body.status !== "string") {
+        throw new Error(typeof body.error === "string" ? body.error : "BANK_TRANSFER_NOT_SUBMITTED");
+      }
+      const final = body.final === true || ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(body.status);
+      setBankTransferResult({
+        reference: body.reference,
+        status: body.status,
+        final,
+        amountMinor: typeof body.amountMinor === "string" ? body.amountMinor : bankPreview.amountMinor,
+        bankName: typeof body.bankName === "string" ? body.bankName : bankPreview.bankName,
+        accountName: typeof body.accountName === "string" ? body.accountName : bankPreview.accountName,
+        accountNumberMasked: typeof body.accountNumberMasked === "string" ? body.accountNumberMasked : "******" + bankPreview.accountNumber.slice(-4),
+        message: typeof body.message === "string" ? body.message : "Paystack returned a bank-transfer status."
+      });
+      setTransactionPin("");
+      if (final) {
+        setAmount("");
+        setIdempotencyKey(crypto.randomUUID());
+      }
+      await load();
+    } catch (cause) {
+      setTransferError(cause instanceof Error ? cause.message : "Bank transfer could not be submitted.");
+    } finally { setBankTransferBusy(false); }
+  };
+
+  const refreshBankTransfer = async () => {
+    if (!bankTransferResult || bankTransferBusy) return;
+    setBankTransferBusy(true);
+    setTransferError("");
+    try {
+      const response = await fetch(apiAddress() + "/customer/transfers/bank/status?reference=" + encodeURIComponent(bankTransferResult.reference), {
+        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok || typeof body.status !== "string") {
+        throw new Error(typeof body.error === "string" ? body.error : "BANK_TRANSFER_STATUS_UNAVAILABLE");
+      }
+      const final = body.final === true || ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(body.status);
+      setBankTransferResult(previous => previous ? {
+        ...previous,
+        status: body.status as string,
+        final,
+        message: typeof body.message === "string" ? body.message : final
+          ? "Paystack reported a final transfer status."
+          : "The transfer is still being processed. The amount remains reserved."
+      } : previous);
+      if (final) setIdempotencyKey(crypto.randomUUID());
+      await load();
+    } catch (cause) {
+      setTransferError(cause instanceof Error ? cause.message : "Unable to refresh bank-transfer status.");
+    } finally { setBankTransferBusy(false); }
+  };
+
+  const startAnotherBankTransfer = () => {
+    setBankTransferResult(null);
+    setBankPreview(null);
+    setTransactionPin("");
+    setAmount("");
+    setIdempotencyKey(crypto.randomUUID());
+    setTransferError("");
   };
 
   const changeMode = (next: Mode) => {
@@ -313,6 +403,9 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setTransferError("");
     setTransferResult(null);
     setBankPreview(null);
+    setBankTransferResult(null);
+    setTransactionPin("");
+    setIdempotencyKey(crypto.randomUUID());
   };
 
   return <section className="fp-panel fp-detail-panel fp-transfer-page">
@@ -324,7 +417,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         </div>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,padding:"7px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#f8fafc"}}>NGN WALLET</span>
       </div>
-      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>{mode === "flowpay" ? "Move money between verified FlowPay wallets, with recipient confirmation and your transaction PIN." : "Verify a Nigerian bank account and review the payout details. Bank payout submission is not enabled yet."}</p>
+      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>{mode === "flowpay" ? "Move money between verified FlowPay wallets, with recipient confirmation and your transaction PIN." : "Send NGN to a verified Nigerian bank account using the Paystack test-transfer flow."}</p>
       <div className="fp-transfer-mode-switch fp-transfer-destination-grid" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
         <button type="button" role="tab" aria-selected={mode === "flowpay"} onClick={() => changeMode("flowpay")}
           style={{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"13px 14px",borderRadius:14,border:mode === "flowpay" ? "2px solid #fb923c" : "1px solid rgba(255,255,255,.18)",background:mode === "flowpay" ? "#f97316" : "rgba(255,255,255,.07)",color:"#fff",cursor:"pointer",minHeight:72}}>
@@ -347,12 +440,12 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       <div className="fp-transfer-form-card" style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
         <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
-        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 12-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
+        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 10-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
         {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
         <label htmlFor="fp-flowpay-recipient">Recipient FlowPay account number</label>
         <input id="fp-flowpay-recipient" value={recipientNumber}
-          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 12)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
-          inputMode="numeric" autoComplete="off" placeholder="Enter 12-digit FlowPay account number" maxLength={12}/>
+          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 10)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
+          inputMode="numeric" autoComplete="off" placeholder="Enter 10-digit FlowPay account number" maxLength={10}/>
         {recipientLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying FlowPay recipient…</p>}
         {recipientLookup === "verified" && <div className="fp-detail-list" role="status">
           <div><span>Verified recipient name</span><b>{recipientName}</b></div>
@@ -422,14 +515,51 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
             onChange={event => { setAmount(event.target.value); setBankPreview(null); setTransferError(""); }}/>
           {transferError && <div className="fp-preview-warning" role="alert">{transferError}</div>}
           <button className="fp-primary" type="button" onClick={reviewBankTransfer}
-            disabled={!activeNgnWallet || bankLookup !== "verified" || !amount.trim()}>Review bank transfer</button>
-          {bankPreview && <div className="fp-preview-warning" role="status">
-            <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> Recipient verified · Review only</b>
+            disabled={!activeNgnWallet || bankLookup !== "verified" || !amount.trim() || !!bankTransferResult}>Review bank transfer</button>
+          {bankPreview && !bankTransferResult && <div className="fp-preview-warning" role="group" aria-label="Bank transfer confirmation">
+            <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> Beneficiary verified · Confirm transfer</b>
             <div>Beneficiary: {bankPreview.accountName}</div>
             <div>Bank: {bankPreview.bankName}</div>
             <div>Account: ••••{bankPreview.accountNumber.slice(-4)}</div>
             <div>Amount: {formatAmount(bankPreview.amountMinor)}</div>
-            <div>This is a review only. Paystack bank payout activation, transfer recipient creation, provider balance checks, approval controls and final-status reconciliation must be verified before FlowPay can submit a payout.</div>
+            {!pinStatusLoading && !pinSet ? <>
+              <p>Set a transaction PIN before authorizing a bank transfer.</p>
+              <label htmlFor="fp-bank-transfer-pin-new">Create 6-digit transaction PIN</label>
+              <input id="fp-bank-transfer-pin-new" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6}
+                value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+              <label htmlFor="fp-bank-transfer-pin-confirm">Confirm transaction PIN</label>
+              <input id="fp-bank-transfer-pin-confirm" type="password" inputMode="numeric" autoComplete="new-password" maxLength={6}
+                value={pinConfirm} onChange={event => setPinConfirm(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+              <button className="fp-primary" type="button" disabled={pinSetupBusy || !/^\d{6}$/.test(transactionPin) || transactionPin !== pinConfirm}
+                onClick={() => void setupPin({ preventDefault: () => undefined } as FormEvent<HTMLFormElement>)}>
+                {pinSetupBusy ? "Saving PIN…" : "Save transaction PIN"}
+              </button>
+            </> : <>
+              <label htmlFor="fp-bank-transfer-pin">Transaction PIN</label>
+              <input id="fp-bank-transfer-pin" type="password" inputMode="numeric" autoComplete="current-password" maxLength={6}
+                placeholder="Enter your 6-digit PIN" value={transactionPin}
+                onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
+              <button className="fp-primary" type="button" onClick={() => void submitBankTransfer()}
+                disabled={bankTransferBusy || !pinSet || !/^\d{6}$/.test(transactionPin)}>
+                {bankTransferBusy ? "Submitting to Paystack…" : "Confirm bank transfer · Test mode"}
+              </button>
+            </>}
+            <small className="fp-muted">Confirming submits a Paystack test transfer. Test mode is simulated and does not move real money.</small>
+          </div>}
+          {bankTransferResult && <div className="fp-preview-warning" role="status" aria-live="polite">
+            <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> Bank transfer · {bankTransferResult.status.toUpperCase()}</b>
+            <div>Beneficiary: {bankTransferResult.accountName}</div>
+            <div>Bank: {bankTransferResult.bankName}</div>
+            <div>Account: {bankTransferResult.accountNumberMasked}</div>
+            <div>Amount: {formatAmount(bankTransferResult.amountMinor)}</div>
+            <div>Reference: {bankTransferResult.reference}</div>
+            <div>{bankTransferResult.message}</div>
+            {!bankTransferResult.final && <button type="button" className="fp-outline" onClick={() => void refreshBankTransfer()} disabled={bankTransferBusy}>
+              <RefreshCw size={16}/> {bankTransferBusy ? "Checking…" : "Refresh transfer status"}
+            </button>}
+            {bankTransferResult.final && <button type="button" className="fp-outline" onClick={startAnotherBankTransfer}>
+              Start another bank transfer
+            </button>}
           </div>}
         </>}
       </>}
@@ -444,7 +574,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         <span>{item.type.replace(/[_-]/g, " ")} · {item.destinationAccountMasked}<small>{dateLabel(item.createdAt)}</small></span>
         <b>{item.status}</b>
       </div>)}
-    </div> : <div className="fp-empty"><Building2 size={22}/><b>No transfers recorded yet</b><span>Completed FlowPay wallet transfers will appear here. Bank payout history will appear after payout processing is connected.</span></div>}
+    </div> : <div className="fp-empty"><Building2 size={22}/><b>No transfers recorded yet</b><span>Completed and pending FlowPay wallet and Paystack test bank transfers appear here.</span></div>}
     <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh transfer details</button>
   </section>;
 }
