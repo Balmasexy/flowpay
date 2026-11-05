@@ -27,7 +27,7 @@ function parseCards(value: unknown): Card[] {
       provider: typeof raw.provider === "string" && raw.provider.trim() ? raw.provider : "Card provider",
       type: raw.type === "physical" ? "physical" : "virtual",
       status: typeof raw.status === "string" && CARD_STATUSES.has(raw.status as Card["status"]) ? raw.status as Card["status"] : "pending",
-      last4: typeof raw.last4 === "string" && /^\\d{4}$/.test(raw.last4) ? raw.last4 : null,
+      last4: typeof raw.last4 === "string" && /^\d{4}$/.test(raw.last4) ? raw.last4 : null,
       expiryMonth: month,
       expiryYear: year,
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : ""
