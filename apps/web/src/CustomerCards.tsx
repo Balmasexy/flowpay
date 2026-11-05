@@ -73,6 +73,7 @@ export default function CustomerCards({ token }: { token: string }) {
     }).catch(reason => {
       if (active) {
         setCards([]);
+        setCardholderName(null);
         setError(reason instanceof Error ? reason.message : "Unable to load cards.");
       }
     }).finally(() => { if (active) setLoading(false); });
