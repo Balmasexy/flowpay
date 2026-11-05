@@ -135,10 +135,7 @@ export default function CustomerActivity({ token }: { token: string }) {
     setExportError("");
     try {
       const page = await requestPage(items.length);
-      setItems(current => {
-        const known = new Set(current.map(item => item.id));
-        return [...current, ...page.transactions.filter(item => !known.has(item.id))];
-      });
+      setItems(current => [...current, ...page.transactions]);
       setTotal(page.total);
       setHasMore(page.hasMore);
     } catch (reason) {
@@ -222,7 +219,7 @@ export default function CustomerActivity({ token }: { token: string }) {
     {!loading && !error && total === 0 && !invalidRange && <div className="fp-empty"><Activity size={24}/><b>No posted transaction history yet</b><span>Only records confirmed by the FlowPay ledger appear here.</span></div>}
     {!loading && !error && items.length > 0 && <div className="fp-activity-result-count">Showing {items.length} of {total} matching transactions</div>}
     {!loading && !error && items.length > 0 && <div className="fp-feature-list">
-      {items.map(item => <div key={item.id + item.currency} style={{alignItems:"flex-start",gap:12}}>
+      {items.map(item => <div key={item.id + ":" + item.currency} style={{alignItems:"flex-start",gap:12}}>
         <Activity size={18}/>
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{item.description || item.type.replace(/_/g," ")}</b>
