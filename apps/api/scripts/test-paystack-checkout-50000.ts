@@ -91,7 +91,7 @@ async function setup() {
 
 test("initializes a Paystack sandbox checkout for exactly NGN 50,000", async () => {
   const context = await setup();
-  let providerPayload: Record<string, unknown> | null = null;
+  let providerPayload: Record<string, unknown> = {};
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     assert.equal(String(input), "https://api.paystack.co/transaction/initialize");
     providerPayload = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -101,7 +101,7 @@ test("initializes a Paystack sandbox checkout for exactly NGN 50,000", async () 
       data: {
         authorization_url: "https://checkout.paystack.com/test-flowpay-50000",
         access_code: "test_access_code",
-        reference: providerPayload.reference
+        reference: providerPayload["reference"]
       }
     }), { status: 200 });
   };
@@ -116,9 +116,9 @@ test("initializes a Paystack sandbox checkout for exactly NGN 50,000", async () 
   assert.equal(result.body.status, "pending");
   assert.equal(result.body.environment, "test");
   assert.equal(result.body.checkoutUrl, "https://checkout.paystack.com/test-flowpay-50000");
-  assert.equal(providerPayload?.amount, amountMinor);
-  assert.equal(providerPayload?.currency, "NGN");
-  assert.equal((providerPayload?.metadata as Record<string, unknown>).flowpay_environment, "test");
+  assert.equal(providerPayload["amount"], amountMinor);
+  assert.equal(providerPayload["currency"], "NGN");
+  assert.equal((providerPayload["metadata"] as Record<string, unknown>).flowpay_environment, "test");
   assert.ok(context.statements.some(item => item.sql.includes("INSERT INTO public.fp_ledger_transactions")));
   assert.ok(context.statements.some(item => item.sql.includes("INSERT INTO public.fp_paystack_deposits")));
   assert.ok(context.statements.some(item => item.sql.includes("UPDATE public.fp_paystack_deposits SET checkout_url")));
