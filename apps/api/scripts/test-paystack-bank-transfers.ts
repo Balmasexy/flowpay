@@ -228,13 +228,21 @@ test("posts a verified sandbox payout with one balanced wallet debit and clearin
       reference = String(requestBody.reference);
       return new Response(JSON.stringify({
         status: true,
-        data: { domain: "test", status: "success", reference, amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123", id: 987654321 }
+        data: {
+          domain: "test", status: "success", reference, amount: Number(amountMinor), currency: "NGN",
+          transfer_code: "TRF_test123", id: 987654321,
+          recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+        }
       }), { status: 200 });
     }
     if (url.endsWith("/transfer/verify/" + reference)) {
       return new Response(JSON.stringify({
         status: true,
-        data: { domain: "test", status: "success", reference, amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123", id: 987654321 }
+        data: {
+          domain: "test", status: "success", reference, amount: Number(amountMinor), currency: "NGN",
+          transfer_code: "TRF_test123", id: 987654321,
+          recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+        }
       }), { status: 200 });
     }
     throw new Error("Unexpected Paystack request: " + method + " " + url);
