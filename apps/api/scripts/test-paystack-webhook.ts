@@ -66,7 +66,7 @@ function setup(options: {
       if (sql.includes("SELECT id FROM public.fp_accounts")) {
         return { rowCount: 1, rows: [{ id: "00000000-0000-4000-8000-000000000004" }] };
       }
-      if (sql.includes("SELECT account_id::text, SUM(amount_minor)")) {
+      if (sql.includes("SELECT account_id::text AS account_id, SUM(amount_minor)")) {
         return { rowCount: options.transactionStatus === "posted" ? 2 : 0, rows: [
           { account_id: "00000000-0000-4000-8000-000000000003", amount_minor: "250000", entry_count: 1 },
           { account_id: "00000000-0000-4000-8000-000000000004", amount_minor: "-250000", entry_count: 1 }
