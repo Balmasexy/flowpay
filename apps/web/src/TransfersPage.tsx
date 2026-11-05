@@ -3,7 +3,8 @@ import { ArrowLeftRight, Building2, Clock3, RefreshCw, ShieldCheck, Wallet } fro
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type TransferRecord = { id: string; type: string; status: string; createdAt: string; destinationAccountMasked: string };
-type Preview = { destination: string; amount: string; currency: string };
+type Preview = { destination: string; amount: string; currency: string; bankName: string; accountName: string };
+type Bank = { code: string; name: string };
 
 function isWalletAccount(value: unknown): value is WalletAccount {
   if (!value || typeof value !== "object") return false;
@@ -27,6 +28,10 @@ export default function TransfersPage({ token }: { token: string }) {
   const [wallets, setWallets] = useState<WalletAccount[]>([]);
   const [history, setHistory] = useState<TransferRecord[]>([]);
   const [destination, setDestination] = useState("");
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [bankCode, setBankCode] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "verified" | "failed">("idle");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("NGN");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -69,20 +74,62 @@ export default function TransfersPage({ token }: { token: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    if (!token || token.split(".").length !== 3) return;
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    if (!apiBase) return;
+    const controller = new AbortController();
+    fetch(apiBase + "/customer/banks", { method: "GET", credentials: "omit", signal: controller.signal,
+      headers: { Authorization: "Bearer " + token } })
+      .then(async response => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error("BANK_LIST_UNAVAILABLE");
+        const items = Array.isArray(body.banks) ? body.banks.filter((item: unknown): item is Bank =>
+          !!item && typeof item === "object" && typeof (item as Bank).code === "string" && typeof (item as Bank).name === "string") : [];
+        setBanks(items);
+      }).catch(() => { if (!controller.signal.aborted) setLookupStatus("failed"); });
+    return () => controller.abort();
+  }, [token]);
+
+  useEffect(() => {
+    setAccountName("");
+    if (destination.length !== 10 || !bankCode) { setLookupStatus("idle"); return; }
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    if (!apiBase || !token) return;
+    const controller = new AbortController();
+    setLookupStatus("loading");
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(apiBase + "/customer/bank-account-lookup", {
+          method: "POST", credentials: "omit", signal: controller.signal,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify({ accountNumber: destination, bankCode })
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || body.verified !== true || body.accountNumber !== destination || body.bankCode !== bankCode || typeof body.accountName !== "string") throw new Error("ACCOUNT_NAME_NOT_VERIFIED");
+        setAccountName(body.accountName); setLookupStatus("verified");
+      } catch {
+        if (!controller.signal.aborted) { setAccountName(""); setLookupStatus("failed"); }
+      }
+    }, 500);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [destination, bankCode, token]);
+
   const makePreview = () => {
     setPreview(null);
-    const cleanDestination = destination.replace(/\s+/g, "");
+    const cleanDestination = destination.replace(/\\s+/g, "");
     const cleanAmount = amount.trim();
     const numericAmount = Number(cleanAmount);
-    if (!/^\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number to preview. This does not verify the bank account."); return; }
-    if (!/^\d+(?:\.\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!/^\\d{10}$/.test(cleanDestination)) { setError("Enter a 10-digit destination account number."); return; }
+    if (lookupStatus !== "verified" || !accountName || !bankCode) { setError("Verify the destination account name with its bank before previewing."); return; }
+    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(cleanAmount) || !Number.isFinite(numericAmount) || numericAmount <= 0) {
       setError("Enter a valid amount greater than zero, using up to two decimal places."); return;
     }
     if (!wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")) {
       setError("An active source wallet in the selected currency is required."); return;
     }
     setError("");
-    setPreview({ destination: cleanDestination, amount: numericAmount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), currency });
+    setPreview({ destination: cleanDestination, amount: numericAmount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), currency, bankName: banks.find(bank => bank.code === bankCode)?.name ?? "", accountName });
   };
 
   return <section className="fp-panel fp-detail-panel">
@@ -100,17 +147,27 @@ export default function TransfersPage({ token }: { token: string }) {
         {Array.from(new Set(wallets.map(w => w.currency))).map(code => <option key={code} value={code}>{code}</option>)}
         {!wallets.length && <option value="NGN">NGN</option>}
       </select>
+      <label htmlFor="fp-transfer-bank">Beneficiary bank</label>
+      <select id="fp-transfer-bank" value={bankCode} onChange={e => { setBankCode(e.target.value); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }}>
+        <option value="">Select bank</option>
+        {banks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
+      </select>
       <label htmlFor="fp-transfer-destination">Destination account number</label>
-      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\D/g, "").slice(0, 10)); setPreview(null); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
+      <input id="fp-transfer-destination" value={destination} onChange={e => { setDestination(e.target.value.replace(/\\D/g, "").slice(0, 10)); setPreview(null); setAccountName(""); setLookupStatus("idle"); setError(""); }} inputMode="numeric" placeholder="10-digit account number" maxLength={10}/>
+      {lookupStatus === "loading" && <p className="fp-overview-muted" role="status">Verifying account with the selected bank…</p>}
+      {lookupStatus === "verified" && <div className="fp-detail-list" role="status"><div><span>Verified account name</span><b>{accountName}</b></div><div><span>Bank</span><b>{banks.find(bank => bank.code === bankCode)?.name}</b></div></div>}
+      {lookupStatus === "failed" && destination.length === 10 && bankCode && <div className="fp-preview-warning" role="alert">Account name could not be verified. Check the bank and account number and try again.</div>}
       <label htmlFor="fp-transfer-amount">Amount</label>
       <input id="fp-transfer-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount((decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole).slice(0, 15)); setPreview(null); setError(""); }} inputMode="decimal" placeholder="0.00" maxLength={15}/>
       {error && <div className="fp-preview-warning" role="alert">{error}</div>}
-      <button className="fp-outline" type="button" onClick={makePreview} disabled={loading || !wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")}>Preview only</button>
+      <button className="fp-outline" type="button" onClick={makePreview} disabled={loading || lookupStatus !== "verified" || !wallets.some(w => w.currency === currency && w.status.toLowerCase() === "active")}>Preview only</button>
       {preview && <div className="fp-preview-warning" role="status">
         <b>Local preview only — not submitted</b>
-        <div>Destination: ••••{preview.destination.slice(-4)}</div>
+        <div>Beneficiary: {preview.accountName}</div>
+        <div>Bank: {preview.bankName}</div>
+        <div>Account: ••••{preview.destination.slice(-4)}</div>
         <div>Amount: {preview.currency} {preview.amount}</div>
-        <div>No bank lookup, beneficiary validation, wallet debit or transfer request was made.</div>
+        <div>Name enquiry was performed in Flutterwave sandbox only. No wallet debit or transfer request was made.</div>
       </div>}
       <div className="fp-preview-warning"><ShieldCheck size={17}/> Transfers remain disabled until beneficiary verification, available-balance calculation, transaction authorization, ledger posting and reconciliation are implemented and tested. Never share your PIN or passkey.</div>
     </>}
