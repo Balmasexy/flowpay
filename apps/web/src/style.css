@@ -593,3 +593,172 @@
 .fp-admin-receipt-actions button.reject{background:#fff5f3;border-color:#f0d9d6;color:#ac4c43}
 .fp-admin-receipt-actions button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:640px){.fp-admin-receipt-details{grid-template-columns:1fr}.fp-admin-receipt-details>div:last-child{grid-column:auto}.fp-admin-receipt-top{flex-direction:column}.fp-admin-receipt-top>small{text-align:left}.fp-admin-receipt-actions{display:grid;grid-template-columns:1fr}.fp-admin-refresh{width:100%;justify-content:center}}
+
+
+/* FlowPay UI refresh — shared visual system across customer, service, auth and admin pages. */
+:root{
+  color-scheme:light;
+  --fp-ink:#20231f;--fp-ink-soft:#343a33;--fp-muted:#737b72;--fp-line:#e7e9e3;
+  --fp-surface:#fff;--fp-canvas:#f4f5f2;--fp-tint:#fff4e9;--fp-orange:#ff7a18;
+  --fp-radius:18px;--fp-shadow:0 10px 30px rgba(28,35,27,.055);
+}
+html{background:var(--fp-canvas);scroll-behavior:smooth}
+body{background:var(--fp-canvas);color:var(--fp-ink);font-family:"DM Sans",sans-serif}
+button,input,select,textarea{font:inherit}
+button{transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(255,122,24,.25);outline-offset:2px}
+.flowpay-app{background:var(--fp-canvas)}
+.fp-header{height:72px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--fp-line);box-shadow:0 2px 12px rgba(30,35,29,.025)}
+.fp-brand{font-size:24px;letter-spacing:-1.2px}
+.fp-logo{width:38px;height:38px;border-radius:12px;box-shadow:0 5px 12px rgba(255,122,24,.22)}
+.fp-header-actions{gap:14px}
+.fp-header-link{min-height:38px;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:650}
+.fp-header-link:hover{background:#f5f5f1;color:#222}
+.fp-avatar{border:1px solid #f0dfcf;background:#fff3e8}
+.fp-layout{max-width:1440px;display:grid;grid-template-columns:252px minmax(0,1fr);gap:30px;padding:30px 30px 24px}
+.fp-sidebar{position:sticky;top:96px;align-self:start;height:calc(100vh - 120px);min-height:540px;display:flex;flex-direction:column;padding:13px 11px;border:1px solid var(--fp-line);border-radius:18px;background:#fff;box-shadow:var(--fp-shadow)}
+.fp-sidebar-toggle{display:flex;align-items:center;gap:9px;min-height:38px;padding:8px 10px;border:0;border-radius:9px;background:#f7f7f4;color:#687066;font-size:10px;font-weight:750}
+.fp-sidebar-toggle:hover{background:#fff0e3;color:#b65a16}
+.fp-sidebar-scroll{padding:12px 2px;overflow:auto;scrollbar-width:thin;scrollbar-color:#d9ddd5 transparent}
+.fp-sidebar-section{margin:0 0 16px}
+.fp-sidebar-section>span{display:block;padding:7px 10px;color:#9a9f96;font-size:9px;font-weight:850;letter-spacing:1.1px}
+.fp-sidebar-section button{display:flex;align-items:center;gap:11px;width:100%;min-height:40px;margin:2px 0;padding:9px 10px;border:0;border-radius:10px;background:transparent;color:#626a60;text-align:left;font-size:11px;font-weight:600}
+.fp-sidebar-section button svg{flex:0 0 auto;color:#899087}
+.fp-sidebar-section button:hover{background:#f7f7f3;color:#242922}
+.fp-sidebar-section button.active{background:#fff0e3;color:#bd5b10;font-weight:800}
+.fp-sidebar-section button.active svg{color:#e56d15}
+.fp-sidebar-foot{display:flex;align-items:center;gap:8px;margin-top:auto;padding:13px 8px 3px;border-top:1px solid #eff0ec;color:#7b8479;font-size:9px}
+.fp-sidebar-foot svg{color:#3d9362}
+.fp-main{min-width:0;max-width:1040px;width:100%;margin:0 auto}
+.fp-page-heading{min-height:76px;margin:0 0 24px;align-items:center}
+.fp-eyebrow{font-size:9px;letter-spacing:1.6px}
+.fp-page-heading h1{font-size:clamp(25px,3vw,34px);letter-spacing:-1.1px;line-height:1.16}
+.fp-page-heading p,.fp-muted{color:#7b8379;font-size:12px;line-height:1.7}
+.fp-outline{min-height:39px;padding:10px 13px;border-color:#e2e5de;border-radius:10px;background:#fff;color:#424a40;font-size:11px;font-weight:700}
+.fp-outline:hover{border-color:#ffc18f;background:#fff8f1;color:#a94e0c}
+.fp-primary{min-height:43px;padding:12px 17px;border-radius:10px;background:var(--fp-orange);box-shadow:0 5px 12px rgba(255,122,24,.16);font-size:12px;font-weight:800}
+.fp-primary:hover:not(:disabled){background:#e96b0c;transform:translateY(-1px);box-shadow:0 8px 17px rgba(255,122,24,.22)}
+.fp-panel{max-width:none;padding:24px;border:1px solid var(--fp-line);border-radius:var(--fp-radius);background:var(--fp-surface);box-shadow:var(--fp-shadow)}
+.fp-detail-panel{gap:20px}
+.fp-panel h2,.fp-section-title h2{color:#252a24;font-size:17px;letter-spacing:-.35px}
+.fp-section{margin-top:30px}
+.fp-section-title{margin-bottom:15px}
+.fp-section-title>span{font-size:10px}
+.fp-balance{min-height:205px;padding:26px 28px;border:1px solid #303630;border-radius:19px;background:linear-gradient(135deg,#171b18 0%,#242b25 100%);box-shadow:0 15px 35px rgba(20,26,21,.14)}
+.fp-balance-top{color:#d3d8d0;font-size:12px}
+.fp-balance>strong{font-size:clamp(32px,4vw,42px);letter-spacing:-1.6px}
+.fp-balance>small{color:#b7beb5;font-size:10px}
+.fp-balance-actions button{min-height:39px;padding:10px 14px;border-radius:9px;font-size:11px;font-weight:750}
+.fp-service-grid{gap:13px}
+.fp-service-tile{min-height:132px;padding:17px;border-color:#e8eae4;border-radius:15px;box-shadow:0 4px 14px rgba(28,35,27,.025)}
+.fp-service-tile:hover{border-color:#ffc08f;background:#fffdfa;box-shadow:0 12px 24px rgba(28,35,27,.07)}
+.fp-service-icon,.fp-form-icon{width:42px;height:42px;border-radius:13px;background:#fff1e5;color:#e56d15}
+.fp-service-tile b{font-size:12px;font-weight:800}
+.fp-service-tile small{font-size:10px;color:#7d857b;line-height:1.5}
+.fp-network-row{gap:11px}
+.fp-network{min-height:45px;border-color:#e5e8e1;border-radius:11px;background:#fff;font-size:11px}
+.fp-network:hover,.fp-network-select button.selected{border-color:#ffb77e;background:#fff4e9;color:#b85a12}
+.fp-form-panel{gap:13px;padding:24px}
+.fp-form-panel label,.fp-profile-edit-form label{margin:5px 0 0;color:#485047;font-size:11px;font-weight:750}
+.fp-form-panel input,.fp-form-panel select,.fp-profile-edit-form input,.fp-profile-edit-form textarea,
+.fp-admin-receipt-card textarea,.fp-admin-receipt-card>input:not([type=checkbox]){
+  min-height:43px;padding:11px 13px;border:1px solid #dfe3dc;border-radius:10px;background:#fff;color:#252a24;font-size:12px
+}
+.fp-form-panel input:focus,.fp-form-panel select:focus,.fp-profile-edit-form input:focus,.fp-profile-edit-form textarea:focus{outline:0;border-color:#ff9a50;box-shadow:0 0 0 3px rgba(255,122,24,.12)}
+.fp-preview-warning{padding:13px 14px;border-color:#f2dfca;border-radius:11px;background:#fff8f0;color:#795a3d;font-size:10px;line-height:1.65}
+.fp-detail-list{gap:0 26px}
+.fp-detail-list>div{padding:15px 0;border-color:#eef0eb}
+.fp-detail-list span{font-size:10px;color:#838b81}
+.fp-detail-list b{font-size:12px;color:#333a32}
+.fp-empty{min-height:175px;justify-content:center;padding:30px 18px;border:1px dashed #dfe3dc;border-radius:14px;background:#fbfcfa}
+.fp-empty b{font-size:13px}
+.fp-empty span{font-size:10px;color:#818980}
+.fp-doc-list>div,.fp-feature-list>div{padding:15px 2px;border-color:#eef0eb;font-size:11px}
+.fp-doc-list svg,.fp-feature-list svg{color:#e87519}
+.fp-footer{padding:28px 2px 12px;color:#959c92;font-size:10px}
+.fp-bottom-nav{background:#171b18;border-top:1px solid #343a34;box-shadow:0 -8px 24px rgba(20,26,21,.12)}
+.fp-bottom-nav button{font-size:9px;font-weight:650}
+.fp-bottom-nav button.active{color:#ff9a50}
+.fp-sidebar-reopen{border-radius:10px;background:#fff;border:1px solid var(--fp-line);color:#b65a16}
+.fp-layout.fp-sidebar-collapsed{grid-template-columns:54px minmax(0,1fr)}
+.fp-layout.fp-sidebar-collapsed .fp-sidebar{padding:10px 6px}
+.fp-layout.fp-sidebar-collapsed .fp-sidebar-section>span,.fp-layout.fp-sidebar-collapsed .fp-sidebar-section button span,.fp-layout.fp-sidebar-collapsed .fp-sidebar-foot span,.fp-layout.fp-sidebar-collapsed .fp-sidebar-toggle span{display:none}
+.fp-layout.fp-sidebar-collapsed .fp-sidebar-section button{justify-content:center;padding:10px 4px}
+.fp-layout.fp-sidebar-collapsed .fp-sidebar-toggle{justify-content:center;padding:8px 4px}
+.fp-profile-card{border-radius:18px;box-shadow:0 14px 32px rgba(24,31,25,.1)}
+.fp-profile-edit-form{gap:12px}
+.fp-profile-section-title{margin-top:10px}
+.fp-profile-section-title h3{font-size:14px}
+.fp-profile-success{padding:12px 14px;border:1px solid #d9eadd;border-radius:11px;background:#f3faf4;color:#2d7046;font-size:10px;line-height:1.6}
+.fp-camera-dialog{border:1px solid #e6e9e2;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.22)}
+.fp-transfer-page,.fp-money-page,.fp-account-page{border-radius:18px}
+.fp-transfer-page input,.fp-transfer-page select,.fp-transfer-page textarea,
+.fp-money-page input,.fp-money-page select,.fp-money-page textarea{border-radius:10px}
+.fp-transfer-page button,.fp-money-page button{font-weight:700}
+.fp-admin{background:#f3f5f2;color:#252a24}
+.fp-admin-sidebar{background:#171b18}
+.fp-admin-main{max-width:1500px}
+.fp-admin-topbar{color:#788176;border-color:#e5e9e2}
+.fp-admin-heading h1{font-size:32px;letter-spacing:-1px}
+.fp-admin-lock,.fp-admin-receipt-card{border-color:#e5e9e2;border-radius:16px;box-shadow:var(--fp-shadow)}
+.fp-admin-lock-copy h2{font-size:17px}
+.fp-admin-receipt-details>div{border-color:#ecefe8;border-radius:10px;background:#f8f9f6}
+.fp-admin-receipt-actions button{min-height:41px;border-radius:10px;font-size:10px}
+.fp-admin-refresh{min-height:40px;border-radius:10px}
+.fp-admin-empty{border-color:#dfe4dc;border-radius:14px;background:#fbfcfa}
+.fp-admin-empty b{color:#30372f}
+.fp-admin-empty span{color:#7d857b}
+.fp-login-page,.fp-landing{background:radial-gradient(circle at 12% 5%,rgba(255,122,24,.09),transparent 28%),#f5f6f3;color:#242a23}
+.fp-login-shell{border-radius:22px}
+.fp-login-form-wrap,.fp-login-card,.fp-auth-card{border-radius:18px}
+.fp-public-header{max-width:1320px}
+.fp-public-brand{font-size:23px}
+.fp-public-logo{width:38px;height:38px;border-radius:12px;box-shadow:0 5px 12px rgba(255,122,24,.18)}
+.fp-landing h1,.fp-login-page h1{letter-spacing:-1.4px}
+.fp-landing button,.fp-login-page button{border-radius:10px}
+.fp-landing input,.fp-login-page input,.fp-login-page select{min-height:44px;border-radius:10px}
+.fp-mobile-menu{border:1px solid #e7e9e3;border-radius:20px 20px 0 0;box-shadow:0 -15px 45px rgba(18,24,18,.15)}
+.fp-mobile-menu-head{padding-bottom:16px}
+.fp-mobile-menu-group>button{min-height:46px;border-radius:9px}
+.fp-mobile-menu-group>button.active{background:#fff1e5;color:#b75a12}
+.fp-mobile-menu-overlay{backdrop-filter:blur(3px)}
+@media(max-width:1000px){
+ .fp-layout{grid-template-columns:218px minmax(0,1fr);gap:20px;padding:24px 20px}
+ .fp-sidebar{top:88px}
+}
+@media(max-width:760px){
+ .fp-layout{display:block;padding:22px 14px 16px}
+ .fp-sidebar{display:none}
+ .fp-main{max-width:none}
+ .fp-header{height:62px;padding:0 14px}
+ .fp-header-actions{gap:8px}
+ .fp-header-link{padding:8px}
+ .fp-page-heading{margin-bottom:18px;gap:10px}
+ .fp-page-heading h1{font-size:26px}
+ .fp-page-heading p{font-size:11px}
+ .fp-panel{padding:17px;border-radius:15px}
+ .fp-form-panel{padding:18px}
+ .fp-balance{min-height:190px;padding:21px;border-radius:16px}
+ .fp-service-grid{gap:9px}
+ .fp-service-tile{min-height:118px;padding:13px;border-radius:13px}
+ .fp-network-row{gap:7px}
+ .fp-network{min-height:42px}
+ .fp-footer{padding:22px 2px 9px}
+ .fp-bottom-nav{min-height:68px;padding-bottom:calc(9px + env(safe-area-inset-bottom))}
+ .fp-detail-list{grid-template-columns:1fr}
+ .fp-admin-main{padding:0 16px}
+}
+@media(max-width:420px){
+ .fp-layout{padding-right:11px;padding-left:11px}
+ .fp-header{padding:0 11px}
+ .fp-brand{font-size:21px}
+ .fp-logo{width:34px;height:34px}
+ .fp-panel{padding:14px}
+ .fp-balance>strong{font-size:29px}
+ .fp-balance-actions{gap:7px;flex-wrap:wrap}
+ .fp-balance-actions button{padding:9px 10px;font-size:10px}
+ .fp-profile-card-photo-actions{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+}
