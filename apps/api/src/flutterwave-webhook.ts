@@ -176,11 +176,11 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
 
       const eventHash = createHash("sha256").update(rawBody).digest("hex");
       const inserted = await client.query(
-        `INSERT INTO public.fp_flutterwave_webhook_events
-           (event_id, event_type, transaction_id, payload_sha256)
-         VALUES ($1, 'charge.completed', $2, $3)
-         ON CONFLICT (event_id) DO NOTHING
-         RETURNING event_id`,
+        `INSERT INTO public.fp_payment_events
+           (provider, provider_event_id, event_type, transaction_id, payload_sha256, processing_status)
+         VALUES ('flutterwave', $1, 'charge.completed', $2, $3, 'pending')
+         ON CONFLICT (provider, provider_event_id) DO NOTHING
+         RETURNING provider_event_id`,
         [providerIdText, deposit.transaction_id, eventHash]
       );
 
@@ -196,6 +196,12 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
                 verified_at = COALESCE(verified_at, NOW())
           WHERE transaction_id = $1 AND status = 'pending'`,
         [deposit.transaction_id, providerIdText]
+      );
+      await client.query(
+        `UPDATE public.fp_payment_events
+            SET processing_status = 'processed'
+          WHERE provider = 'flutterwave' AND provider_event_id = $1`,
+        [providerIdText]
       );
       await client.query("COMMIT");
       send(res, 200, {
