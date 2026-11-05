@@ -76,7 +76,7 @@ function parseOverview(value: unknown): Overview | null {
       const row = asRecord(raw);
       if (!row || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency) || (typeof row.amountMinor !== "string" && typeof row.amountMinor !== "number")) return null;
       const amountMinor = String(row.amountMinor);
-      if (!/^-?\\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
+      if (!/^-?\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
       balances.push({ currency: row.currency, amountMinor });
     }
     return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
