@@ -271,7 +271,7 @@ const server = createServer(async (req, res) => {
       const parsedLimit = Number(params.get("limit") ?? "50");
       const parsedOffset = Number(params.get("offset") ?? "0");
       const limit = Number.isInteger(parsedLimit) ? Math.min(100, Math.max(1, parsedLimit)) : 50;
-      const offset = Number.isInteger(parsedOffset) ? Math.min(100000, Math.max(0, parsedOffset)) : 0;
+      const offset = Number.isInteger(parsedOffset) ? Math.min(2147483647, Math.max(0, parsedOffset)) : 0;
       const fromDate = params.get("fromDate");
       const toDate = params.get("toDate");
       const validDate = (value: string | null) => {
