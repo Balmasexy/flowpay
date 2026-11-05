@@ -98,12 +98,4 @@ INSERT INTO public.schema_migrations(version)
 VALUES ('018_deposit_receipt_submissions')
 ON CONFLICT (version) DO NOTHING;
 
--- Keep existing customer/admin assignments untouched while allowing the
--- explicitly protected super_admin role already required by /admin/session.
-ALTER TABLE public.fp_users
-  DROP CONSTRAINT IF EXISTS fp_users_role_check;
-ALTER TABLE public.fp_users
-  ADD CONSTRAINT fp_users_role_check
-  CHECK (role IN ('customer','admin','super_admin'));
-
 COMMIT;
