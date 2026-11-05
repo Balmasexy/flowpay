@@ -27,8 +27,50 @@ export default function HelpSupport({ go, token }: Props) {
   const [category, setCategory] = useState("Transaction issue");
   const [reference, setReference] = useState("");
   const [details, setDetails] = useState("");
-  const [showDraft, setShowDraft] = useState(false);
-  const [copyStatus, setCopyStatus] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("");
+  const [submittedTicket, setSubmittedTicket] = useState("");
+  const [requests, setRequests] = useState<Array<{ticketReference:string;category:string;details:string;status:string;createdAt:string}>>([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
+  const [requestsError, setRequestsError] = useState("");
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  const [clientRequestId, setClientRequestId] = useState(() => crypto.randomUUID());
+
+  useEffect(() => {
+    let active = true;
+    if (!token || !apiBase) { setRequestsLoading(false); setRequestsError("Support service is not configured."); return () => { active = false; }; }
+    fetch(apiBase + "/customer/support-requests", { headers: { Authorization: "Bearer " + token }, credentials: "omit" })
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Unable to load support requests.");
+        return data;
+      })
+      .then(data => { if (active) setRequests(Array.isArray(data.requests) ? data.requests : []); })
+      .catch(error => { if (active) setRequestsError(error instanceof Error ? error.message : "Unable to load support requests."); })
+      .finally(() => { if (active) setRequestsLoading(false); });
+    return () => { active = false; };
+  }, [token, apiBase]);
+
+  const submitRequest = async () => {
+    if (submitting || details.trim().length < 20 || !token || !apiBase) return;
+    setSubmitting(true); setSubmitStatus(""); setSubmittedTicket("");
+    try {
+      const response = await fetch(apiBase + "/customer/support-requests", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ clientRequestId, category, reference: reference.trim() || null, details: details.trim() })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Support request could not be submitted.");
+      setSubmittedTicket(data.request?.ticketReference || "");
+      setSubmitStatus(data.message || "Your support request was saved.");
+      setClientRequestId(crypto.randomUUID());
+      setDetails(""); setReference("");
+      setRequests(current => [data.request, ...current.filter(item => item.ticketReference !== data.request?.ticketReference)].slice(0, 50));
+    } catch (error) {
+      setSubmitStatus(error instanceof Error ? error.message : "Support request could not be submitted. Retry safely.");
+    } finally { setSubmitting(false); }
+  };
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? topics.filter(t => (t.title + " " + t.category + " " + t.keywords + " " + t.detail).toLowerCase().includes(q)) : topics;
