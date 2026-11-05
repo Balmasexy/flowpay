@@ -11,7 +11,9 @@ const originalFetch = globalThis.fetch;
 const originalEnvironment = {
   environment: process.env.PAYSTACK_ENVIRONMENT,
   secret: process.env.PAYSTACK_SECRET_KEY,
-  transfers: process.env.PAYSTACK_TRANSFERS_ENABLED
+  transfers: process.env.PAYSTACK_TRANSFERS_ENABLED,
+  runtime: process.env.FLOWPAY_RUNTIME_ENV,
+  nodeEnv: process.env.NODE_ENV
 };
 const senderId = "00000000-0000-4000-8000-000000000001";
 const walletId = "00000000-0000-4000-8000-000000000003";
@@ -56,6 +58,8 @@ async function setup(options: SetupOptions = {}) {
   process.env.PAYSTACK_ENVIRONMENT = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
   process.env.PAYSTACK_TRANSFERS_ENABLED = "true";
+  process.env.FLOWPAY_RUNTIME_ENV = "development";
+  process.env.NODE_ENV = "test";
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-bank-transfer-test" })
     .setIssuer("https://flowpay.test")
@@ -315,4 +319,8 @@ process.on("exit", () => {
   else process.env.PAYSTACK_SECRET_KEY = originalEnvironment.secret;
   if (originalEnvironment.transfers === undefined) delete process.env.PAYSTACK_TRANSFERS_ENABLED;
   else process.env.PAYSTACK_TRANSFERS_ENABLED = originalEnvironment.transfers;
+  if (originalEnvironment.runtime === undefined) delete process.env.FLOWPAY_RUNTIME_ENV;
+  else process.env.FLOWPAY_RUNTIME_ENV = originalEnvironment.runtime;
+  if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalEnvironment.nodeEnv;
 });
