@@ -13,7 +13,7 @@ type Transaction = {
   customerEntryCount: number;
 };
 
-type ActivityPage = { transactions: Transaction[]; total: number; hasMore: boolean; offset: number; limit: number };
+type ActivityPage = { transactions: Transaction[]; total: number; hasMore: boolean; offset: number; nextOffset: number; limit: number };
 
 const VALID_STATUSES = new Set<Transaction["status"]>(["posted", "reversed"]);
 const PAGE_SIZE = 100;
@@ -59,6 +59,7 @@ export default function CustomerActivity({ token }: { token: string }) {
   const [toDate, setToDate] = useState("");
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState(0);
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
   const invalidRange = Boolean(fromDate && toDate && fromDate > toDate);
 
@@ -87,6 +88,7 @@ export default function CustomerActivity({ token }: { token: string }) {
       transactions, total: pageTotal,
       hasMore: raw.hasMore === true,
       offset: typeof raw.offset === "number" ? raw.offset : offset,
+      nextOffset: typeof raw.nextOffset === "number" ? raw.nextOffset : offset + transactions.length,
       limit: typeof raw.limit === "number" ? raw.limit : PAGE_SIZE
     };
   };
@@ -97,6 +99,7 @@ export default function CustomerActivity({ token }: { token: string }) {
       setItems([]);
       setTotal(0);
       setHasMore(false);
+      setNextOffset(0);
       setError("Your authenticated activity service is not configured.");
       setLoading(false);
       return () => { active = false; };
@@ -105,6 +108,7 @@ export default function CustomerActivity({ token }: { token: string }) {
       setItems([]);
       setTotal(0);
       setHasMore(false);
+      setNextOffset(0);
       setError("");
       setLoading(false);
       return () => { active = false; };
@@ -117,12 +121,14 @@ export default function CustomerActivity({ token }: { token: string }) {
         setItems(page.transactions);
         setTotal(page.total);
         setHasMore(page.hasMore);
+        setNextOffset(page.nextOffset);
       }
     }).catch(reason => {
       if (active) {
         setItems([]);
         setTotal(0);
         setHasMore(false);
+        setNextOffset(0);
         setError(reason instanceof Error ? reason.message : "Unable to load transaction activity.");
       }
     }).finally(() => { if (active) setLoading(false); });
@@ -134,10 +140,11 @@ export default function CustomerActivity({ token }: { token: string }) {
     setLoadingMore(true);
     setExportError("");
     try {
-      const page = await requestPage(items.length);
+      const page = await requestPage(nextOffset);
       setItems(current => [...current, ...page.transactions]);
       setTotal(page.total);
       setHasMore(page.hasMore);
+      setNextOffset(page.nextOffset);
     } catch (reason) {
       setExportError(reason instanceof Error ? reason.message : "Unable to load more transactions.");
     } finally {
@@ -173,7 +180,7 @@ export default function CustomerActivity({ token }: { token: string }) {
         const page = await requestPage(offset);
         all.push(...page.transactions);
         more = page.hasMore;
-        offset += page.transactions.length;
+        offset = page.nextOffset;
         if (page.transactions.length === 0 && more) throw new Error("The activity service returned an incomplete page. Please refresh and try again.");
       }
       const rows = [
