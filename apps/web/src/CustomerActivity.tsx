@@ -10,6 +10,7 @@ type Transaction = {
   postedAt: string | null;
   currency: string;
   customerLedgerAmountMinor: string;
+  direction: "received" | "sent" | "neutral";
   customerEntryCount: number;
 };
 
@@ -37,6 +38,7 @@ function parseTransactions(value: unknown): Transaction[] {
       postedAt: typeof raw.postedAt === "string" ? raw.postedAt : null,
       currency: typeof raw.currency === "string" && /^[A-Z]{3}$/.test(raw.currency) ? raw.currency : "NGN",
       customerLedgerAmountMinor: amount,
+      direction: raw.direction === "received" || raw.direction === "sent" ? raw.direction : "neutral",
       customerEntryCount: entryCount
     }];
   });
@@ -184,9 +186,9 @@ export default function CustomerActivity({ token }: { token: string }) {
         if (page.transactions.length === 0 && more) throw new Error("The activity service returned an incomplete page. Please refresh and try again.");
       }
       const rows = [
-        ["Transaction ID", "Type", "Description", "Status", "Date", "Currency", "Ledger amount minor units", "Customer ledger entries"],
+        ["Transaction ID", "Type", "Direction", "Description", "Status", "Date", "Currency", "Ledger amount minor units", "Customer ledger entries"],
         ...all.map(item => [
-          item.id, item.type, item.description, item.status, item.postedAt || item.createdAt,
+          item.id, item.type, item.direction, item.description, item.status, item.postedAt || item.createdAt,
           item.currency, item.customerLedgerAmountMinor, item.customerEntryCount
         ])
       ];
@@ -219,7 +221,7 @@ export default function CustomerActivity({ token }: { token: string }) {
       <button type="button" className="fp-activity-clear" onClick={() => { setFromDate(""); setToDate(""); }}>Clear dates</button>
     </div>
     {invalidRange && <div className="fp-preview-warning"><AlertCircle size={17}/> The start date must be on or before the end date.</div>}
-    <div className="fp-preview-warning"><Activity size={17}/> Statements include only verified posted and reversed ledger records. Incoming/outgoing direction is not inferred where the ledger sign convention is not configured.</div>
+    <div className="fp-preview-warning"><Activity size={17}/> Statements include verified posted and reversed ledger records. Direction follows the signed customer ledger amount: positive is received, negative is sent.</div>
     {loading && <p className="fp-muted">Loading verified activity…</p>}
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/> {error}</div>}
     {exportError && <div className="fp-preview-warning"><AlertCircle size={17}/> {exportError}</div>}
@@ -231,7 +233,7 @@ export default function CustomerActivity({ token }: { token: string }) {
         <div style={{minWidth:0,flex:1,display:"grid",gap:4}}>
           <b>{item.description || item.type.replace(/_/g," ")}</b>
           <small>{item.type.replace(/_/g," ")} · {formatDate(item.postedAt || item.createdAt)}</small>
-          <small>{item.customerEntryCount} customer ledger {item.customerEntryCount === 1 ? "entry" : "entries"}</small>
+          <small>{item.direction === "received" ? "Money received" : item.direction === "sent" ? "Money sent" : "Neutral ledger movement"} · {item.customerEntryCount} customer ledger {item.customerEntryCount === 1 ? "entry" : "entries"}</small>
         </div>
         <div style={{textAlign:"right",display:"grid",gap:4}}>
           <b>{formatAmount(item.customerLedgerAmountMinor,item.currency)}</b>
