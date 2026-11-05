@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { ArrowDownLeft, RefreshCw, ShieldCheck, AlertCircle, Wallet, ExternalLink, CheckCircle2, Clock3 } from "lucide-react";
 
 type DepositStatus = "pending" | "posted" | "failed";
