@@ -156,7 +156,7 @@ export default function App() {
         {sidebarCollapsed && <button className="fp-sidebar-reopen" type="button" onClick={() => setSidebarCollapsed(false)} aria-label="Open navigation menu" title="Open navigation menu"><Ellipsis size={22}/></button>}
         <main className="fp-main">
           <div className="fp-page-heading">
-            <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : active.label}</h1>
+            <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : path === "/payment-return/paystack" ? "Payment status" : active.label}</h1>
               {path !== "/dashboard" && <p>{pageDescription(path)}</p>}
             </div>
             {path === "/dashboard" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
@@ -205,6 +205,7 @@ function pageDescription(path: string) {
   const descriptions: Record<string,string> = {
     "/search":"Search your FlowPay account and available services.",
     "/money-received":"Review incoming money and verified credits.",
+    "/payment-return/paystack":"Check the verified status of your Paystack test deposit.",
     "/money-sent":"Review outgoing money and verified debits.",
     "/bulk-payments":"Bulk payment tools are restricted until approved business services are connected.",
     "/bulk-verification":"Customer verification tools require approved verification services.",
@@ -235,6 +236,7 @@ function pageDescription(path: string) {
 function RouteContent({path,go,user,token,onPhotoChange}:{path:string;go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};token:string;onPhotoChange:(photo:string|null)=>void}) {
   if (path === "/search") return <FlowPaySearch go={go}/>;
   if (path === "/money-received") return <MoneyReceived token={token}/>;
+  if (path === "/payment-return/paystack") return <MoneyReceived token={token} paymentReturn/>;
   if (path === "/money-sent") return <MoneySent token={token}/>;
   if (path === "/account-number") return <CustomerAccountDetails token={token} go={go}/>;
   if (path === "/more") return <MorePage go={go}/>;
