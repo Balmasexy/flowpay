@@ -147,8 +147,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
       <small>{error ? "We could not refresh your verified account data. No estimated or sample amount is displayed." : overview?.balance.available && overview.balance.balances.length > 0 ? isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service." : !loading && overview?.balance.available ? "No active customer account is available for balance calculation." : "Balance is unavailable until the ledger sign convention is confirmed. No estimated or sample amount is shown."}</small>
       <div className="fp-balance-actions">
-        <button onClick={() => go("/money-received")}><ArrowDownLeft size={17}/> To FlowPay</button>
-        <button onClick={() => go("/money-sent")}><ArrowUpRight size={17}/> To Banks</button>
+        <button onClick={() => go("/transfers?mode=flowpay")}><ArrowDownLeft size={17}/> To FlowPay</button>
+        <button onClick={() => go("/transfers?mode=bank")}><ArrowUpRight size={17}/> To Bank</button>
       </div>
       {!loading && !error && overview?.generatedAt && <small className="fp-overview-updated">Last updated {dateLabel(overview.generatedAt)}</small>}
     </section>
