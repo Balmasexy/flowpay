@@ -47,10 +47,12 @@ export default function CustomerCards({ token }: { token: string }) {
     let active = true;
     if (!token || !apiBase) {
       setCards([]);
+      setCardholderName(null);
       setError("Your authenticated cards service is not configured.");
       setLoading(false);
       return () => { active = false; };
     }
+    setCardholderName(null);
     setLoading(true);
     setError("");
     fetch(apiBase + "/customer/cards", {
