@@ -44,7 +44,7 @@ const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
 const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, audience });
-const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer, audience });
+const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer });
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
 

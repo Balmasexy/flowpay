@@ -29,7 +29,6 @@ async function setup() {
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-dva-test" })
     .setIssuer("https://flowpay.test")
-    .setAudience("flowpay-api")
     .setSubject("neon-auth-subject")
     .setIssuedAt()
     .setExpirationTime("5m")
@@ -61,7 +60,6 @@ async function setup() {
     pool,
     jwks: jwks as unknown as ReturnType<typeof import("jose").createRemoteJWKSet>,
     issuer: "https://flowpay.test",
-    audience: "flowpay-api"
   });
   const request = (method: string, url: string, payload?: Record<string, unknown>, auth = true) =>
     Object.assign(Readable.from(payload ? [Buffer.from(JSON.stringify(payload))] : []), {
@@ -103,7 +101,7 @@ test("blocks the sandbox route when isolated development switches are absent", a
   assert.equal(calls, 0);
 });
 
-test("creates and stores only a provider-confirmed ten-digit test virtual bank account", async () => {
+test("accepts issuer-verified Neon JWTs without an audience claim and stores only provider-confirmed accounts", async () => {
   const context = await setup();
   const calls: { url: string; body: Record<string, unknown> }[] = [];
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
