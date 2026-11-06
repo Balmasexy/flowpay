@@ -6,7 +6,6 @@ type Options = {
   pool: Pool | null;
   jwks: ReturnType<typeof createRemoteJWKSet> | null;
   issuer?: string;
-  audience?: string;
 };
 type PaystackBody = { status?: unknown; message?: unknown; data?: unknown };
 type PaystackRecord = Record<string, unknown>;
