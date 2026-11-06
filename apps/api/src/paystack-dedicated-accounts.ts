@@ -76,10 +76,12 @@ async function paystack(secret: string, path: string, payload?: PaystackRecord):
   const parsed = record(body);
   return { ok: response.ok && parsed.status === true, status: response.status, body: parsed as PaystackBody };
 }
-async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string, req: IncomingMessage): Promise<Identity | null> {
+async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, req: IncomingMessage): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
-  const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+  // Neon Managed Auth documents the branch Auth URL's origin as the JWT issuer.
+  // It does not require an API audience claim, so verify the signature and issuer only.
+  const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
     `SELECT app_user.id, app_user.role,
@@ -175,12 +177,12 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
     const get = req.method === "GET" && path === "/customer/dedicated-bank-account";
     const post = req.method === "POST" && path === "/customer/dedicated-bank-account";
     if (!get && !post) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "DEDICATED_BANK_ACCOUNT_SERVICE_NOT_CONFIGURED" }); return true;
     }
     let identity: Identity | null;
     try {
-      identity = await authenticate(pool, jwks, issuer, audience, req);
+      identity = await authenticate(pool, jwks, issuer, req);
       if (!identity) {
         send(res, req.headers.authorization ? 403 : 401, {
           error: req.headers.authorization ? "ACTIVE_VERIFIED_PROFILE_REQUIRED" : "AUTHENTICATION_REQUIRED"
