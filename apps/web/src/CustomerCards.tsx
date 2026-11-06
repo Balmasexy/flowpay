@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authClient } from "./auth-client";
 import {
   AlertCircle, Building2, Check, Copy, CreditCard, RefreshCw, ShieldCheck
 } from "lucide-react";
@@ -51,7 +52,16 @@ function parseCards(value: unknown): Card[] {
     }];
   });
 }
-function parseVirtualBankAccount(value: unknown): VirtualBankAccount {
+
+async function getApiJwt(): Promise<string> {
+  const result = await authClient.token();
+  const jwt = result.data?.token;
+  if (typeof jwt !== "string" || !jwt.trim()) {
+    throw new Error("Your sign-in session could not be verified. Please sign out and sign in again.");
+  }
+  return jwt;
+}
+\nfunction parseVirtualBankAccount(value: unknown): VirtualBankAccount {
   const raw = asRecord(value);
   const assigned = raw.assigned === true &&
     typeof raw.accountNumber === "string" && /^[0-9]{10}$/.test(raw.accountNumber) &&
@@ -97,10 +107,10 @@ export default function CustomerCards({ token }: { token: string }) {
     }
     setLoading(true);
     setError("");
-    fetch(apiBase + "/customer/cards", {
+    getApiJwt().then(jwt => fetch(apiBase + "/customer/cards", {
       method: "GET", credentials: "omit",
-      headers: { Authorization: "Bearer " + token }
-    }).then(async response => {
+      headers: { Authorization: "Bearer " + jwt }
+    })).then(async response => {
       const data: unknown = await response.json().catch(() => ({}));
       const body = asRecord(data);
       if (!response.ok) {
@@ -131,9 +141,10 @@ export default function CustomerCards({ token }: { token: string }) {
     setAccountError("");
     setAccountMessage("");
     try {
+      const jwt = await getApiJwt();
       const response = await fetch(dedicatedAccountApiBase + "/customer/dedicated-bank-account", {
         method: "POST", credentials: "omit",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + jwt },
         body: JSON.stringify({ consent: true })
       });
       const body = asRecord(await response.json().catch(() => ({})));
