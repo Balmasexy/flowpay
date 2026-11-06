@@ -274,7 +274,7 @@ function RouteContent({path,go,user,token,onPhotoChange,transferMode}:{path:stri
   if (path === "/profile") return <CustomerProfile go={go} user={user} onPhotoChange={onPhotoChange}/>;
   if (path === "/documents") return <DocumentsPage token={token} go={go}/>;
   if (path === "/transfers") return <TransfersPage token={token} initialMode={transferMode}/>;
-  if (path === "/cards") return <CustomerCards token={token}/>;
+  if (path === "/cards") return <CustomerCards token={token} registeredName={user.name}/>;
   if (path === "/activity") return <CustomerActivity token={token}/>;
   if (path === "/savings") return <SavingsPage mode="savings"/>;
   if (path === "/fixed-savings") return <SavingsPage mode="fixed"/>;

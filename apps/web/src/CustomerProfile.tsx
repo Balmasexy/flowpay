@@ -32,11 +32,16 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
 
   async function request(method:"GET"|"PATCH",body?:object) {
     if(authSession.isPending) throw new Error("Your sign-in session is still loading. Please wait a moment and try again.");
-    // Neon Auth injects the signed JWT into the React session after sign-in.
-    // Reuse the active session instead of invoking a second token-fetch request.
-    const token=authSession.data?.session?.token;
-    if(typeof token!=="string"||token.split(".").length!==3) {
-      throw new Error("Your secure session token is unavailable or expired. Please sign out and sign in again.");
+    // The session token is an opaque cookie identifier, not an API JWT.
+    // Exchange the current session for a short-lived signed access token.
+    const tokenResult=await authClient.token();
+    if(tokenResult.error) {
+      const detail=typeof tokenResult.error.message==="string"?tokenResult.error.message:"Neon Auth rejected the token request.";
+      throw new Error("Neon Auth token request failed: "+detail);
+    }
+    const token=tokenResult.data?.token;
+    if(typeof token!=="string"||!token.trim()||token.split(".").length!==3) {
+      throw new Error("Neon Auth did not issue an API access token for this session. Please sign in again.");
     }
     if(!API_BASE) throw new Error("FlowPay API address is missing from the web app configuration.");
     const response=await fetch(API_BASE+"/customer/profile",{method,credentials:"omit",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
@@ -188,7 +193,7 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
       <button className="fp-primary" type="submit" disabled={saving||loading||photoBusy}>{saving?"Saving…":"Save profile"}</button>
     </form>
     <div className="fp-profile-section-title"><h3>Account information</h3><span>Assigned by FlowPay</span></div>
-    <div className="fp-detail-list fp-profile-details"><div><span>FlowPay account number</span><b>Not yet assigned</b></div><div><span>Account tier</span><b>Not yet assigned</b></div><div><span>Account status</span><b>Signed in</b></div></div>
+    <div className="fp-detail-list fp-profile-details"><div><span>Account holder name</span><b>{displayName}</b></div><div><span>FlowPay account number</span><b>Not yet assigned</b></div><div><span>Account tier</span><b>Not yet assigned</b></div><div><span>Account status</span><b>Signed in</b></div></div>
     <div className="fp-profile-actions"><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button><button className="fp-outline" onClick={()=>go("/security")}><ShieldCheck size={16}/> Security settings</button></div>
     <div className="fp-preview-warning"><UserRound size={17}/> Only your own authenticated profile photo and contact details can be changed.</div>
   </section>;
