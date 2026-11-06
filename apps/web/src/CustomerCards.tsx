@@ -80,7 +80,7 @@ function parseVirtualBankAccount(value: unknown): VirtualBankAccount {
   };
 }
 
-export default function CustomerCards({ token }: { token: string }) {
+export default function CustomerCards({ token, registeredName }: { token: string; registeredName?: string | null }) {
   const [cards, setCards] = useState<Card[]>([]);
   const [cardholderName, setCardholderName] = useState<string | null>(null);
   const [virtualBankAccount, setVirtualBankAccount] = useState<VirtualBankAccount>({
@@ -192,7 +192,7 @@ export default function CustomerCards({ token }: { token: string }) {
     </div>
 
     <div className="fp-detail-list">
-      <div><span>Cardholder name</span><b>{cardholderName || "Not available on this profile"}</b></div>
+      <div><span>Cardholder name</span><b>{cardholderName || registeredName?.trim() || "Not available on this profile"}</b></div>
       <div><span>Card number</span><b>Available only after issuer-confirmed issuance</b></div>
     </div>
 
