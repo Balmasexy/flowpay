@@ -170,7 +170,7 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
 }
 
 export function createPaystackDedicatedAccountsHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer } = options;
   return async function handle(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     const get = req.method === "GET" && path === "/customer/dedicated-bank-account";
