@@ -326,13 +326,26 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       const bankName = typeof bank.name === "string" ? bank.name.trim() : "";
       const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
       if (!assigned.ok) {
+        const providerMessage = typeof assigned.body.message === "string"
+          ? assigned.body.message.replace(/[\\r\\n\\t]+/g, " ").slice(0, 240)
+          : "Paystack did not provide a rejection reason.";
+        console.error("Paystack dedicated account assignment rejected:", {
+          httpStatus: assigned.status,
+          providerMessage
+        });
         await pool.query(
           `UPDATE public.fp_paystack_dedicated_accounts
               SET status = 'failed', last_error_code = 'PAYSTACK_DEDICATED_ACCOUNT_FAILED', updated_at = NOW()
             WHERE user_id = $1`,
           [identity.id]
         );
-        send(res, 502, { error: "PAYSTACK_DEDICATED_ACCOUNT_FAILED", message: "Paystack did not issue a test virtual bank account. No placeholder number was saved." });
+        send(res, 502, {
+          error: "PAYSTACK_DEDICATED_ACCOUNT_FAILED",
+          message: "Paystack did not issue a test virtual bank account. No placeholder number was saved.",
+          providerStatus: assigned.status,
+          providerMessage,
+          livePaymentsEnabled: false
+        });
         return true;
       }
       if (account.assigned === true && account.active === true &&
