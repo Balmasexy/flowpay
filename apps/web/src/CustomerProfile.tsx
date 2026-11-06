@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Camera, FileText, ImagePlus, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
-import { authClient } from "./auth-client";
+import { getApiJwt } from "./auth-client";
 
 type Profile = {
   fullName: string;
@@ -32,17 +32,8 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
 
   async function request(method:"GET"|"PATCH",body?:object) {
     if(authSession.isPending) throw new Error("Your sign-in session is still loading. Please wait a moment and try again.");
-    // The session token is an opaque cookie identifier, not an API JWT.
-    // Exchange the current session for a short-lived signed access token.
-    const tokenResult=await authClient.token();
-    if(tokenResult.error) {
-      const detail=typeof tokenResult.error.message==="string"?tokenResult.error.message:"Neon Auth rejected the token request.";
-      throw new Error("Neon Auth token request failed: "+detail);
-    }
-    const token=tokenResult.data?.token;
-    if(typeof token!=="string"||!token.trim()||token.split(".").length!==3) {
-      throw new Error("Neon Auth did not issue an API access token for this session. Please sign in again.");
-    }
+    // The session cookie is not an API JWT; obtain a short-lived signed token.
+    const token=await getApiJwt();
     if(!API_BASE) throw new Error("FlowPay API address is missing from the web app configuration.");
     const response=await fetch(API_BASE+"/customer/profile",{method,credentials:"omit",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
     const data=await response.json().catch(()=>({}));
