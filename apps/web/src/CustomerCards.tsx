@@ -54,17 +54,14 @@ function parseCards(value: unknown): Card[] {
 }
 
 async function getApiJwt(): Promise<string> {
-  // Use Neon Auth's JWT accessor. The session token is an opaque session ID,
-  // not a signed JWT and must never be sent to the API as a Bearer token.
-  const client = authClient as typeof authClient & {
-    getJWTToken?: () => Promise<string | null | undefined>;
-  };
-  if (typeof client.getJWTToken !== "function") {
-    throw new Error("Neon Auth JWT access is unavailable in this app build. Please refresh and sign in again.");
+  const result = await authClient.token();
+  if (result.error) {
+    const detail = typeof result.error.message === "string" ? result.error.message : "Neon Auth rejected the token request.";
+    throw new Error("Neon Auth token request failed: " + detail);
   }
-  const jwt = await client.getJWTToken();
+  const jwt = result.data?.token;
   if (typeof jwt !== "string" || !jwt.trim() || jwt.split(".").length !== 3) {
-    throw new Error("Neon Auth did not return a valid access token. Please sign in again.");
+    throw new Error("Neon Auth did not issue an API access token for this session. Please sign in again.");
   }
   return jwt;
 }
