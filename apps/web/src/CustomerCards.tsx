@@ -61,7 +61,7 @@ async function getApiJwt(): Promise<string> {
   }
   return jwt;
 }
-\nfunction parseVirtualBankAccount(value: unknown): VirtualBankAccount {
+function parseVirtualBankAccount(value: unknown): VirtualBankAccount {
   const raw = asRecord(value);
   const assigned = raw.assigned === true &&
     typeof raw.accountNumber === "string" && /^[0-9]{10}$/.test(raw.accountNumber) &&
