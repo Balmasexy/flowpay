@@ -81,6 +81,7 @@ export default function CustomerCards({ token }: { token: string }) {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+  const dedicatedAccountApiBase = (import.meta.env.VITE_DEDICATED_ACCOUNT_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || apiBase;
 
   useEffect(() => {
     let active = true;
@@ -130,7 +131,7 @@ export default function CustomerCards({ token }: { token: string }) {
     setAccountError("");
     setAccountMessage("");
     try {
-      const response = await fetch(apiBase + "/customer/dedicated-bank-account", {
+      const response = await fetch(dedicatedAccountApiBase + "/customer/dedicated-bank-account", {
         method: "POST", credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
         body: JSON.stringify({ consent: true })
