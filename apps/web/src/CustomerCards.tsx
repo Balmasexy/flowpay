@@ -141,8 +141,12 @@ export default function CustomerCards({ token, registeredName }: { token: string
       });
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok && response.status !== 202) {
-        throw new Error(typeof body.message === "string" ? body.message :
-          typeof body.error === "string" ? body.error : "Unable to request a virtual bank account.");
+        const providerDetail = typeof body.providerMessage === "string" ? body.providerMessage.slice(0, 240) : "";
+        const providerStatus = typeof body.providerStatus === "number" ? " (HTTP " + body.providerStatus + ")" : "";
+        throw new Error(providerDetail
+          ? "Paystack rejected the test account request" + providerStatus + ": " + providerDetail
+          : typeof body.message === "string" ? body.message :
+            typeof body.error === "string" ? body.error : "Unable to request a virtual bank account.");
       }
       setVirtualBankAccount(parseVirtualBankAccount(body.virtualBankAccount));
       setAccountMessage(typeof body.message === "string" ? body.message :
