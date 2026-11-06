@@ -55,9 +55,13 @@ function parseCards(value: unknown): Card[] {
 
 async function getApiJwt(): Promise<string> {
   const result = await authClient.token();
+  if (result.error) {
+    const detail = typeof result.error.message === "string" ? result.error.message : "Neon Auth rejected the token request.";
+    throw new Error("Neon Auth token request failed: " + detail);
+  }
   const jwt = result.data?.token;
-  if (typeof jwt !== "string" || !jwt.trim()) {
-    throw new Error("Your sign-in session could not be verified. Please sign out and sign in again.");
+  if (typeof jwt !== "string" || !jwt.trim() || jwt.split(".").length !== 3) {
+    throw new Error("Neon Auth did not issue an API access token for this session. Please sign in again.");
   }
   return jwt;
 }
