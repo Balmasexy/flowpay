@@ -327,7 +327,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
       if (!assigned.ok) {
         const providerMessage = typeof assigned.body.message === "string"
-          ? assigned.body.message.replace(/[\\r\\n\\t]+/g, " ").slice(0, 240)
+          ? assigned.body.message.replace(/[\r\n\t]+/g, " ").slice(0, 240)
           : "Paystack did not provide a rejection reason.";
         console.error("Paystack dedicated account assignment rejected:", {
           httpStatus: assigned.status,
