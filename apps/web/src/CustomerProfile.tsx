@@ -15,7 +15,6 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.repl
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
 export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};onPhotoChange:(photo:string|null)=>void}) {
-  const authSession=authClient.useSession();
   const [profile,setProfile]=useState<Profile>({fullName:user.name ?? "",email:user.email ?? "",phoneNumber:"",residentialAddress:"",photoUrl:null,updatedAt:null});
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
@@ -31,7 +30,6 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
   const cameraVideo=useRef<HTMLVideoElement>(null);
 
   async function request(method:"GET"|"PATCH",body?:object) {
-    if(authSession.isPending) throw new Error("Your sign-in session is still loading. Please wait a moment and try again.");
     // The session cookie is not an API JWT; obtain a short-lived signed token.
     const token=await getApiJwt();
     if(!API_BASE) throw new Error("FlowPay API address is missing from the web app configuration.");
