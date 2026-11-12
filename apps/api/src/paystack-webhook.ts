@@ -3,6 +3,7 @@ import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { getPaystackCredential, paystackReferenceEnvironment } from "./paystack-config.js";
 
 type Options = { pool: Pool | null };
 type Deposit = {
@@ -76,13 +77,16 @@ function balancedDepositLedger(
 export function createPaystackWebhookHandler({ pool }: Options) {
   return async function handlePaystackWebhook(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
-    if (req.method !== "POST" || pathname !== "/webhooks/paystack") return false;
+    if (req.method !== "POST" || !["/webhooks/paystack", "/webhooks/paystack/test", "/webhooks/paystack/live"].includes(pathname)) return false;
 
-    const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-    if (process.env.PAYSTACK_ENVIRONMENT !== "test" || !secret.startsWith("sk_test_")) {
-      send(res, 503, { error: "PAYSTACK_SANDBOX_CONFIGURATION_REQUIRED" });
+    // The legacy endpoint remains Test-only. Register separate Test and Live webhook URLs.
+    const environment = pathname === "/webhooks/paystack/live" ? "live" : "test";
+    const credential = getPaystackCredential(environment);
+    if (!credential) {
+      send(res, 503, { error: environment === "live" ? "PAYSTACK_LIVE_CONFIGURATION_REQUIRED" : "PAYSTACK_TEST_CONFIGURATION_REQUIRED" });
       return true;
     }
+    const secret = credential.secretKey;
     if (!pool) {
       send(res, 503, { error: "WEBHOOK_DATABASE_UNAVAILABLE" });
       return true;
@@ -136,7 +140,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     const reference = typeof data.reference === "string" ? data.reference.trim() : "";
     const eventAmount = amountMinor(data.amount);
     const eventProviderId = providerId(data.id);
-    if (!reference || !eventAmount || !eventProviderId || String(data.status ?? "").toLowerCase() !== "success" || data.currency !== "NGN") {
+    if (!reference || paystackReferenceEnvironment(reference) !== environment || !eventAmount || !eventProviderId || String(data.status ?? "").toLowerCase() !== "success" || data.currency !== "NGN") {
       send(res, 202, { received: true, processed: false, reason: "INVALID_PROVIDER_EVENT" });
       return true;
     }
@@ -161,7 +165,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       ? body.data as Record<string, unknown> : {};
     const verifiedAmount = amountMinor(verified.amount);
     const verifiedProviderId = providerId(verified.id);
-    if (!verifyResponse.ok || body.status !== true || verified.status !== "success" || verified.domain !== "test") {
+    if (!verifyResponse.ok || body.status !== true || verified.status !== "success" || verified.domain !== environment) {
       send(res, 202, { received: true, processed: false, reason: "PROVIDER_TRANSACTION_NOT_VERIFIED" });
       return true;
     }
