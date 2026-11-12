@@ -152,7 +152,7 @@ export default function AdminPage({ token }: { token: string }) {
 
   const requestVirtualAccount = async () => {
     if (!virtualAccountConsent || virtualAccountBusy) return;
-    if (virtualAccount?.environment === "live" && (!/^\\d{11}$/.test(virtualBvn) || !/^\\d{10}$/.test(virtualBankAccountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(virtualBankCode))) {
+    if (virtualAccount?.environment === "live" && (!/^\d{11}$/.test(virtualBvn) || !/^\d{10}$/.test(virtualBankAccountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(virtualBankCode))) {
       setVirtualAccountError("Enter the 11-digit BVN and the 10-digit BVN-linked bank account number with its bank code."); return;
     }
     setVirtualAccountBusy(true);
@@ -273,9 +273,9 @@ export default function AdminPage({ token }: { token: string }) {
                 </label>
                 {virtualAccount?.environment === "live" && !virtualAccount?.assigned && <>
                   <label htmlFor="super-admin-bvn">BVN (11 digits)</label>
-                  <input id="super-admin-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event => setVirtualBvn(event.target.value.replace(/\\D/g, "").slice(0, 11))} placeholder="Enter BVN for Paystack validation" disabled={virtualAccountBusy}/>
+                  <input id="super-admin-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event => setVirtualBvn(event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter BVN for Paystack validation" disabled={virtualAccountBusy}/>
                   <label htmlFor="super-admin-bank-account">BVN-linked bank account number</label>
-                  <input id="super-admin-bank-account" inputMode="numeric" autoComplete="off" maxLength={10} value={virtualBankAccountNumber} onChange={event => setVirtualBankAccountNumber(event.target.value.replace(/\\D/g, "").slice(0, 10))} placeholder="10-digit account number" disabled={virtualAccountBusy}/>
+                  <input id="super-admin-bank-account" inputMode="numeric" autoComplete="off" maxLength={10} value={virtualBankAccountNumber} onChange={event => setVirtualBankAccountNumber(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit account number" disabled={virtualAccountBusy}/>
                   <label htmlFor="super-admin-bank-code">Bank code</label>
                   <input id="super-admin-bank-code" autoComplete="off" maxLength={12} value={virtualBankCode} onChange={event => setVirtualBankCode(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 12))} placeholder="Bank code from Paystack bank directory" disabled={virtualAccountBusy}/>
                   <p style={{ margin: "6px 0", fontSize: 12 }}>The BVN is sent to Paystack for validation only; FlowPay does not store it in its virtual-account table.</p>
