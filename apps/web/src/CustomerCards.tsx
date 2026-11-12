@@ -152,7 +152,8 @@ export default function CustomerCards({ token, registeredName }: { token: string
       setCards([]);
       setCardholderName(null);
       setVirtualBankAccount({
-        assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+        assigned: false, status: "not_requested", environment: "test",
+        accountNumber: null, bankName: null, accountName: null
       });
       setError(cause instanceof Error ? cause.message : "Unable to load cards.");
     }).finally(() => { if (active) setLoading(false); });
