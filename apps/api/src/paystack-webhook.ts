@@ -1,4 +1,5 @@
 import { processPaystackDedicatedAccountWebhook } from "./paystack-dedicated-accounts.js";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -78,9 +79,11 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/webhooks/paystack") return false;
 
-    const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-    if (process.env.PAYSTACK_ENVIRONMENT !== "test" || !secret.startsWith("sk_test_")) {
-      send(res, 503, { error: "PAYSTACK_SANDBOX_CONFIGURATION_REQUIRED" });
+    const paystackRuntime = getPaystackRuntime();
+    const secret = paystackRuntime?.secretKey ?? "";
+    const environment = paystackRuntime?.environment ?? null;
+    if (!paystackRuntime || !environment) {
+      send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED" });
       return true;
     }
     if (!pool) {
@@ -109,7 +112,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       send(res, 400, { error: "INVALID_JSON" });
       return true;
     }
-    if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
+    if (environment === "test" && ["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
       const result = await processPaystackTransferWebhook(pool, secret, event);
       send(res, result.status, result.body);
       return true;
@@ -161,7 +164,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       ? body.data as Record<string, unknown> : {};
     const verifiedAmount = amountMinor(verified.amount);
     const verifiedProviderId = providerId(verified.id);
-    if (!verifyResponse.ok || body.status !== true || verified.status !== "success" || verified.domain !== "test") {
+    if (!verifyResponse.ok || body.status !== true || verified.status !== "success" || verified.domain !== environment) {
       send(res, 202, { received: true, processed: false, reason: "PROVIDER_TRANSACTION_NOT_VERIFIED" });
       return true;
     }
