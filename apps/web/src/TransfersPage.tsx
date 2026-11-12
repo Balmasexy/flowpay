@@ -417,7 +417,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         </div>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,padding:"7px 11px",borderRadius:999,border:"1px solid rgba(255,255,255,.18)",background:"rgba(255,255,255,.08)",color:"#f8fafc"}}>NGN WALLET</span>
       </div>
-      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>{mode === "flowpay" ? "Move money between verified FlowPay wallets, with recipient confirmation and your transaction PIN." : "Send NGN to a verified Nigerian bank account using the Paystack test-transfer flow."}</p>
+      <p style={{color:"#cbd5e1",fontSize:13,lineHeight:1.55,margin:"13px 0 17px"}}>{mode === "flowpay" ? "Move money between verified FlowPay wallets, with recipient confirmation and your transaction PIN." : "Send NGN to a verified Nigerian bank account using the Paystack transfer provider. Availability depends on the API environment, Paystack permissions and transfer controls."}</p>
       <div className="fp-transfer-mode-switch fp-transfer-destination-grid" role="tablist" aria-label="Transfer destination" style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
         <button type="button" role="tab" aria-selected={mode === "flowpay"} onClick={() => changeMode("flowpay")}
           style={{display:"flex",alignItems:"center",gap:11,textAlign:"left",padding:"13px 14px",borderRadius:14,border:mode === "flowpay" ? "2px solid #fb923c" : "1px solid rgba(255,255,255,.18)",background:mode === "flowpay" ? "#f97316" : "rgba(255,255,255,.07)",color:"#fff",cursor:"pointer",minHeight:72}}>
@@ -486,7 +486,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           <span style={{fontSize:11,fontWeight:800,color:"#c2410c",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:999,padding:"6px 10px"}}>PAYSTACK · TEST MODE</span>
         </div>
         <p className="fp-muted" style={{marginTop:0}}>Verify the recipient's account name before reviewing the bank transfer.</p>
-        {banksLoading ? <p className="fp-overview-muted" role="status">Loading Paystack's bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Check PAYSTACK_ENVIRONMENT=test and the Paystack test secret in Render, then refresh.</div> : <>
+        {banksLoading ? <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Check the selected Paystack environment and backend credentials in Render, then refresh.</div> : <>
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
             <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
