@@ -18,7 +18,8 @@
     "test:paystack-dedicated-accounts": "tsx --test scripts/test-paystack-dedicated-accounts.ts",
     "test:customer-ai": "tsx --test scripts/test-customer-ai.ts",
     "test:deposit-receipts": "tsx --test scripts/test-deposit-receipts.ts",
-    "test:vtpass-bills": "tsx --test scripts/test-vtpass-bills.ts"
+    "test:vtpass-bills": "tsx --test scripts/test-vtpass-bills.ts",
+    "test:storyblok-preview": "tsx --test scripts/test-storyblok-preview.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
