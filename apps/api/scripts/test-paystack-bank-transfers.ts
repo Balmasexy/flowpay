@@ -197,7 +197,7 @@ test("requires the explicit sandbox feature switch and never accepts live creden
   const response = context.response();
   await context.handler(context.request("POST", "/customer/transfers/bank", body()), response.res);
   assert.equal(response.result().status, 503);
-  assert.equal(response.result().body.error, "PAYSTACK_TEST_BANK_PAYOUTS_NOT_ENABLED");
+  assert.equal(response.result().body.error, "PAYSTACK_BANK_PAYOUTS_NOT_ENABLED");
   assert.equal(context.connections(), 0);
 });
 
