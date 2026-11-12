@@ -711,9 +711,14 @@ export function createPaystackBankTransfersHandler(options: Options) {
           [walletId]
         ),
         client.query<{ amount_minor: string }>(
-          `SELECT COALESCE(SUM(amount_minor), 0)::text AS amount_minor
-             FROM public.fp_paystack_bank_transfers
-            WHERE account_id = $1 AND status IN ('initiating', 'pending', 'otp', 'unknown')`,
+          `SELECT COALESCE(SUM(reservation.amount_minor), 0)::text AS amount_minor
+             FROM (
+               SELECT amount_minor FROM public.fp_paystack_bank_transfers
+                WHERE account_id = $1 AND status IN ('initiating', 'pending', 'otp', 'unknown')
+               UNION ALL
+               SELECT amount_minor FROM public.fp_vtpass_bill_payments
+                WHERE account_id = $1 AND status IN ('initiating', 'pending', 'unknown')
+             ) AS reservation`,
           [walletId]
         )
       ]);
