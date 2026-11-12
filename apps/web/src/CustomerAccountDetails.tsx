@@ -118,7 +118,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       setVirtualRequestError("Enter your 11-digit BVN and the 10-digit bank account linked to it.");
       return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setVirtualRequestError("FlowPay API address is not configured."); return; }
     setVirtualRequestBusy(true); setVirtualRequestError(""); setVirtualRequestMessage("");
     try {
