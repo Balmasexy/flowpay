@@ -48,7 +48,7 @@ function validAmount(value: unknown): value is string {
   return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER);
 }
 function testPaystackSecret(): string | null {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
+  const secret = (process.env.PAYSTACK_TEST_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY)?.trim() ?? "";
   return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
 }
 function sandboxRuntimeEnabled(): boolean {
@@ -501,7 +501,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         error: "PAYSTACK_TEST_BANK_PAYOUTS_NOT_ENABLED",
         environment: "test",
         livePayoutsEnabled: false,
-        requiredConfiguration: ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "PAYSTACK_TRANSFERS_ENABLED=true"]
+        requiredConfiguration: ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_TEST_SECRET_KEY=sk_test_…", "PAYSTACK_TRANSFERS_ENABLED=true"]
       }); return true;
     }
 
