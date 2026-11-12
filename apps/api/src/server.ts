@@ -15,6 +15,7 @@ import { createPaystackBankTransfersHandler } from "./paystack-bank-transfers.js
 import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
+import { getSelectedPaystackCredential } from "./paystack-config.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -211,7 +212,7 @@ const server = createServer(async (req, res) => {
       );
       const bankPayoutsEnabled = payoutSchema.rows[0]?.available === true &&
         process.env.PAYSTACK_ENVIRONMENT === "test" &&
-        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
+        (process.env.PAYSTACK_TEST_SECRET_KEY ?? process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
         process.env.PAYSTACK_TRANSFERS_ENABLED === "true" &&
         process.env.FLOWPAY_RUNTIME_ENV === "development" &&
         process.env.NODE_ENV !== "production";
@@ -306,7 +307,7 @@ const server = createServer(async (req, res) => {
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
       send(res, 200, {
-        deposits, environment: "test", livePaymentsEnabled: false,
+        deposits, environment: selectedPaystack?.environment ?? "test", livePaymentsEnabled: selectedPaystack?.environment === "live",
         depositProviders: { paystack: paystackConfigured, flutterwave: false }
       });
     } catch (error) {
