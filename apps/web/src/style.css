@@ -762,3 +762,55 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
 }
+
+/* FlowPay customer workspace: restore the dark navigation rail and orange brand contrast. */
+.flowpay-app { background:#f3f2ef; color:#20231f; }
+.flowpay-app .fp-header { background:#fff; }
+.flowpay-app .fp-layout { background:transparent; }
+.flowpay-app .fp-sidebar {
+  background:#171b18 !important;
+  color:#f7f8f5 !important;
+  border:1px solid #303831 !important;
+  box-shadow:0 12px 30px rgba(18,24,19,.12) !important;
+}
+.flowpay-app .fp-sidebar-toggle {
+  background:#242a25 !important;
+  color:#e8ece6 !important;
+  border:1px solid #39423a !important;
+}
+.flowpay-app .fp-sidebar-toggle:hover { background:#303a31 !important; color:#fff !important; }
+.flowpay-app .fp-sidebar-section>span { color:#929d91 !important; }
+.flowpay-app .fp-sidebar-section button {
+  color:#d0d8ce !important;
+  background:transparent !important;
+}
+.flowpay-app .fp-sidebar-section button svg { color:#aeb9ac !important; }
+.flowpay-app .fp-sidebar-section button:hover {
+  background:#29332b !important;
+  color:#fff !important;
+}
+.flowpay-app .fp-sidebar-section button.active {
+  background:#3a291d !important;
+  color:#ffad70 !important;
+  box-shadow:inset 3px 0 0 #ff7a18;
+}
+.flowpay-app .fp-sidebar-section button.active svg { color:#ff9a50 !important; }
+.flowpay-app .fp-sidebar-foot {
+  color:#b7c1b4 !important;
+  border-top:1px solid #384139 !important;
+}
+.flowpay-app .fp-sidebar-foot svg { color:#ff9a50 !important; }
+.flowpay-app .fp-sidebar-reopen {
+  background:#171b18 !important;
+  color:#ff9a50 !important;
+  border:1px solid #39423a !important;
+}
+.flowpay-app .fp-main { color:#20231f; }
+.flowpay-app .fp-page-heading h1 { color:#20231f; }
+.flowpay-app .fp-panel,
+.flowpay-app .fp-service-tile,
+.flowpay-app .fp-network,
+.flowpay-app .fp-outline { background:#fff; }
+@media (max-width:760px) {
+  .flowpay-app { background:#f3f2ef; }
+}
