@@ -1,42 +1,75 @@
-# FlowPay Paystack sandbox deposits
+# FlowPay Paystack deposits and environment separation
 
-Paystack is integrated inside the existing FlowPay API. It is a separate provider adapter and uses FlowPay customer authentication, pending deposit records, a provider-specific clearing account, the existing double-entry ledger, and the shared provider-event receipt table.
+Paystack is integrated inside the existing FlowPay API. FlowPay uses a server-side Paystack adapter, verified customer authentication, pending deposit records, a provider-specific clearing account, the double-entry ledger, signed webhooks, independent provider verification, and idempotent event handling.
 
-## Test-only safety boundary
+## Separate Test and Live credentials
 
-- Set `PAYSTACK_ENVIRONMENT=test` and use a Paystack test secret beginning with `sk_test_`.
-- Live credentials and live mode are rejected by the checkout and webhook handlers.
-- The customer identity and email are loaded from the verified FlowPay session; the browser cannot substitute an email or customer ID.
-- The only supported currency is NGN. The browser submits an amount in kobo as an integer string.
-- A deposit is credited only after a valid Paystack signature, independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, and a pending FlowPay deposit have all been confirmed.
-- The webhook posts a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
-- Duplicate webhook delivery cannot post a second credit. A previously received event can resume a pending deposit if its ledger posting did not complete.
-- No test clearing account balance represents money held at Paystack or a bank. Sandbox credits are not real funds.
-- Live money movement remains disabled.
+Configure the following variables on the **FlowPay backend only**. Never add Paystack secrets to the web service, browser bundle, Android APK, build arguments, source code, or GitHub.
 
-## Render backend configuration
-
-Configure these variables on the FlowPay backend service only. Do not put the secret in the web service, APK, source code, build arguments, or this repository.
-
-| Variable | Value |
+| Variable | Purpose |
 |---|---|
-| `PAYSTACK_ENVIRONMENT` | `test` |
-| `PAYSTACK_SECRET_KEY` | Paystack test secret (`sk_test_...`) |
-| `PAYSTACK_CALLBACK_URL` | `https://flowpay-web-jx7i.onrender.com/payment-return/paystack` |
+| `PAYSTACK_ENVIRONMENT` | Selects `test` or `live` for new checkout and bank-lookup operations |
+| `PAYSTACK_TEST_SECRET_KEY` | Dedicated Test secret beginning with `sk_test_` |
+| `PAYSTACK_LIVE_SECRET_KEY` | Dedicated Live secret beginning with `sk_live_` |
+| `PAYSTACK_LIVE_ENABLED` | Must be `true` before the Live secret can be selected; keep `false` until Live is separately approved |
+| `PAYSTACK_SECRET_KEY` | Legacy Test-only fallback while migrating older configurations; never used for Live |
+| `PAYSTACK_CALLBACK_URL` | Canonical HTTPS callback URL |
 | `PAYSTACK_DEPOSIT_MIN_MINOR` | Approved minimum amount in kobo |
 | `PAYSTACK_DEPOSIT_MAX_MINOR` | Approved maximum amount in kobo |
 
-The backend requires positive integer min/max values and rejects amounts outside that inclusive range. The API never accepts a provider secret from the browser.
+The API validates the key prefix against the selected mode. Test-specific credentials take priority over the legacy `PAYSTACK_SECRET_KEY`. A Live request requires `PAYSTACK_LIVE_SECRET_KEY` and `PAYSTACK_LIVE_ENABLED=true`; a Test key is never accepted in Live mode or vice versa.
 
-## Paystack webhook setup
+The API uses hosted checkout initialized server-to-server. A Paystack public key is not required by this backend flow.
 
-Register this HTTPS endpoint in the Paystack dashboard for the **test integration**:
+## Webhook registrations
 
-`https://flowpay-backend-qz79.onrender.com/webhooks/paystack`
+Register separate HTTPS webhook URLs in the matching Paystack integration:
 
-Paystack signs the raw request body with HMAC-SHA512 using the test secret. FlowPay compares `x-paystack-signature` in constant time, then independently calls Paystack's transaction verification endpoint. Only `charge.success` events for a verified `test` transaction in NGN are eligible for ledger posting.
+- Test: `https://flowpay-backend-qz79.onrender.com/webhooks/paystack/test`
+- Live: `https://flowpay-backend-qz79.onrender.com/webhooks/paystack/live`
 
-Do not configure the live integration to call this test-only webhook. Do not use an `sk_live_` key.
+The legacy `/webhooks/paystack` endpoint remains Test-only for compatibility. Each endpoint verifies the raw-body HMAC-SHA512 signature using the matching environment's secret. FlowPay then independently verifies the transaction and checks the provider domain, reference, amount, currency, and provider transaction ID before posting a balanced ledger transaction.
+
+New references include the mode (`flowpay-ps-test-…` or `flowpay-ps-live-…`), and idempotency is namespaced by mode. Existing sandbox references without a mode marker remain valid on the Test webhook only.
+
+## Supported behavior and safety boundaries
+
+- Customer deposits can use the selected Test or Live mode when the corresponding server configuration is valid.
+- Bank directory and account-name lookup use the selected mode and corresponding credential.
+- Existing Paystack deposit records and ledger posting remain on the existing FlowPay schema; this branch adds no database migration.
+- Payouts/bank transfers remain sandbox-only and development-only. They are not enabled for Live by this change.
+- Paystack dedicated virtual-account provisioning remains test-only and requires its existing development and explicit feature guards. Live DVA provisioning is not enabled by this change.
+- No customer balance is credited from a browser callback or unsigned webhook.
+- No real charge is initiated by configuration or deployment; a customer must still deliberately start checkout.
+- An uncertain provider result remains pending and must be reconciled before retrying.
+
+## Test configuration
+
+Use a dedicated Test key:
+
+```dotenv
+PAYSTACK_ENVIRONMENT=test
+PAYSTACK_TEST_SECRET_KEY=sk_test_replace_with_the_test_key
+PAYSTACK_LIVE_ENABLED=false
+```
+
+The legacy `PAYSTACK_SECRET_KEY` may be retained temporarily for existing Test-only services. Move it into `PAYSTACK_TEST_SECRET_KEY` when ready.
+
+## Live configuration — do not activate without approval
+
+Set the Live variables only after the merchant's Live integration, settlement account, business eligibility, limits, callback URL, webhook, and reconciliation process have been checked:
+
+```dotenv
+PAYSTACK_ENVIRONMENT=live
+PAYSTACK_LIVE_SECRET_KEY=sk_live_replace_with_the_live_key
+PAYSTACK_LIVE_ENABLED=false
+```
+
+The Live key must be entered only in the Render backend's encrypted Environment settings. Keep the Live enable switch false until the owner explicitly approves activation. Do not overwrite or delete Test credentials.
+
+## Database migration
+
+The existing Paystack deposit schema is required before deposit checkout can post to the FlowPay ledger. Apply the approved Paystack schema migrations only after confirming the intended Neon database and branch. This code change does not execute any migration and does not alter existing ledger rows or balances.
 
 ## Customer API
 
@@ -44,41 +77,10 @@ Do not configure the live integration to call this test-only webhook. Do not use
 
 `POST /customer/paystack/deposits`
 
-Requires a verified FlowPay bearer session.
-
-```json
-{
-  "amountMinor": "250000",
-  "idempotencyKey": "UUID"
-}
-```
-
-A successful response contains a hosted `checkoutUrl`, the FlowPay transaction ID, the unique provider reference, and `environment: "test"`. The customer UI accepts only the HTTPS host `checkout.paystack.com` before redirecting.
+Requires a verified FlowPay bearer session. The browser submits an amount in kobo as an integer string and a UUID idempotency key. The API loads the customer identity and email from the verified session.
 
 ### Check callback status
 
-`GET /customer/paystack/deposits/status?reference=flowpay-ps-...`
+`GET /customer/paystack/deposits/status?reference=flowpay-ps-…`
 
-Requires the same customer's verified bearer session. A reference belonging to another customer is not returned. The API returns the persisted deposit status and whether the wallet was credited.
-
-### Deposit history
-
-`GET /customer/money-received`
-
-Returns posted Flutterwave deposits plus Paystack pending, posted, and failed attempts for the authenticated customer. The Paystack part is omitted until the Paystack schema migration is applied; existing Flutterwave history remains available.
-
-## Database migration
-
-Apply `apps/api/migrations/016_paystack_sandbox_ledger_posting.sql` to the approved FlowPay database before accepting test deposits. The migration is additive and idempotent: it creates the Paystack deposit table, adds nullable provider-event receipt metadata when absent, extends the system-account role check, and creates a zero-opening-balance Paystack clearing account. It does not alter existing customer balances, existing ledger entries, Flutterwave deposits, or customer records.
-
-The migration also records `015_paystack_sandbox_deposits` because the Paystack table and event columns are created in this consolidated migration to accommodate existing FlowPay databases where the older Flutterwave migration sequence is incomplete.
-
-Never apply this migration to Production without explicit approval. Confirm the database and Neon branch before applying it.
-
-## Operational behavior and recovery
-
-- A provider verification or database error returns a retryable server error; the provider event is not marked processed.
-- A duplicate receipt with the same payload and FlowPay transaction may safely resume a pending ledger posting.
-- A posted FlowPay transaction is acknowledged as a duplicate only after its two ledger entries are checked against the customer account, clearing account, amount, and equal-and-opposite balance.
-- A deposit whose account, amount, provider transaction ID, or existing ledger entries do not match is not credited automatically and requires reconciliation.
-- Checkout initialization that returns an uncertain provider outcome remains pending. Do not treat an HTTP error as evidence that a payment failed or was successful; reconcile the provider reference before retrying with a new request.
+Requires the same customer's verified bearer session. The reference identifies the mode and the API returns only that customer's persisted deposit state.
