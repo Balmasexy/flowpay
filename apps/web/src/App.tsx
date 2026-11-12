@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AdminPage from "./AdminPage";
 import BulkOperations from "./BulkOperations";
 import LandingPage from "./LandingPage";
+import StoryblokPublicPage from "./StoryblokPublicPage";
 import BalmzAiAssistant from "./BalmzAiAssistant";
 import LoginPage from "./LoginPage";
 import SignupPage from "./SignupPage";
@@ -139,7 +140,10 @@ export default function App() {
   };
   const servicePage = ["/airtime", "/data", "/bills", "/cable-tv", "/tv"].includes(path);
 
-  if (path === "/") return <LandingPage />;
+  if (path === "/" || path === "/about" || path === "/services") {
+    const slug = path === "/" ? "home" : path.slice(1);
+    return <StoryblokPublicPage slug={slug} />;
+  }
   if (path === "/login") return <LoginPage />;
   if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
   if (path === "/admin" || path.startsWith("/admin/")) {
