@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, Cable, CheckCircle2, Clock3, Phone, RefreshCw, ShieldCheck, Wifi, Zap } from "lucide-react";
 
 type Variation = { code: string; name: string; amount: string };
@@ -92,11 +92,6 @@ export default function ServicePreview({ path, token }: { path: string; token: s
     }).finally(() => { if (!controller.signal.aborted) setCatalogLoading(false); });
     return () => controller.abort();
   }, [category, serviceId, token, apiBase, isData, isElectricity]);
-
-  const reviewAmount = useMemo(() => {
-    if (isData && selectedVariation) return selectedVariation.amount;
-    return amount;
-  }, [isData, selectedVariation, amount]);
 
   function resetOutcome() {
     setError(""); setMessage(""); setRequestId(""); setPaymentStatus("");
