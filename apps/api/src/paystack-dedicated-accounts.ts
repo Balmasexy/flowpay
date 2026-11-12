@@ -203,6 +203,12 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
+    const runtime = getPaystackRuntime();
+    if (!runtime) {
+      send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
+      return true;
+    }
+    const environment = runtime.environment;
     try {
       const saved = await pool.query<DedicatedAccountRow>(
         `SELECT user_id, paystack_customer_code, dedicated_account_id,
@@ -235,7 +241,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           provider: "Paystack", environment,
           virtualBankAccount: view(current),
           message: "A Paystack dedicated-account request is already pending for this profile. FlowPay will not submit a duplicate request.",
-          livePaymentsEnabled: false
+          livePaymentsEnabled: environment === "live"
         });
         return true;
       }
@@ -280,7 +286,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       if (requestClaim.rowCount !== 1) {
         const latest = await pool.query<DedicatedAccountRow>(
           `SELECT user_id, paystack_customer_code, dedicated_account_id,
-                  account_number, bank_name, account_name, status
+                  account_number, bank_name, account_name, provider_domain, status
              FROM public.fp_paystack_dedicated_accounts_v2
             WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
           [identity.id, environment]
@@ -362,15 +368,15 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         await pool.query(
           `UPDATE public.fp_paystack_dedicated_accounts_v2
               SET status = 'failed', last_error_code = 'PAYSTACK_DEDICATED_ACCOUNT_FAILED', updated_at = NOW()
-            WHERE user_id = $1`,
-          [identity.id]
+            WHERE user_id = $1 AND provider_domain = $2`,
+          [identity.id, environment]
         );
         send(res, 502, {
           error: "PAYSTACK_DEDICATED_ACCOUNT_FAILED",
-          message: "Paystack did not issue a test virtual bank account. No placeholder number was saved.",
+          message: "Paystack did not confirm a dedicated bank account assignment. No placeholder number was saved.",
           providerStatus: assigned.status,
           providerMessage,
-          livePaymentsEnabled: false
+          livePaymentsEnabled: environment === "live"
         });
         return true;
       }
