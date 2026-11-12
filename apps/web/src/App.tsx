@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AdminPage from "./AdminPage";
 import BulkOperations from "./BulkOperations";
-import LandingPage from "./LandingPage";
 import StoryblokPublicPage from "./StoryblokPublicPage";
 import BalmzAiAssistant from "./BalmzAiAssistant";
 import LoginPage from "./LoginPage";
