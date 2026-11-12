@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX, type ReactNode } from "react";
 import LandingPage from "./LandingPage";
 import "./storyblok-public.css";
 
@@ -295,7 +295,7 @@ export default function StoryblokPublicPage({ slug }: { slug: string }) {
       bridge = new window.StoryblokBridge();
       bridge.on(["input"], onInput);
       bridge.on(["change", "published"], onSaved);
-    }).catch(() => setFailed(true));
+    }).catch(() => undefined);
     return () => {
       disposed = true;
       bridge?.off?.(["input"], onInput);
