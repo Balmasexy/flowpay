@@ -527,30 +527,49 @@ const server = createServer(async (req, res) => {
         throw new Error("FLOWPAY_ACCOUNT_NUMBER_ASSIGNMENT_FAILED");
       }
 
+      const providerDomain = process.env.PAYSTACK_ENVIRONMENT === "live" && process.env.NODE_ENV === "production"
+        ? "live" : "test";
       const virtualAccountSchema = await pool.query<{ available: boolean }>(
-        "SELECT to_regclass('public.fp_paystack_dedicated_accounts') IS NOT NULL AS available"
+        "SELECT to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS available"
       );
       const virtualAccount = virtualAccountSchema.rows[0]?.available === true
         ? await pool.query(
             `SELECT account_number, bank_name, account_name, status
+               FROM public.fp_paystack_dedicated_accounts_v2
+              WHERE user_id = $1 AND provider_domain = $2
+              LIMIT 1`,
+            [identity.rows[0].id, providerDomain]
+          )
+        : await pool.query(
+            `SELECT account_number, bank_name, account_name, status
                FROM public.fp_paystack_dedicated_accounts
-              WHERE user_id = $1 AND status = 'assigned'
+              WHERE user_id = $1
               LIMIT 1`,
             [identity.rows[0].id]
-          )
-        : { rows: [] as Array<Record<string, unknown>> };
+          );
       const assignedVirtualAccount = virtualAccount.rows[0] ?? null;
       send(res, 200, {
         walletAccounts: accounts.rows.map(row => ({
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
         flowpayAccountNumber: String(flowpayAccount.rows[0].account_number).trim(),
-        virtualBankAccount: assignedVirtualAccount ? {
-          assigned: true,
-          accountNumber: String(assignedVirtualAccount.account_number),
-          bankName: String(assignedVirtualAccount.bank_name),
-          accountName: String(assignedVirtualAccount.account_name)
-        } : { assigned: false, accountNumber: null, bankName: null, accountName: null },
+        virtualBankAccount: assignedVirtualAccount &&
+          assignedVirtualAccount.status === "assigned" &&
+          /^[0-9]{10}$/.test(String(assignedVirtualAccount.account_number ?? "")) &&
+          typeof assignedVirtualAccount.bank_name === "string" &&
+          typeof assignedVirtualAccount.account_name === "string" ? {
+            assigned: true,
+            status: "assigned",
+            environment: providerDomain,
+            accountNumber: String(assignedVirtualAccount.account_number).trim(),
+            bankName: String(assignedVirtualAccount.bank_name),
+            accountName: String(assignedVirtualAccount.account_name)
+          } : {
+            assigned: false,
+            status: typeof assignedVirtualAccount?.status === "string" ? assignedVirtualAccount.status : "not_requested",
+            environment: providerDomain,
+            accountNumber: null, bankName: null, accountName: null
+          },
         profileRole: identity.rows[0].role,
         message: "Your 10-digit FlowPay number is for wallet-to-wallet transfers. The separate bank virtual account appears only after Paystack confirms assignment."
       });
