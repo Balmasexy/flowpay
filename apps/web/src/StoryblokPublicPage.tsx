@@ -236,9 +236,9 @@ function Block({ blok }: { blok: Blok }) {
     return <section className="fp-sb-section fp-sb-text-section" {...attrs}>
       {eyebrow && <span className="fp-sb-eyebrow">{eyebrow}</span>}
       {title && <h2>{title}</h2>}
-      {blok.content && <RichText value={blok.content}/>}
-      {blok.richtext && <RichText value={blok.richtext}/>}
-      {!blok.content && !blok.richtext && copy && <p>{copy}</p>}
+      {Object.prototype.hasOwnProperty.call(blok, "content") ? <RichText value={blok.content}/> : null}
+      {Object.prototype.hasOwnProperty.call(blok, "richtext") ? <RichText value={blok.richtext}/> : null}
+      {blok.content === undefined && blok.richtext === undefined && copy && <p>{copy}</p>}
     </section>;
   }
   if (component === "cta" || component === "call_to_action") {
