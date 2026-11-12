@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { getSelectedPaystackCredential } from "./paystack-config.js";
 
 type Options = {
   pool: Pool | null;
@@ -40,10 +41,6 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   const parsed: unknown = JSON.parse(raw || "{}");
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("INVALID_PAYLOAD");
   return parsed as Record<string, unknown>;
-}
-function paystackTestSecret(): string | null {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-  return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
 }
 async function paystackGet(secret: string, path: string): Promise<PaystackResponse> {
   const response = await fetch("https://api.paystack.co" + path, {
@@ -118,12 +115,13 @@ export function createBankAccountLookupHandler(options: Options) {
       else send(res, 503, { error: "BANK_LOOKUP_AUTH_UNAVAILABLE" });
       return true;
     }
-    const secret = paystackTestSecret();
-    if (!secret) { send(res, 503, { error: "PAYSTACK_BANK_SANDBOX_NOT_CONFIGURED" }); return true; }
+    const credential = getSelectedPaystackCredential();
+    const secret = credential?.secretKey ?? "";
+    if (!credential) { send(res, 503, { error: "PAYSTACK_CREDENTIALS_NOT_CONFIGURED" }); return true; }
     try {
       if (req.method === "GET" && pathname === "/customer/banks") {
         const banks = await fetchBanks(secret);
-        send(res, 200, { banks, country: "NG", currency: "NGN", provider: "Paystack", environment: "test" });
+        send(res, 200, { banks, country: "NG", currency: "NGN", provider: "Paystack", environment: credential.environment });
         return true;
       }
       let input: Record<string, unknown>;
