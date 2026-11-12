@@ -104,6 +104,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [depositing, setDepositing] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [paystackEnabled, setPaystackEnabled] = useState(false);
+  const [paystackEnvironment, setPaystackEnvironment] = useState<"test" | "live" | null>(null);
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
@@ -153,6 +154,8 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
         const providerConfig = root.depositProviders && typeof root.depositProviders === "object"
           ? root.depositProviders as Record<string, unknown> : {};
         setPaystackEnabled(providerConfig.paystack === true);
+        setPaystackEnvironment(providerConfig.paystackEnvironment === "test" || providerConfig.paystackEnvironment === "live"
+          ? providerConfig.paystackEnvironment : null);
         const deposits = root.deposits;
         setItems(Array.isArray(deposits)
           ? deposits.map(parseDeposit).filter((item): item is Deposit => item !== null)
@@ -162,6 +165,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
         if (active) {
           setItems([]);
           setPaystackEnabled(false);
+          setPaystackEnvironment(null);
           setError(reason instanceof Error ? reason.message : "Unable to load received payments.");
         }
       })
@@ -346,15 +350,17 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       <div className="fp-money-main-column">
         <div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">01 / FUND YOUR WALLET</span><h3>Choose your deposit amount</h3></div><span className="fp-money-currency">NGN ₦</span></div>
         {paystackEnabled ? <form onSubmit={startPaystackCheckout} className="fp-money-checkout">
-          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">TEST MODE</span></div>
+          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">{paystackEnvironment === "live" ? "LIVE MODE" : "TEST MODE"}</span></div>
           <label htmlFor="fp-deposit-amount">How much would you like to add?</label>
           <div className="fp-money-amount-input"><span>₦</span><input id="fp-deposit-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={event => setAmount(event.target.value)} disabled={depositing} required/></div>
           <div className="fp-money-quick-amounts" aria-label="Suggested deposit amounts">{["1000","5000","10000","20000"].map(value => <button key={value} type="button" className={amount === value ? "selected" : ""} onClick={() => { setAmount(value); setCheckoutError(""); }} disabled={depositing}>₦{Number(value).toLocaleString("en-NG")}</button>)}</div>
           <div className="fp-money-checkout-note"><ShieldCheck size={16}/><span>You will complete payment on Paystack's secure hosted checkout. FlowPay credits your wallet only after the signed webhook and independent provider verification both succeed.</span></div>
           {checkoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {checkoutError}</div>}
           <button type="submit" className="fp-primary fp-money-submit" disabled={depositing || !amount.trim()}>{depositing ? "Connecting to Paystack…" : <>Continue securely <ExternalLink size={16}/></>}</button>
-          <small className="fp-money-minor-note">Sandbox transaction · No live customer funds are collected in this environment.</small>
-        </form> : <div className="fp-money-unavailable" role="status"><span><AlertCircle size={20}/></span><div><b>Deposit checkout is not available right now</b><p>Paystack test checkout requires the test secret, callback URL, deposit limits, database migration and clearing account to be correctly configured on the FlowPay backend.</p></div></div>}
+          <small className="fp-money-minor-note">{paystackEnvironment === "live"
+            ? "Live payment · Real funds move only after you confirm payment on Paystack."
+            : "Sandbox transaction · No live customer funds are collected in this environment."}</small>
+        </form> : <div className="fp-money-unavailable" role="status"><span><AlertCircle size={20}/></span><div><b>Deposit checkout is not available right now</b><p>Paystack checkout is unavailable until the selected environment, matching secret key, callback URL, deposit limits, database migration and clearing account are correctly configured on the FlowPay backend.</p></div></div>}
       </div>
         <form className="fp-money-receipt-form" onSubmit={submitReceipt}>
           <div className="fp-money-receipt-heading">
