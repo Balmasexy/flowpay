@@ -189,7 +189,6 @@ jobs:
           gradle-version: "9.9.1"
 
       - name: Configure release signing when private keystore secrets exist
-        if: ${{ env.FLOWPAY_ANDROID_KEYSTORE_BASE64 != '' && env.FLOWPAY_ANDROID_KEYSTORE_PASSWORD != '' && env.FLOWPAY_ANDROID_KEY_ALIAS != '' && env.FLOWPAY_ANDROID_KEY_PASSWORD != '' }}
         env:
           FLOWPAY_ANDROID_KEYSTORE_BASE64: ${{ secrets.FLOWPAY_ANDROID_KEYSTORE_BASE64 }}
           FLOWPAY_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.FLOWPAY_ANDROID_KEYSTORE_PASSWORD }}
@@ -197,13 +196,17 @@ jobs:
           FLOWPAY_ANDROID_KEY_PASSWORD: ${{ secrets.FLOWPAY_ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          keystore="$RUNNER_TEMP/flowpay-upload-key.jks"
-          printf '%s' "$FLOWPAY_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
-          chmod 600 "$keystore"
-          echo "FLOWPAY_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
-          echo "FLOWPAY_ANDROID_KEYSTORE_PASSWORD=$FLOWPAY_ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "FLOWPAY_ANDROID_KEY_ALIAS=$FLOWPAY_ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "FLOWPAY_ANDROID_KEY_PASSWORD=$FLOWPAY_ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          if [[ -n "${FLOWPAY_ANDROID_KEYSTORE_BASE64:-}" && -n "${FLOWPAY_ANDROID_KEYSTORE_PASSWORD:-}" && -n "${FLOWPAY_ANDROID_KEY_ALIAS:-}" && -n "${FLOWPAY_ANDROID_KEY_PASSWORD:-}" ]]; then
+            keystore="$RUNNER_TEMP/flowpay-upload-key.jks"
+            printf '%s' "$FLOWPAY_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            chmod 600 "$keystore"
+            echo "FLOWPAY_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEYSTORE_PASSWORD=$FLOWPAY_ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEY_ALIAS=$FLOWPAY_ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEY_PASSWORD=$FLOWPAY_ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "No Android release keystore configured; the AAB will be built unsigned."
+          fi
 
       - name: Build Android debug APK and release AAB
         run: gradle --no-daemon --stacktrace -p apps/android :app:assembleDebug :app:bundleRelease
