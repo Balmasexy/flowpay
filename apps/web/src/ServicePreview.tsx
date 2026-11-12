@@ -1,95 +1,229 @@
-import { useMemo, useState } from "react";
-import { AlertCircle, Cable, CheckCircle2, Phone, ShieldCheck, Wifi, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Cable, CheckCircle2, Clock3, Phone, RefreshCw, ShieldCheck, Wifi, Zap } from "lucide-react";
 
-const networks = ["MTN", "Airtel", "Glo", "9mobile"];
-const electricityProviders = ["IKEDC", "EKEDC", "AEDC", "IBEDC", "KEDCO", "PHED", "Jos Electricity", "KAEDCO"];
-const tvProviders = ["DStv", "GOtv", "StarTimes"];
+type Variation = { code: string; name: string; amount: string };
+const networks = [
+  { label: "MTN", airtime: "mtn", data: "mtn-data" },
+  { label: "Airtel", airtime: "airtel", data: "airtel-data" },
+  { label: "Glo", airtime: "glo", data: "glo-data" },
+  { label: "9mobile", airtime: "etisalat", data: "etisalat-data" }
+];
+const electricityProviders = [
+  { label: "IKEDC – Ikeja Electric", id: "ikeja-electric" },
+  { label: "EKEDC – Eko Electric", id: "eko-electric" },
+  { label: "AEDC – Abuja Electric", id: "abuja-electric" },
+  { label: "IBEDC – Ibadan Electric", id: "ibadan-electric" },
+  { label: "KEDCO – Kano Electric", id: "kano-electric" },
+  { label: "PHED – Port Harcourt Electric", id: "portharcourt-electric" },
+  { label: "Jos Electric", id: "jos-electric" },
+  { label: "Kaduna Electric", id: "kaduna-electric" }
+];
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function toMinor(value: string): string | null {
+  const match = /^(0|[1-9]\d{0,8})(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return null;
+  const amount = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
+  return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER) ? amount.toString() : null;
+}
 
-export default function ServicePreview({ path }: { path: string }) {
+export default function ServicePreview({ path, token }: { path: string; token: string }) {
   const isAirtime = path === "/airtime";
   const isData = path === "/data";
   const isCable = path === "/cable-tv";
   const isTv = path === "/tv";
   const isTelevision = isCable || isTv;
-  const title = isAirtime ? "Airtime" : isData ? "Data" : isCable ? "Cable TV" : isTv ? "TV subscriptions" : "Bill payments";
+  const isElectricity = path === "/bills";
+  const category = isAirtime ? "airtime" : isData ? "data" : "electricity";
+  const title = isAirtime ? "Airtime" : isData ? "Data bundles" : isElectricity ? "Electricity / NEPA" : isCable ? "Cable TV" : "TV subscriptions";
   const [network, setNetwork] = useState("MTN");
-  const [provider, setProvider] = useState("");
+  const [provider, setProvider] = useState("ikeja-electric");
   const [phone, setPhone] = useState("");
   const [customerRef, setCustomerRef] = useState("");
-  const [meterType, setMeterType] = useState("Prepaid");
-  const [plan, setPlan] = useState("");
+  const [meterType, setMeterType] = useState("prepaid");
+  const [variations, setVariations] = useState<Variation[]>([]);
+  const [variationCode, setVariationCode] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
   const [amount, setAmount] = useState("");
-  const [review, setReview] = useState(false);
+  const [transactionPin, setTransactionPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verifiedName, setVerifiedName] = useState("");
+  const [verifiedAddress, setVerifiedAddress] = useState("");
+  const [meterVerified, setMeterVerified] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [requestId, setRequestId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+  const selectedNetwork = networks.find(item => item.label === network) ?? networks[0];
+  const serviceId = isAirtime ? selectedNetwork.airtime : isData ? selectedNetwork.data : provider;
+  const selectedVariation = variations.find(item => item.code === variationCode) ?? null;
+  const phoneValid = /^(?:0\d{10}|\+?234\d{10})$/.test(phone.replace(/[\s-]/g, ""));
+  const amountValid = isData ? Boolean(selectedVariation) : Boolean(toMinor(amount));
+  const readyToPurchase = token.split(".").length === 3 && Boolean(apiBase) && phoneValid && amountValid &&
+    (!isElectricity || meterVerified) && transactionPin.length === 6 && !busy;
 
-  const referenceLabel = isTelevision ? "Smartcard / IUC number" : "Meter / customer account number";
-  const referenceValid = /^[A-Za-z0-9-]{5,30}$/.test(customerRef.trim());
-  const phoneValid = /^(?:0[0-9]{10}|\+?234[0-9]{10})$/.test(phone.replace(/[\s-]/g, ""));
-  const amountValue = Number(amount);
-  const amountValid = /^\d+(?:\.\d{1,2})?$/.test(amount.trim()) && Number.isFinite(amountValue) && amountValue > 0 && amountValue <= 100000000;
-  const valid = isAirtime || isData
-    ? phoneValid && amountValid && (!isData || plan.trim().length > 0)
-    : Boolean(provider) && referenceValid && amountValid;
+  useEffect(() => {
+    if (!isData && !isElectricity) return;
+    if (!token || !apiBase) { setCatalogError("Authenticated FlowPay API is not configured."); return; }
+    const controller = new AbortController();
+    setCatalogLoading(true); setCatalogError(""); setVariations([]); setVariationCode("");
+    const query = new URLSearchParams({ category, serviceID: serviceId });
+    fetch(apiBase + "/customer/bills/catalog?" + query.toString(), {
+      method: "GET", credentials: "omit", signal: controller.signal,
+      headers: { Authorization: "Bearer " + token }
+    }).then(async response => {
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Bill catalogue is unavailable.");
+      const items = Array.isArray(body.variations) ? body.variations.map(value => {
+        const item = asRecord(value);
+        return { code: String(item.code ?? ""), name: String(item.name ?? ""), amount: String(item.amount ?? "") };
+      }).filter(item => item.code && item.name) : [];
+      if (isData && !items.length) throw new Error("No data bundles were returned by VTpass for this network.");
+      setVariations(items);
+      if (items.length) setVariationCode(items[0].code);
+    }).catch(cause => {
+      if (!controller.signal.aborted) setCatalogError(cause instanceof Error ? cause.message : "Bill catalogue is unavailable.");
+    }).finally(() => { if (!controller.signal.aborted) setCatalogLoading(false); });
+    return () => controller.abort();
+  }, [category, serviceId, token, apiBase, isData, isElectricity]);
 
-  const detail = useMemo(() => ({
-    provider: isAirtime || isData ? network : provider,
-    recipient: isAirtime || isData ? phone.trim() : customerRef.trim(),
-    service: isAirtime ? "Airtime top-up" : isData ? "Data bundle" : isTelevision ? "TV subscription" : "Electricity bill",
-    plan: isData ? plan.trim() : "",
-    meterType: !isAirtime && !isData && !isTelevision ? meterType : ""
-  }), [isAirtime, isData, isTelevision, network, phone, plan, provider, customerRef, meterType]);
+  const reviewAmount = useMemo(() => {
+    if (isData && selectedVariation) return selectedVariation.amount;
+    return amount;
+  }, [isData, selectedVariation, amount]);
 
-  function preview() {
-    setError("");
-    setReview(false);
-    if (!valid) {
-      setError(isAirtime || isData
-        ? "Enter a valid Nigerian phone number and an amount from ₦0.01 to ₦100,000,000" + (isData ? ", and choose a data plan" : "")
-        : "Select a provider and enter a valid customer reference and amount");
-      return;
-    }
-    setReview(true);
+  function resetOutcome() {
+    setError(""); setMessage(""); setRequestId(""); setPaymentStatus("");
+    setIdempotencyKey(crypto.randomUUID());
+  }
+  async function verifyMeter() {
+    if (!token || !apiBase) { setError("FlowPay API is not configured."); return; }
+    if (!customerRef.trim() || !phoneValid) { setError("Enter the meter number and a valid Nigerian contact phone number first."); return; }
+    setVerificationBusy(true); setError(""); setMeterVerified(false); setVerifiedName(""); setVerifiedAddress("");
+    try {
+      const response = await fetch(apiBase + "/customer/bills/validate", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ serviceID: provider, customerReference: customerRef.trim(), meterType })
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok || body.verified !== true) throw new Error(typeof body.error === "string" ? body.error : "Electricity meter could not be verified.");
+      setVerifiedName(typeof body.customerName === "string" ? body.customerName : "Verified customer");
+      setVerifiedAddress(typeof body.address === "string" ? body.address : "");
+      setMeterVerified(true);
+      setMessage("VTpass confirmed the meter details. Review the amount before paying.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Electricity meter verification failed.");
+    } finally { setVerificationBusy(false); }
+  }
+  async function purchase() {
+    if (!readyToPurchase) { setError("Complete all required details and enter your transaction PIN."); return; }
+    setBusy(true); setError(""); setMessage(""); setRequestId(""); setPaymentStatus("");
+    const payload: Record<string, unknown> = {
+      category, serviceID: serviceId, variationCode, customerReference: isElectricity ? customerRef.trim() : "",
+      phone, meterType, transactionPin, idempotencyKey,
+      ...(isData ? {} : { amountMinor: toMinor(amount) })
+    };
+    try {
+      const response = await fetch(apiBase + "/customer/bills/purchase", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify(payload)
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (typeof body.requestId === "string") setRequestId(body.requestId);
+      if (typeof body.status === "string") setPaymentStatus(body.status);
+      if (!response.ok && !body.requestId) throw new Error(typeof body.error === "string" ? body.error : "Bill-payment request failed.");
+      setMessage(typeof body.message === "string" ? body.message : "Payment request submitted. Check the provider status before retrying.");
+      if (["success","failed","reversed"].includes(String(body.status))) setIdempotencyKey(crypto.randomUUID());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Bill-payment outcome could not be confirmed.");
+    } finally { setBusy(false); }
+  }
+  async function refreshStatus() {
+    if (!requestId || !apiBase) return;
+    setStatusBusy(true); setError("");
+    try {
+      const response = await fetch(apiBase + "/customer/bills/status?requestId=" + encodeURIComponent(requestId), {
+        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+      });
+      const body = asRecord(await response.json().catch(() => ({})));
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Unable to requery this bill payment.");
+      setPaymentStatus(String(body.status ?? "unknown"));
+      setMessage(typeof body.message === "string" ? body.message : "Latest provider status received.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Status requery failed."); }
+    finally { setStatusBusy(false); }
   }
 
   const Icon = isAirtime ? Phone : isData ? Wifi : isTelevision ? Cable : Zap;
+  if (isTelevision) return <section className="fp-panel fp-form-panel">
+    <div className="fp-form-icon"><Cable/></div><h2>{title}</h2>
+    <p className="fp-muted">Cable and TV subscriptions are not connected to a payment provider yet. This section does not debit your wallet.</p>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> TV subscription provider integration is not enabled.</div>
+  </section>;
+
   return <section className="fp-panel fp-form-panel">
     <div className="fp-form-icon"><Icon/></div>
     <h2>{title}</h2>
-    <p className="fp-muted">Prepare and review your service details. This page does not submit a request or debit your FlowPay wallet.</p>
+    <p className="fp-muted">Provider-connected service purchase. Your wallet is debited only after VTpass confirms delivery; pending outcomes remain reserved until requery.</p>
 
     {(isAirtime || isData) ? <>
       <label>Mobile network</label>
-      <div className="fp-network-select">{networks.map(item => <button type="button" key={item} className={network === item ? "selected" : ""} aria-pressed={network === item} onClick={() => { setNetwork(item); setReview(false); }}>{item}</button>)}</div>
+      <div className="fp-network-select">{networks.map(item => <button type="button" key={item.label} className={network === item.label ? "selected" : ""} aria-pressed={network === item.label} onClick={() => { setNetwork(item.label); resetOutcome(); }}>{item.label}</button>)}</div>
       <label htmlFor="service-phone">Phone number</label>
-      <input id="service-phone" value={phone} onChange={e => { setPhone(e.target.value); setReview(false); }} inputMode="tel" autoComplete="tel" placeholder="080 0000 0000" maxLength={16}/>
-      {isData && <><label htmlFor="service-plan">Data plan / bundle</label><input id="service-plan" value={plan} onChange={e => { setPlan(e.target.value); setReview(false); }} placeholder="Enter plan name or code"/></>}
-    </> : <>
-      <label htmlFor="service-provider">Service provider</label>
-      <select id="service-provider" value={provider} onChange={e => { setProvider(e.target.value); setReview(false); }}>
-        <option value="">Select provider</option>
-        {(isTelevision ? tvProviders : electricityProviders).map(item => <option key={item} value={item}>{item}</option>)}
-      </select>
-      {!isTelevision && <>
-        <label htmlFor="service-meter-type">Meter type</label>
-        <select id="service-meter-type" value={meterType} onChange={e => { setMeterType(e.target.value); setReview(false); }}><option>Prepaid</option><option>Postpaid</option></select>
+      <input id="service-phone" value={phone} onChange={event => { setPhone(event.target.value); resetOutcome(); }} inputMode="tel" autoComplete="tel" placeholder="080 0000 0000" maxLength={16}/>
+      {isData && <>
+        <label htmlFor="service-plan">Data bundle</label>
+        <select id="service-plan" value={variationCode} onChange={event => { setVariationCode(event.target.value); resetOutcome(); }} disabled={catalogLoading || variations.length === 0}>
+          <option value="">{catalogLoading ? "Loading bundles…" : "Select data bundle"}</option>
+          {variations.map(item => <option key={item.code} value={item.code}>{item.name}{Number(item.amount) > 0 ? " – ₦" + Number(item.amount).toLocaleString("en-NG") : ""}</option>)}
+        </select>
       </>}
-      <label htmlFor="service-customer-ref">{referenceLabel}</label>
-      <input id="service-customer-ref" value={customerRef} onChange={e => { setCustomerRef(e.target.value); setReview(false); }} autoComplete="off" placeholder="Enter customer reference"/>
+    </> : <>
+      <label htmlFor="service-provider">Electricity provider</label>
+      <select id="service-provider" value={provider} onChange={event => { setProvider(event.target.value); setMeterVerified(false); resetOutcome(); }}>
+        {electricityProviders.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+      </select>
+      <label htmlFor="service-meter-type">Meter type</label>
+      <select id="service-meter-type" value={meterType} onChange={event => { setMeterType(event.target.value); setMeterVerified(false); resetOutcome(); }}><option value="prepaid">Prepaid</option><option value="postpaid">Postpaid</option></select>
+      <label htmlFor="service-customer-ref">Meter number</label>
+      <input id="service-customer-ref" value={customerRef} onChange={event => { setCustomerRef(event.target.value); setMeterVerified(false); resetOutcome(); }} autoComplete="off" placeholder="Enter meter / customer number"/>
+      <label htmlFor="service-phone">Contact phone number</label>
+      <input id="service-phone" value={phone} onChange={event => { setPhone(event.target.value); resetOutcome(); }} inputMode="tel" placeholder="080 0000 0000" maxLength={16}/>
+      <button type="button" className="fp-outline" onClick={() => void verifyMeter()} disabled={verificationBusy || !customerRef.trim() || !phoneValid}>
+        {verificationBusy ? "Verifying meter…" : "Verify meter with VTpass"}
+      </button>
+      {meterVerified && <div className="fp-bulk-notice"><CheckCircle2 size={17}/><span>Verified: {verifiedName}{verifiedAddress ? " · " + verifiedAddress : ""}</span></div>}
     </>}
 
-    <label htmlFor="service-amount">Amount (NGN)</label>
-    <input id="service-amount" value={amount} onChange={e => { const raw = e.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount(decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole); setReview(false); }} inputMode="decimal" maxLength={12} placeholder="₦ 0.00"/>
+    {!isData && <>
+      <label htmlFor="service-amount">Amount (NGN)</label>
+      <input id="service-amount" value={amount} onChange={event => { const raw = event.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount(decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole); resetOutcome(); }} inputMode="decimal" maxLength={12} placeholder="₦ 0.00"/>
+    </>}
+    {isData && selectedVariation && <p className="fp-muted">Provider price: ₦{Number(selectedVariation.amount).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
+    {catalogLoading && <p className="fp-muted">Loading provider catalogue…</p>}
+    {catalogError && <div className="fp-preview-warning"><AlertCircle size={17}/>{catalogError}</div>}
+    <label htmlFor="service-pin">Transaction PIN</label>
+    <input id="service-pin" type="password" value={transactionPin} onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" maxLength={6} autoComplete="off" placeholder="Enter 6-digit PIN"/>
+
     {error && <div className="fp-preview-warning"><AlertCircle size={17}/>{error}</div>}
-    <button type="button" className="fp-primary" onClick={preview}>Review details</button>
-    {review && <div className="fp-panel" style={{ marginTop: 8, padding: 16, boxShadow: "none" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#a95712", fontWeight: 700, fontSize: 12 }}><CheckCircle2 size={17}/> Local preview ready</div>
-      <p className="fp-muted">{detail.service} · {detail.provider}</p>
-      <p className="fp-muted">Recipient / reference: {detail.recipient}</p>
-      {detail.plan && <p className="fp-muted">Plan: {detail.plan}</p>}
-      {detail.meterType && <p className="fp-muted">Meter: {detail.meterType}</p>}
-      <b>₦{amountValue.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
-      <p className="fp-muted">Preview only. No provider lookup, bill validation, wallet debit or payment request has occurred.</p>
+    {message && <div className="fp-bulk-notice"><CheckCircle2 size={17}/>{message}</div>}
+    <button type="button" className="fp-primary" onClick={() => void purchase()} disabled={!readyToPurchase}>
+      {busy ? "Submitting to VTpass…" : "Authorize and pay"}
+    </button>
+    {requestId && <div className="fp-panel" style={{ marginTop: 8, padding: 16, boxShadow: "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 12 }}><Clock3 size={17}/> Provider request: {paymentStatus || "pending"}</div>
+      <p className="fp-muted">Request ID: {requestId}</p>
+      {paymentStatus !== "success" && paymentStatus !== "failed" && paymentStatus !== "reversed" && <button type="button" className="fp-outline" onClick={() => void refreshStatus()} disabled={statusBusy}>
+        <RefreshCw size={15}/> {statusBusy ? "Checking VTpass…" : "Requery payment status"}
+      </button>}
     </div>}
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> Live service payments remain disabled until provider integration, customer verification, authenticated authorization, ledger posting and reconciliation are implemented and tested.</div>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> {isAirtime ? "Airtime" : isData ? "Data" : "Electricity"} payments require VTPASS credentials in the API environment. Live processing also requires the separate VTPASS_LIVE_ENABLED approval switch. Never share provider secrets in the app.</div>
   </section>;
 }
