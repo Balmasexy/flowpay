@@ -186,7 +186,7 @@ export default function CustomerCards({ token, registeredName }: { token: string
         const providerDetail = typeof body.providerMessage === "string" ? body.providerMessage.slice(0, 240) : "";
         const providerStatus = typeof body.providerStatus === "number" ? " (HTTP " + body.providerStatus + ")" : "";
         throw new Error(providerDetail
-          ? "Paystack rejected the test account request" + providerStatus + ": " + providerDetail
+          ? "Paystack rejected the dedicated-account request" + providerStatus + ": " + providerDetail
           : typeof body.message === "string" ? body.message :
             typeof body.error === "string" ? body.error : "Unable to request a virtual bank account.");
       }
@@ -273,9 +273,9 @@ export default function CustomerCards({ token, registeredName }: { token: string
           {banksError && <div className="fp-preview-warning" role="alert">{banksError}</div>}
         </>}
         <button type="button" className="fp-primary"
-          disabled={!accountConsent || accountBusy || loading || (virtualBankAccount.environment === "live" && (bvn.length !== 11 || linkedBankAccount.length !== 10 || !linkedBankCode))}
+          disabled={!accountConsent || accountBusy || loading || virtualBankAccount.status === "pending" || (virtualBankAccount.environment === "live" && (bvn.length !== 11 || linkedBankAccount.length !== 10 || !linkedBankCode))}
           onClick={() => void requestVirtualBankAccount()}>
-          {accountBusy ? "Requesting with Paystack…" : "Request dedicated bank account"}
+          {accountBusy ? "Requesting with Paystack…" : virtualBankAccount.status === "pending" ? "Request already pending" : "Request dedicated bank account"}
         </button>
         <small className="fp-muted">
           {virtualBankAccount.environment === "live"
