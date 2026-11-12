@@ -352,17 +352,24 @@ const server = createServer(async (req, res) => {
            FROM public.fp_cards
           WHERE user_id = $1
           ORDER BY created_at DESC`, [identity.rows[0].id]);
-      const dedicatedAccountSchema = await pool.query<{ available: boolean }>(
-        "SELECT to_regclass('public.fp_paystack_dedicated_accounts') IS NOT NULL AS available"
+      const providerDomain = process.env.PAYSTACK_ENVIRONMENT === "live" && process.env.NODE_ENV === "production"
+        ? "live" : "test";
+      const dedicatedAccountV2Schema = await pool.query<{ available: boolean }>(
+        "SELECT to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS available"
       );
-      const dedicatedAccountRows = dedicatedAccountSchema.rows[0]?.available === true
+      const dedicatedAccountRows = dedicatedAccountV2Schema.rows[0]?.available === true
         ? await pool.query(
+            `SELECT account_number, bank_name, account_name, status
+               FROM public.fp_paystack_dedicated_accounts_v2
+              WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
+            [identity.rows[0].id, providerDomain]
+          )
+        : await pool.query(
             `SELECT account_number, bank_name, account_name, status
                FROM public.fp_paystack_dedicated_accounts
               WHERE user_id = $1 LIMIT 1`,
             [identity.rows[0].id]
-          )
-        : { rows: [] as Array<Record<string, unknown>> };
+          );
       const virtualBankAccount = dedicatedAccountRows.rows[0];
       const virtualBankAccountAssigned = virtualBankAccount?.status === "assigned" &&
         /^[0-9]{10}$/.test(String(virtualBankAccount.account_number ?? "")) &&
@@ -380,12 +387,14 @@ const server = createServer(async (req, res) => {
         virtualBankAccount: virtualBankAccountAssigned ? {
           assigned: true,
           status: "assigned",
+          environment: providerDomain,
           accountNumber: String(virtualBankAccount.account_number),
           bankName: String(virtualBankAccount.bank_name),
           accountName: String(virtualBankAccount.account_name)
         } : {
           assigned: false,
           status: typeof virtualBankAccount?.status === "string" ? virtualBankAccount.status : "not_requested",
+          environment: providerDomain,
           accountNumber: null, bankName: null, accountName: null
         },
         actionsEnabled: false,
