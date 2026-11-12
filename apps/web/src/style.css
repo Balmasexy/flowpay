@@ -886,3 +886,73 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .flowpay-app .fp-more-copy b {font-size:13px}
   .flowpay-app .fp-more-copy small {font-size:12px}
 }
+
+
+/* FlowPay shared navigation and mobile More menu: consistent orange/white brand. */
+.flowpay-app .fp-sidebar {
+  background:linear-gradient(180deg,#20241f 0%,#151915 100%) !important;
+  color:#fff !important;
+  border:1px solid #343c34 !important;
+}
+.flowpay-app .fp-sidebar-section>span,
+.flowpay-app .fp-mobile-menu-group>span {
+  color:#ffb47c !important;
+  font-size:10px !important;
+  letter-spacing:1.05px !important;
+}
+.flowpay-app .fp-sidebar-section button,
+.flowpay-app .fp-mobile-menu-group>button {
+  font-size:13px !important;
+  line-height:1.45 !important;
+  font-weight:600 !important;
+  letter-spacing:.05px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+.flowpay-app .fp-sidebar-section button { min-height:43px; color:#f0f2ed !important; }
+.flowpay-app .fp-sidebar-section button:hover { background:#30382f !important; color:#fff !important; }
+.flowpay-app .fp-sidebar-section button.active {
+  background:#3a291d !important;
+  color:#ffb47c !important;
+  box-shadow:inset 3px 0 0 #ff7a18;
+}
+.flowpay-app .fp-sidebar-toggle {
+  background:#2a302a !important;
+  color:#fff !important;
+  border:1px solid #485047 !important;
+  font-size:12px !important;
+}
+.flowpay-app .fp-sidebar-foot { color:#d1d8cf !important; font-size:11px !important; }
+.flowpay-app .fp-mobile-menu {
+  background:#20241f !important;
+  color:#fff !important;
+  border:1px solid #3b443b !important;
+}
+.flowpay-app .fp-mobile-menu-head { border-color:#3b443b !important; }
+.flowpay-app .fp-mobile-menu-head b { color:#fff !important; font-size:17px !important; }
+.flowpay-app .fp-mobile-menu-head small { color:#c5cec3 !important; font-size:12px !important; }
+.flowpay-app .fp-mobile-menu-head>button {
+  background:#343b34 !important; color:#fff !important; border:1px solid #4b554a !important;
+}
+.flowpay-app .fp-mobile-menu-group>button {
+  background:transparent !important;
+  color:#f0f2ed !important;
+  border-bottom:1px solid #3b443b !important;
+  min-height:48px !important;
+  font-size:13px !important;
+}
+.flowpay-app .fp-mobile-menu-group>button svg:first-child { color:#ff9a50 !important; }
+.flowpay-app .fp-mobile-menu-group>button svg:last-child { color:#c5cec3 !important; }
+.flowpay-app .fp-mobile-menu-group>button.active {
+  background:#3a291d !important; color:#ffb47c !important;
+}
+.flowpay-app .fp-sidebar-reopen {
+  background:#20241f !important; color:#ff9a50 !important;
+  border:1px solid #485047 !important;
+}
+.flowpay-app .fp-page-back {
+  display:inline-flex;align-items:center;gap:7px;min-height:38px;
+  padding:8px 13px;border:1px solid #f1c5a2;border-radius:10px;
+  background:#fff4eb;color:#a94f0c;font-size:13px;font-weight:750;
+}
+.flowpay-app .fp-page-back:hover { background:#ffe6d2;color:#843d08; }
