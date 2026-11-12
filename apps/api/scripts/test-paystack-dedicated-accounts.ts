@@ -141,7 +141,9 @@ test("accepts issuer-verified Neon JWTs without an audience claim and stores onl
   assert.equal(result.body.livePaymentsEnabled, false);
   assert.equal(calls.length, 2);
   assert.ok(context.queries.some(item => item.sql.includes("consent_at")));
-  assert.ok(context.queries.some(item => item.sql.includes("account_number = $3")));
+  const assignedUpdate = context.queries.find(item => item.sql.includes("account_number = $6") && item.sql.includes("status = 'assigned'"));
+  assert.ok(assignedUpdate, "account data must be stored only in the provider-confirmed assignment update");
+  assert.equal(assignedUpdate.values?.[5], "9930000737");
 });
 
 process.on("exit", () => {
