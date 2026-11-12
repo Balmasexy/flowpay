@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { paystackReferenceEnvironment } from "./paystack-config.js";
 
 type Options = {
   pool: Pool | null;
@@ -32,7 +33,8 @@ export function createPaystackDepositStatusHandler(options: Options) {
     }
 
     const reference = url.searchParams.get("reference")?.trim() ?? "";
-    if (!/^flowpay-ps-[0-9a-f]{32}$/i.test(reference)) {
+    const environment = paystackReferenceEnvironment(reference);
+    if (!environment) {
       send(res, 400, { error: "INVALID_PAYSTACK_REFERENCE" });
       return true;
     }
@@ -89,9 +91,9 @@ export function createPaystackDepositStatusHandler(options: Options) {
           createdAt: deposit.created_at,
           verifiedAt: deposit.verified_at
         },
-        environment: "test",
+        environment,
         walletCredited: deposit.status === "posted",
-        livePaymentsEnabled: false
+        livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_ENABLED === "true"
       });
       return true;
     } catch (error) {
