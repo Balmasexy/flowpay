@@ -7,6 +7,7 @@ import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
@@ -297,17 +298,22 @@ const server = createServer(async (req, res) => {
           status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
         }))
       ].sort((a, b) => new Date(b.verifiedAt ?? b.createdAt).getTime() - new Date(a.verifiedAt ?? a.createdAt).getTime()).slice(0, 100);
-      const paystackConfigured = paystackAvailable &&
-        process.env.PAYSTACK_ENVIRONMENT === "test" &&
-        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
+      const paystackRuntime = getPaystackRuntime();
+      const paystackConfigured = paystackAvailable && Boolean(paystackRuntime) &&
         (process.env.PAYSTACK_CALLBACK_URL ?? "").startsWith("https://") &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR) > 0 &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
       send(res, 200, {
-        deposits, environment: "test", livePaymentsEnabled: false,
-        depositProviders: { paystack: paystackConfigured, flutterwave: false }
+        deposits,
+        environment: paystackRuntime?.environment ?? null,
+        livePaymentsEnabled: paystackRuntime?.environment === "live",
+        depositProviders: {
+          paystack: paystackConfigured,
+          paystackEnvironment: paystackRuntime?.environment ?? null,
+          flutterwave: false
+        }
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
