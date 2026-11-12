@@ -42,7 +42,7 @@ async function readJson(req: IncomingMessage): Promise<PaystackRecord> {
   return value as PaystackRecord;
 }
 function sandboxEnabled() {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
+  const secret = (process.env.PAYSTACK_TEST_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY)?.trim() ?? "";
   return process.env.PAYSTACK_ENVIRONMENT === "test" &&
     secret.startsWith("sk_test_") &&
     process.env.FLOWPAY_RUNTIME_ENV === "development" &&
@@ -239,7 +239,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           message: "Dedicated-account assignment is not enabled on an isolated development API. No account was created.",
           requiredConfiguration: [
             "PAYSTACK_ENVIRONMENT=test",
-            "PAYSTACK_SECRET_KEY=sk_test_…",
+            "PAYSTACK_TEST_SECRET_KEY=sk_test_…",
             "FLOWPAY_RUNTIME_ENV=development",
             "PAYSTACK_DEDICATED_ACCOUNTS_ENABLED=true"
           ],
@@ -286,7 +286,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         return true;
       }
 
-      const secret = process.env.PAYSTACK_SECRET_KEY!.trim();
+      const secret = (process.env.PAYSTACK_TEST_SECRET_KEY || process.env.PAYSTACK_SECRET_KEY)!.trim();
       let customerCode = current?.paystack_customer_code ?? null;
       if (!customerCode) {
         const createdCustomer = await paystack(secret, "/customer", {
