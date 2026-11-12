@@ -7,6 +7,7 @@ on:
       - feat/api-foundation
       - feat/customer-banking-routes-no-sidebar
       - feat/to-bank-paystack-sandbox-payouts
+      - feat/paystack-live-test-mode-support
     paths:
       - "apps/**"
       - ".github/workflows/**"
@@ -70,6 +71,9 @@ jobs:
 
       - name: Test fail-closed Paystack live and test mode selection
         run: npm run test:paystack-mode --prefix apps/api
+
+      - name: Test VTpass bill payment validation and status handling
+        run: npm run test:vtpass-bills --prefix apps/api
 
       - name: Test Paystack Nigerian bank directory and account resolution
         run: npm run test:paystack-bank-lookup --prefix apps/api
