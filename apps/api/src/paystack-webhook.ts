@@ -119,7 +119,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     }
     if ([
       "dedicatedaccount.assign.success", "dedicatedaccount.assign.failed",
-      "customeridentification.success", "customeridentification.failed"
+      "customeridentification.success", "customeridentification.failed", "assigndedicatedaccount.failed"
     ].includes(String(event.event))) {
       try {
         const handled = await processPaystackDedicatedAccountWebhook(pool, event);
