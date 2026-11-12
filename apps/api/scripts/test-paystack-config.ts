@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getPaystackCredential, getSelectedPaystackCredential, paystackReferenceEnvironment } from "./paystack-config.js";
 
