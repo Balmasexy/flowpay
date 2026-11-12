@@ -196,9 +196,9 @@ export default function App() {
               onNetworkChange={setNetwork}
             />
           ) : servicePage ? (
-            <ServicePreview path={path}/>
+            <ServicePreview path={path} token={authSession.data.session?.token ?? ""}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={authSession.data.session?.token ?? ""}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={authSession.data.session?.token ?? ""}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
