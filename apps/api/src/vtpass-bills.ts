@@ -109,13 +109,13 @@ function amountMinor(value: unknown): value is string {
   return BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER);
 }
 function nairaAmount(minor: string): number { return Number(minor) / 100; }
-function normalizePhone(value: unknown): string {
+export function normalizePhone(value: unknown): string {
   if (typeof value !== "string") return "";
   let digits = value.replace(/\D/g, "");
   if (digits.startsWith("234") && digits.length === 13) digits = "0" + digits.slice(3);
   return /^0\d{10}$/.test(digits) ? digits : "";
 }
-function requestId(): string {
+export function requestId(): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23"
@@ -124,7 +124,7 @@ function requestId(): string {
   const prefix = value("year") + value("month") + value("day") + value("hour") + value("minute");
   return prefix + randomUUID().replace(/-/g, "").slice(0, 12);
 }
-function serviceAllowed(category: string, serviceId: string): boolean {
+export function serviceAllowed(category: string, serviceId: string): boolean {
   return Object.prototype.hasOwnProperty.call(CATALOG, category) &&
     (CATALOG as Record<string, readonly { id: string; label: string }[]>)[category].some(item => item.id === serviceId);
 }
@@ -132,7 +132,7 @@ function providerTransaction(body: ProviderBody): Record<string, unknown> {
   const content = record(body.content);
   return record(content.transactions ?? content.transaction ?? content);
 }
-function providerState(body: ProviderBody): BillStatus {
+export function providerState(body: ProviderBody): BillStatus {
   const tx = providerTransaction(body);
   const status = String(tx.status ?? body.status ?? body.response_description ?? "").toLowerCase();
   const code = String(body.code ?? body.responseCode ?? "");
@@ -515,7 +515,7 @@ export function createVtpassBillsHandler(options: Options) {
 
       const payload: Record<string, unknown> = {
         request_id: bill.request_id, serviceID: bill.service_id, phone: bill.customer_phone,
-        amount: nairaAmount(bill.amount_minor)
+        billersCode: bill.customer_phone, amount: nairaAmount(bill.amount_minor)
       };
       if (category === "data") {
         payload.variation_code = bill.variation_code;
@@ -526,7 +526,8 @@ export function createVtpassBillsHandler(options: Options) {
       }
       try {
         const response = await providerRequest(cfg, "POST", "/pay", payload);
-        const state = providerState(response.body);
+        const classified = providerState(response.body);
+        const state = response.ok ? classified : (classified === "success" || classified === "failed" ? "unknown" : classified);
         const result = await reconcile(pool, bill, state, response.body);
         send(res, result === "success" ? 201 : result === "failed" ? 502 : 202, {
           requestId: bill.request_id, status: result, final: ["success","failed","reversed"].includes(result),
