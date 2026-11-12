@@ -11,6 +11,7 @@ type VirtualBankAccount = {
   accountNumber: string | null;
   bankName: string | null;
   accountName: string | null;
+  environment: "test" | "live" | null;
 };
 
 type ReceiptQueueItem = {
@@ -71,6 +72,9 @@ export default function AdminPage({ token }: { token: string }) {
   const [actionError, setActionError] = useState("");
   const [virtualAccount, setVirtualAccount] = useState<VirtualBankAccount | null>(null);
   const [virtualAccountConsent, setVirtualAccountConsent] = useState(false);
+  const [virtualBvn, setVirtualBvn] = useState("");
+  const [virtualBankAccountNumber, setVirtualBankAccountNumber] = useState("");
+  const [virtualBankCode, setVirtualBankCode] = useState("");
   const [virtualAccountBusy, setVirtualAccountBusy] = useState(false);
   const [virtualAccountMessage, setVirtualAccountMessage] = useState("");
   const [virtualAccountError, setVirtualAccountError] = useState("");
@@ -113,7 +117,8 @@ export default function AdminPage({ token }: { token: string }) {
             status: typeof virtualRaw.status === "string" ? virtualRaw.status : "unknown",
             accountNumber: typeof virtualRaw.accountNumber === "string" ? virtualRaw.accountNumber : null,
             bankName: typeof virtualRaw.bankName === "string" ? virtualRaw.bankName : null,
-            accountName: typeof virtualRaw.accountName === "string" ? virtualRaw.accountName : null
+            accountName: typeof virtualRaw.accountName === "string" ? virtualRaw.accountName : null,
+            environment: virtualRoot.environment === "live" || virtualRoot.environment === "test" ? virtualRoot.environment : null
           });
         } else if (active && !virtualResponse.ok) {
           setVirtualAccountError("Virtual bank account status is unavailable. Refresh to retry.");
@@ -147,6 +152,9 @@ export default function AdminPage({ token }: { token: string }) {
 
   const requestVirtualAccount = async () => {
     if (!virtualAccountConsent || virtualAccountBusy) return;
+    if (virtualAccount?.environment === "live" && (!/^\\d{11}$/.test(virtualBvn) || !/^\\d{10}$/.test(virtualBankAccountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(virtualBankCode))) {
+      setVirtualAccountError("Enter the 11-digit BVN and the 10-digit BVN-linked bank account number with its bank code."); return;
+    }
     setVirtualAccountBusy(true);
     setVirtualAccountError("");
     setVirtualAccountMessage("");
@@ -155,7 +163,7 @@ export default function AdminPage({ token }: { token: string }) {
         method: "POST",
         credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ consent: true })
+        body: JSON.stringify({ consent: true, ...(virtualAccount?.environment === "live" ? { bvn: virtualBvn, accountNumber: virtualBankAccountNumber, bankCode: virtualBankCode } : {}) })
       });
       const payload: unknown = await response.json().catch(() => ({}));
       const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
@@ -167,7 +175,8 @@ export default function AdminPage({ token }: { token: string }) {
           status: typeof raw.status === "string" ? raw.status : "unknown",
           accountNumber: typeof raw.accountNumber === "string" ? raw.accountNumber : null,
           bankName: typeof raw.bankName === "string" ? raw.bankName : null,
-          accountName: typeof raw.accountName === "string" ? raw.accountName : null
+          accountName: typeof raw.accountName === "string" ? raw.accountName : null,
+          environment: root.environment === "live" || root.environment === "test" ? root.environment : null
         });
       }
       if (!response.ok) {
@@ -182,6 +191,7 @@ export default function AdminPage({ token }: { token: string }) {
     } catch (error) {
       setVirtualAccountError(error instanceof Error ? error.message : "Virtual bank account request failed.");
     } finally {
+      setVirtualBvn("");
       setVirtualAccountBusy(false);
       setRefresh(value => value + 1);
     }
@@ -259,9 +269,18 @@ export default function AdminPage({ token }: { token: string }) {
                 {virtualAccountError && <p role="alert">{virtualAccountError}</p>}
                 <label className="fp-admin-confirm" style={{ marginTop: 10 }}>
                   <input type="checkbox" checked={virtualAccountConsent} onChange={event => setVirtualAccountConsent(event.target.checked)} disabled={virtualAccountBusy || virtualAccount?.assigned === true}/>
-                  I consent to FlowPay sending my registered full name, email address and phone number to Paystack to request this account.
+                  I consent to FlowPay sending my registered profile details to Paystack to request this account. For a live financial-services account, Paystack also receives my BVN and the linked bank account details below for identity validation.
                 </label>
-                <button type="button" className="fp-admin-refresh" onClick={() => void requestVirtualAccount()} disabled={!virtualAccountConsent || virtualAccountBusy || virtualAccount?.assigned === true} style={{ marginTop: 10 }}>
+                {virtualAccount?.environment === "live" && !virtualAccount?.assigned && <>
+                  <label htmlFor="super-admin-bvn">BVN (11 digits)</label>
+                  <input id="super-admin-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event => setVirtualBvn(event.target.value.replace(/\\D/g, "").slice(0, 11))} placeholder="Enter BVN for Paystack validation" disabled={virtualAccountBusy}/>
+                  <label htmlFor="super-admin-bank-account">BVN-linked bank account number</label>
+                  <input id="super-admin-bank-account" inputMode="numeric" autoComplete="off" maxLength={10} value={virtualBankAccountNumber} onChange={event => setVirtualBankAccountNumber(event.target.value.replace(/\\D/g, "").slice(0, 10))} placeholder="10-digit account number" disabled={virtualAccountBusy}/>
+                  <label htmlFor="super-admin-bank-code">Bank code</label>
+                  <input id="super-admin-bank-code" autoComplete="off" maxLength={12} value={virtualBankCode} onChange={event => setVirtualBankCode(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 12))} placeholder="Bank code from Paystack bank directory" disabled={virtualAccountBusy}/>
+                  <p style={{ margin: "6px 0", fontSize: 12 }}>The BVN is sent to Paystack for validation only; FlowPay does not store it in its virtual-account table.</p>
+                </>}
+                <button type="button" className="fp-admin-refresh" onClick={() => void requestVirtualAccount()} disabled={!virtualAccountConsent || virtualAccountBusy || virtualAccount?.assigned === true || (virtualAccount?.environment === "live" && (virtualBvn.length !== 11 || virtualBankAccountNumber.length !== 10 || !virtualBankCode))} style={{ marginTop: 10 }}>
                   {virtualAccountBusy ? "Requesting account…" : "Request Super Admin virtual account"}
                 </button>
                 <p style={{ margin: "8px 0 0", fontSize: 12 }}>Availability depends on Paystack live-mode eligibility and required customer identity validation. The existing API may reject requests until provider access is enabled.</p>
