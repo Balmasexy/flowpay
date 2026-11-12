@@ -1,4 +1,4 @@
-import { randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -122,7 +122,7 @@ export function requestId(): string {
   }).formatToParts(new Date());
   const value = (type: string) => parts.find(part => part.type === type)?.value ?? "";
   const prefix = value("year") + value("month") + value("day") + value("hour") + value("minute");
-  return prefix + randomUUID().replace(/-/g, "").slice(0, 12);
+  return prefix + randomInt(0, 1_000_000_000_000).toString().padStart(12, "0");
 }
 export function serviceAllowed(category: string, serviceId: string): boolean {
   return Object.prototype.hasOwnProperty.call(CATALOG, category) &&
