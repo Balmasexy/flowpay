@@ -293,6 +293,32 @@ test("insufficient available balance prevents transfer initiation and ledger pos
 });
 
 
+test("pending VTpass bills reduce the available balance for bank transfers", async () => {
+  const context = await setup({ balance: "10000000", held: "6000000" });
+  let transferInitiations = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.startsWith("https://api.paystack.co/bank/resolve?")) {
+      return new Response(JSON.stringify({ status: true, data: { account_number: accountNumber, account_name: "Test Customer" } }), { status: 200 });
+    }
+    if (url === "https://api.paystack.co/transferrecipient") {
+      return new Response(JSON.stringify({
+        status: true,
+        data: { domain: "test", active: true, type: "nuban", currency: "NGN", recipient_code: "RCP_test123", details: { bank_name: "Zenith Bank", account_number: accountNumber, bank_code: bankCode } }
+      }), { status: 200 });
+    }
+    if (url === "https://api.paystack.co/transfer") transferInitiations += 1;
+    throw new Error("Unexpected Paystack request: " + url);
+  };
+  const response = context.response();
+  await context.handler(context.request("POST", "/customer/transfers/bank", body()), response.res);
+  assert.equal(response.result().status, 409);
+  assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
+  assert.equal(response.result().body.availableMinor, "4000000");
+  assert.equal(transferInitiations, 0);
+  assert.equal(context.ledgerValues.length, 0);
+});
+
 test("a definite Paystack rejection releases the reservation without a wallet debit", async () => {
   const context = await setup();
   let transferInitiations = 0;
