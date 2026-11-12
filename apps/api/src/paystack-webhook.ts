@@ -112,7 +112,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       send(res, 400, { error: "INVALID_JSON" });
       return true;
     }
-    if (environment === "test" && ["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
+    if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(String(event.event))) {
       const result = await processPaystackTransferWebhook(pool, secret, event);
       send(res, result.status, result.body);
       return true;
