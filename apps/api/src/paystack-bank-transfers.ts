@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -47,17 +48,14 @@ function validAmount(value: unknown): value is string {
   const amount = BigInt(value);
   return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER);
 }
-function testPaystackSecret(): string | null {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-  return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
-}
-function sandboxRuntimeEnabled(): boolean {
-  return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
-    process.env.NODE_ENV !== "production";
-}
-function payoutsEnabled(): boolean {
-  return sandboxRuntimeEnabled() &&
-    process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+function payoutsEnabled(environment: "test" | "live"): boolean {
+  if (environment === "test") {
+    return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.PAYSTACK_TRANSFERS_ENABLED === "true";
+  }
+  return process.env.NODE_ENV === "production" &&
+    process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true";
 }
 function beneficiaryFingerprint(secret: string, accountNumber: string): string {
   return createHmac("sha256", secret).update(accountNumber, "utf8").digest("hex");
@@ -143,7 +141,7 @@ async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKS
   );
   return result.rowCount === 1 ? result.rows[0] : null;
 }
-async function resolveRecipient(secret: string, accountNumber: string, bankCode: string): Promise<{ recipientCode: string; accountName: string; bankName: string }> {
+async function resolveRecipient(secret: string, accountNumber: string, bankCode: string, environment: "test" | "live"): Promise<{ recipientCode: string; accountName: string; bankName: string }> {
   const resolveUrl = new URL("https://api.paystack.co/bank/resolve");
   resolveUrl.searchParams.set("account_number", accountNumber);
   resolveUrl.searchParams.set("bank_code", bankCode);
@@ -166,7 +164,7 @@ async function resolveRecipient(secret: string, accountNumber: string, bankCode:
   const details = record(data.details);
   const recipientCode = typeof data.recipient_code === "string" ? data.recipient_code.trim() : "";
   const bankName = typeof details.bank_name === "string" ? details.bank_name.trim() : "";
-  if (!recipient.ok || data.domain !== "test" || data.active !== true ||
+  if (!recipient.ok || data.domain !== environment || data.active !== true ||
       data.type !== "nuban" || data.currency !== "NGN" ||
       !/^RCP_[A-Za-z0-9]+$/.test(recipientCode) || !bankName ||
       (typeof details.account_number === "string" && details.account_number !== accountNumber) ||
@@ -207,7 +205,7 @@ async function loadPayout(pool: Pool, reference: string, userId?: string): Promi
   );
   return result.rowCount === 1 ? result.rows[0] : null;
 }
-async function applyVerifiedStatus(pool: Pool, secret: string, reference: string, verified: PaystackData): Promise<{ status: PayoutStatus; duplicate: boolean }> {
+async function applyVerifiedStatus(pool: Pool, secret: string, reference: string, verified: PaystackData, environment: "test" | "live"): Promise<{ status: PayoutStatus; duplicate: boolean }> {
   const verifiedReference = typeof verified.reference === "string" ? verified.reference : "";
   const verifiedAmount = typeof verified.amount === "number" || typeof verified.amount === "string" ? String(verified.amount) : "";
   const verifiedCurrency = typeof verified.currency === "string" ? verified.currency : "";
@@ -216,7 +214,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
   const providerTransferId = typeof verified.id === "number" || typeof verified.id === "string" ? String(verified.id) : null;
   const transferCode = typeof verified.transfer_code === "string" ? verified.transfer_code : null;
   if (verifiedReference !== reference || !/^\d{1,15}$/.test(verifiedAmount) ||
-      !Number.isSafeInteger(Number(verifiedAmount)) || verifiedCurrency !== "NGN" || verifiedDomain !== "test") {
+      !Number.isSafeInteger(Number(verifiedAmount)) || verifiedCurrency !== "NGN" || verifiedDomain !== environment) {
     throw new Error("PAYSTACK_TRANSFER_VERIFICATION_MISMATCH");
   }
 
@@ -460,8 +458,9 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 }
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (!sandboxRuntimeEnabled()) {
-    return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_SANDBOX_RUNTIME_DISABLED" } };
+  const runtime = getPaystackRuntime();
+  if (!runtime || !payoutsEnabled(runtime.environment)) {
+    return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
   }
   const eventType = typeof event.event === "string" ? event.event : "";
   if (!["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
@@ -476,7 +475,7 @@ export async function processPaystackTransferWebhook(pool: Pool, secret: string,
     if (!verified.ok || verifiedData.reference !== reference) {
       return { status: 503, body: { error: "PAYSTACK_TRANSFER_VERIFICATION_UNAVAILABLE" } };
     }
-    const result = await applyVerifiedStatus(pool, secret, reference, verifiedData);
+    const result = await applyVerifiedStatus(pool, secret, reference, verifiedData, runtime.environment);
     return { status: 200, body: { received: true, processed: true, status: result.status, duplicate: result.duplicate } };
   } catch (error) {
     console.error("FlowPay Paystack transfer webhook reconciliation failed:", error instanceof Error ? error.message : "database error");
@@ -495,13 +494,17 @@ export function createPaystackBankTransfersHandler(options: Options) {
     if (!pool || !jwks || !issuer || !audience) {
       send(res, 503, { error: "BANK_TRANSFER_SERVICE_NOT_CONFIGURED" }); return true;
     }
-    const secret = testPaystackSecret();
-    if (!secret || !sandboxRuntimeEnabled() || (isSubmit && !payoutsEnabled())) {
+    const runtime = getPaystackRuntime();
+    const secret = runtime?.secretKey ?? "";
+    const environment = runtime?.environment ?? null;
+    if (!runtime || !environment || (isSubmit && !payoutsEnabled(environment))) {
       send(res, 503, {
-        error: "PAYSTACK_TEST_BANK_PAYOUTS_NOT_ENABLED",
-        environment: "test",
-        livePayoutsEnabled: false,
-        requiredConfiguration: ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "PAYSTACK_TRANSFERS_ENABLED=true"]
+        error: "PAYSTACK_BANK_PAYOUTS_NOT_ENABLED",
+        environment,
+        livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
+        requiredConfiguration: environment === "live"
+          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_TRANSFERS_ENABLED=true"]
+          : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_TRANSFERS_ENABLED=true"]
       }); return true;
     }
 
@@ -541,7 +544,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
           send(res, 202, { reference, status: saved.status, final: false, message: "Paystack has not returned a final status. The amount remains reserved until verification completes." });
           return true;
         }
-        const result = await applyVerifiedStatus(pool, secret, reference, data);
+        const result = await applyVerifiedStatus(pool, secret, reference, data, environment);
         send(res, 200, { reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status), amountMinor: saved.amount_minor, currency: "NGN" });
       } catch (error) {
         console.error("FlowPay bank payout status check failed:", error instanceof Error ? error.message : "database error");
@@ -629,7 +632,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
 
     let recipient: { recipientCode: string; accountName: string; bankName: string };
     try {
-      recipient = await resolveRecipient(secret, accountNumber, bankCode);
+      recipient = await resolveRecipient(secret, accountNumber, bankCode, environment);
     } catch (error) {
       const code = error instanceof Error ? error.message : "PAYSTACK_RECIPIENT_CREATION_FAILED";
       const status = code === "BANK_ACCOUNT_NOT_VERIFIED" ? 422 : 503;
@@ -767,12 +770,12 @@ export function createPaystackBankTransfersHandler(options: Options) {
         );
         send(res, 202, {
           transactionId, reference, status: "failed", final: true,
-          amountMinor: input.amountMinor, currency: "NGN", environment: "test",
+          amountMinor: input.amountMinor, currency: "NGN", environment,
           message: "Paystack rejected this test transfer. No wallet debit was posted; review the bank and provider configuration."
         });
         return true;
       }
-      if (!initiated.ok || data.domain !== "test" || data.reference !== reference ||
+      if (!initiated.ok || data.domain !== environment || data.reference !== reference ||
           String(data.amount) !== input.amountMinor || data.currency !== "NGN") {
         await markUnknown(pool, reference, "Paystack did not return a matching transfer response.");
         send(res, 202, { transactionId, reference, status: "unknown", final: false, amountMinor: input.amountMinor, currency: "NGN", message: "Transfer submission outcome is unconfirmed. Funds remain reserved; refresh status before retrying." });
@@ -781,17 +784,17 @@ export function createPaystackBankTransfersHandler(options: Options) {
       const verified = await paystackRequest(secret, "/transfer/verify/" + encodeURIComponent(reference), "GET");
       const verifiedData = record(verified.body.data);
       if (!verified.ok || verifiedData.reference !== reference || String(verifiedData.amount) !== input.amountMinor ||
-          verifiedData.currency !== "NGN" || verifiedData.domain !== "test") {
+          verifiedData.currency !== "NGN" || verifiedData.domain !== environment) {
         await markUnknown(pool, reference, "Transfer was initiated, but Paystack verification has not confirmed its outcome.");
         send(res, 202, { transactionId, reference, status: status === "otp" ? "otp" : "pending", final: false, amountMinor: input.amountMinor, currency: "NGN", message: "Paystack is processing this test transfer. Funds remain reserved until the provider confirms the final status." });
         return true;
       }
-      const result = await applyVerifiedStatus(pool, secret, reference, verifiedData);
+      const result = await applyVerifiedStatus(pool, secret, reference, verifiedData, runtime.environment);
       send(res, result.status === "success" ? 201 : 202, {
         transactionId, reference, status: result.status, final: ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(result.status),
         amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
         accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
-        environment: "test", livePayoutsEnabled: false,
+        environment, livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
         message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
       return true;
