@@ -19,12 +19,12 @@ type Overview = {
 };
 
 const services = [
-  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Review airtime options (preview only)" },
-  { label: "Data", path: "/data", icon: Wifi, detail: "Review available bundles (preview only)" },
+  { label: "Airtime", path: "/airtime", icon: Phone, detail: "Recharge with provider verification" },
+  { label: "Data", path: "/data", icon: Wifi, detail: "Choose a provider-priced data bundle" },
   { label: "Transfers", path: "/transfers", icon: ArrowLeftRight, detail: "Send to a FlowPay wallet or Nigerian bank" },
   { label: "Cards", path: "/cards", icon: CreditCard, detail: "Review linked card records" },
-  { label: "Electricity", path: "/bills", icon: Zap, detail: "Review bill-payment options (preview only)" },
-  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Review TV subscription options (preview only)" },
+  { label: "Electricity", path: "/bills", icon: Zap, detail: "Verify meter and pay through provider" },
+  { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Provider activation is still required" },
   { label: "Savings", path: "/savings", icon: Wallet, detail: "Review savings tools and goals" },
   { label: "History", path: "/activity", icon: Clock3, detail: "Review posted and reversed ledger activity" },
 ];
@@ -167,9 +167,9 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       </article>
       <article className="fp-overview-card fp-account-safety-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><ShieldCheck size={19}/></span><span>Account services</span></div>
-        <strong className="fp-overview-service-status">Payments are currently disabled</strong>
-        <p className="fp-overview-muted">Transfers and provider payments remain unavailable until secure verification, ledger posting and reconciliation are enabled.</p>
-        <button className="fp-overview-link" onClick={() => go("/security")}>Security centre <ChevronRight size={15}/></button>
+        <strong className="fp-overview-service-status">Transfer and bill services</strong>
+        <p className="fp-overview-muted">FlowPay wallet transfers use recipient, PIN and ledger checks. Nigerian bank payouts require Paystack transfer approval and an enabled environment. Airtime, data and electricity use VTpass provider confirmation.</p>
+        <button className="fp-overview-link" onClick={() => go("/transfers")}>Open transfers <ChevronRight size={15}/></button>
       </article>
     </section>
 
