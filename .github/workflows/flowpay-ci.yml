@@ -75,6 +75,9 @@ jobs:
       - name: Test VTpass bill payment validation and status handling
         run: npm run test:vtpass-bills --prefix apps/api
 
+      - name: Test signed Storyblok Visual Editor preview access
+        run: npm run test:storyblok-preview --prefix apps/api
+
       - name: Test Paystack Nigerian bank directory and account resolution
         run: npm run test:paystack-bank-lookup --prefix apps/api
 
