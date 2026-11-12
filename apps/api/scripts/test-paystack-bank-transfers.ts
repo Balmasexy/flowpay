@@ -32,6 +32,7 @@ type SetupOptions = {
   balance?: string;
   wrongPin?: boolean;
   existing?: boolean;
+  held?: string;
 };
 function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001") {
   return {
@@ -120,8 +121,8 @@ async function setup(options: SetupOptions = {}) {
           if (sql.includes("SUM(entry.amount_minor)")) {
             return { rowCount: 1, rows: [{ amount_minor: options.balance ?? "20000000" }] };
           }
-          if (sql.includes("SUM(amount_minor)") && sql.includes("fp_paystack_bank_transfers")) {
-            return { rowCount: 1, rows: [{ amount_minor: "0" }] };
+          if (sql.includes("SUM(reservation.amount_minor)") && sql.includes("fp_paystack_bank_transfers") && sql.includes("fp_vtpass_bill_payments")) {
+            return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
           }
           if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
             return { rowCount: 1, rows: [{ id: transactionId }] };
