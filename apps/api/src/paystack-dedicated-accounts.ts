@@ -137,18 +137,37 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
   if (![
     "dedicatedaccount.assign.success",
     "dedicatedaccount.assign.failed",
+    "assigndedicatedaccount.failed",
     "customeridentification.success",
     "customeridentification.failed"
   ].includes(eventName)) return false;
   const data = record(event.data);
-  const customerCode = typeof data.customer_code === "string" ? data.customer_code : "";
-  if (!customerCode) return true;
-  if (eventName === "customeridentification.failed" || eventName === "dedicatedaccount.assign.failed") {
+  const nestedCustomer = record(data.customer);
+  const customerCode = typeof data.customer_code === "string" ? data.customer_code
+    : typeof nestedCustomer.customer_code === "string" ? nestedCustomer.customer_code : "";
+  const email = typeof data.email === "string" ? data.email.trim().toLowerCase()
+    : typeof nestedCustomer.email === "string" ? nestedCustomer.email.trim().toLowerCase() : "";
+  if (!customerCode && !email) return true;
+  const match = `provider_domain = $2 AND
+    (($1 <> '' AND paystack_customer_code = $1) OR ($3 <> '' AND lower(customer_email) = $3))`;
+  if (eventName === "customeridentification.failed" || eventName === "dedicatedaccount.assign.failed" ||
+      eventName === "assigndedicatedaccount.failed") {
     await pool.query(
       `UPDATE public.fp_paystack_dedicated_accounts_v2
-          SET status = 'failed', last_error_code = $3, last_provider_event = $3, updated_at = NOW()
-        WHERE paystack_customer_code = $1 AND provider_domain = $2 AND status <> 'assigned'`,
-      [customerCode, environment, eventName.replace(/[^a-z.]/g, "").slice(0, 80)]
+          SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+              status = 'failed', last_error_code = $4, last_provider_event = $4, updated_at = NOW()
+        WHERE ${match} AND status <> 'assigned'`,
+      [customerCode, environment, email, eventName.replace(/[^a-z.]/g, "").slice(0, 80)]
+    );
+    return true;
+  }
+  if (eventName === "customeridentification.success") {
+    await pool.query(
+      `UPDATE public.fp_paystack_dedicated_accounts_v2
+          SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+              last_provider_event = $4, updated_at = NOW()
+        WHERE ${match} AND status = 'pending'`,
+      [customerCode, environment, email, eventName]
     );
     return true;
   }
@@ -163,12 +182,13 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
         (account.currency === undefined || account.currency === "NGN")) {
       await pool.query(
         `UPDATE public.fp_paystack_dedicated_accounts_v2
-            SET dedicated_account_id = $3, account_number = $4,
-                bank_name = $5, account_name = $6, status = 'assigned',
-                assigned_at = NOW(), last_provider_event = $7,
+            SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+                dedicated_account_id = $4, account_number = $5,
+                bank_name = $6, account_name = $7, status = 'assigned',
+                assigned_at = NOW(), last_provider_event = $8,
                 last_error_code = NULL, updated_at = NOW()
-          WHERE paystack_customer_code = $1 AND provider_domain = $2`,
-        [customerCode, environment, String(account.id ?? ""), accountNumber, bankName, accountName, eventName]
+          WHERE ${match}`,
+        [customerCode, environment, email, String(account.id ?? ""), accountNumber, bankName, accountName, eventName]
       );
     }
   }
@@ -272,16 +292,17 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
 
       const requestClaim = await pool.query(
         `INSERT INTO public.fp_paystack_dedicated_accounts_v2 AS existing
-           (user_id, provider_domain, status, consent_at, last_error_code)
-         VALUES ($1, $2, 'pending', NOW(), NULL)
+           (user_id, provider_domain, customer_email, status, consent_at, last_error_code)
+         VALUES ($1, $2, lower($3), 'pending', NOW(), NULL)
          ON CONFLICT (user_id, provider_domain) DO UPDATE
-           SET status = 'pending',
+           SET customer_email = EXCLUDED.customer_email,
+               status = 'pending',
                consent_at = EXCLUDED.consent_at,
                last_error_code = NULL,
                updated_at = NOW()
          WHERE existing.status = 'failed'
          RETURNING user_id`,
-        [identity.id, environment]
+        [identity.id, environment, identity.email]
       );
       if (requestClaim.rowCount !== 1) {
         const latest = await pool.query<DedicatedAccountRow>(
@@ -358,6 +379,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       const responseDomain = typeof account.domain === "string" ? account.domain : environment;
       const assignedCustomer = record(account.customer);
       const assignedCustomerCode = typeof account.customer_code === "string" ? account.customer_code : typeof assignedCustomer.customer_code === "string" ? assignedCustomer.customer_code : customerCode;
+      const assignedCustomerEmail = typeof account.email === "string" ? account.email.trim().toLowerCase() : typeof assignedCustomer.email === "string" ? assignedCustomer.email.trim().toLowerCase() : identity.email.toLowerCase();
       if (!assigned.ok) {
         const providerMessage = typeof assigned.body.message === "string"
           ? assigned.body.message.replace(/[\r\n\t]+/g, " ").slice(0, 240)
@@ -386,15 +408,16 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           account.currency === "NGN") {
         const result = await pool.query<DedicatedAccountRow>(
           `UPDATE public.fp_paystack_dedicated_accounts_v2
-              SET paystack_customer_code = COALESCE($3,paystack_customer_code),
-                  dedicated_account_id = $4, account_number = $5, bank_name = $6,
-                  account_name = $7, status = 'assigned', assigned_at = NOW(),
+              SET customer_email = COALESCE($4,customer_email),
+                  paystack_customer_code = COALESCE($3,paystack_customer_code),
+                  dedicated_account_id = $5, account_number = $6, bank_name = $7,
+                  account_name = $8, status = 'assigned', assigned_at = NOW(),
                   last_provider_event = 'dedicatedaccount.assign.success',
                   last_error_code = NULL, updated_at = NOW()
             WHERE user_id = $1 AND provider_domain = $2
             RETURNING user_id, paystack_customer_code, dedicated_account_id,
                       account_number, bank_name, account_name, provider_domain, status`,
-          [identity.id, environment, assignedCustomerCode, String(account.id ?? ""), accountNumber, bankName, accountName]
+          [identity.id, environment, assignedCustomerCode, assignedCustomerEmail, String(account.id ?? ""), accountNumber, bankName, accountName]
         );
         send(res, 201, {
           provider: "Paystack", environment,
@@ -407,10 +430,11 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
 
       await pool.query(
         `UPDATE public.fp_paystack_dedicated_accounts_v2
-            SET paystack_customer_code = COALESCE($3,paystack_customer_code),
+            SET customer_email = COALESCE($4,customer_email),
+                paystack_customer_code = COALESCE($3,paystack_customer_code),
                 status = 'pending', last_error_code = NULL, updated_at = NOW()
           WHERE user_id = $1 AND provider_domain = $2`,
-        [identity.id, environment, assignedCustomerCode]
+        [identity.id, environment, assignedCustomerCode, assignedCustomerEmail]
       );
       send(res, 202, {
         provider: "Paystack", environment,
