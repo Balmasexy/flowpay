@@ -233,7 +233,7 @@ function pageDescription(path: string) {
   const descriptions: Record<string,string> = {
     "/search":"Search your FlowPay account and available services.",
     "/money-received":"Add money and review verified wallet deposits.",
-    "/payment-return/paystack":"Check the verified status of your Paystack test deposit.",
+    "/payment-return/paystack":"Check the verified status of your Paystack deposit.",
     "/money-sent":"Review your recorded outgoing transfer history.",
     "/bulk-payments":"Bulk payment tools are restricted until approved business services are connected.",
     "/bulk-verification":"Customer verification tools require approved verification services.",
