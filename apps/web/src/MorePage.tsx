@@ -7,9 +7,9 @@ const items = [
   { title: "Account number", description: "Check your virtual bank-account assignment status.", path: "/account-number", icon: Wallet },
   { title: "Documents & statements", description: "Review available document and statement options.", path: "/documents", icon: FileText },
   { title: "Security centre", description: "Review available sign-in and account-security information.", path: "/security", icon: LockKeyhole },
-  { title: "Face & liveness verification", description: "Complete a secure live selfie verification with Smile ID.", path: "/face-verification", icon: ShieldCheck },
-  { title: "Bulk payments", description: "Prepare and validate a bulk-payment file. Execution is disabled.", path: "/bulk-payments", icon: Zap },
-  { title: "Bulk verification", description: "Validate uploaded contact rows. Identity-provider checks are unavailable.", path: "/bulk-verification", icon: ShieldCheck },
+  { title: "Face & liveness verification", description: "Smile ID sandbox verification requires configured API credentials and callback setup.", path: "/face-verification", icon: ShieldCheck },
+  { title: "Bulk payments", description: "Submit reviewed bank-payment rows individually. Paystack transfer approval and configuration are required.", path: "/bulk-payments", icon: Zap },
+  { title: "Bulk verification", description: "Verify Nigerian bank account numbers and compare provider-returned account names. This is not KYC.", path: "/bulk-verification", icon: ShieldCheck },
   { title: "Invitations", description: "Referral invitations are not yet connected to an active referral service.", path: "/invitations", icon: Gift },
   { title: "Help & support", description: "Search help topics and prepare a support-request draft.", path: "/support", icon: HelpCircle }
 ];
