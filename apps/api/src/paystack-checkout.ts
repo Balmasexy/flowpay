@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -80,17 +81,28 @@ export function createPaystackCheckoutHandler(options: Options) {
     if (amountMinor === null) { send(res, 400, { error: "INVALID_AMOUNT_MINOR" }); return true; }
     if (!idempotencyKey) { send(res, 400, { error: "VALID_IDEMPOTENCY_KEY_REQUIRED" }); return true; }
 
-    const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
+    const paystackRuntime = getPaystackRuntime();
+    const secret = paystackRuntime?.secretKey ?? "";
+    const environment = paystackRuntime?.environment ?? null;
     const callback = httpsUrl(process.env.PAYSTACK_CALLBACK_URL?.trim());
     const min = Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
     const max = Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR);
-    if (process.env.PAYSTACK_ENVIRONMENT !== "test" || !secret.startsWith("sk_test_") || !callback ||
+    if (!paystackRuntime || !callback ||
         !Number.isSafeInteger(min) || min <= 0 || !Number.isSafeInteger(max) || max < min) {
-      send(res, 503, { error: "PAYSTACK_SANDBOX_CONFIGURATION_REQUIRED" }); return true;
+      send(res, 503, {
+        error: "PAYSTACK_CONFIGURATION_REQUIRED",
+        requiredConfiguration: [
+          "PAYSTACK_ENVIRONMENT=test with sk_test_ on a non-production API, or",
+          "PAYSTACK_ENVIRONMENT=live with sk_live_, NODE_ENV=production, and PAYSTACK_LIVE_PAYMENTS_ENABLED=true",
+          "PAYSTACK_CALLBACK_URL",
+          "PAYSTACK_DEPOSIT_MIN_MINOR",
+          "PAYSTACK_DEPOSIT_MAX_MINOR"
+        ]
+      }); return true;
     }
     if (amountMinor < min || amountMinor > max) { send(res, 400, { error: "DEPOSIT_AMOUNT_OUT_OF_RANGE", minimumMinor: min, maximumMinor: max }); return true; }
 
-    const dbKey = `paystack-deposit:${identity.id}:${idempotencyKey}`;
+    const dbKey = `paystack-deposit:${environment}:${identity.id}:${idempotencyKey}`;
     const reference = `flowpay-ps-${randomUUID().replace(/-/g, "")}`;
     let transactionId = "";
     let existingUrl: string | null = null;
@@ -110,8 +122,8 @@ export function createPaystackCheckoutHandler(options: Options) {
       }
       const inserted = await client.query<{id:string}>(
         `INSERT INTO public.fp_ledger_transactions (idempotency_key,transaction_type,status,description)
-         VALUES ($1,'paystack_deposit','pending','Paystack NGN sandbox deposit')
-         ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`, [dbKey]);
+         VALUES ($1,'paystack_deposit','pending',$2)
+         ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`, [dbKey, `Paystack NGN ${environment} deposit`]);
       if (inserted.rowCount === 1) {
         transactionId = inserted.rows[0].id;
         await client.query(
@@ -135,7 +147,7 @@ export function createPaystackCheckoutHandler(options: Options) {
       console.error("FlowPay Paystack deposit setup failed:", error instanceof Error ? error.message : "database error");
       send(res,503,{error:"DEPOSIT_SETUP_UNAVAILABLE"}); return true;
     } finally { client.release(); }
-    if (existingUrl) { send(res,200,{transactionId,status:"pending",environment:"test",checkoutUrl:existingUrl}); return true; }
+    if (existingUrl) { send(res,200,{transactionId,status:"pending",environment,checkoutUrl:existingUrl}); return true; }
     if (!created) { send(res,409,{error:"DEPOSIT_REQUEST_ALREADY_PROCESSING"}); return true; }
 
     let providerResponse: Response;
@@ -146,7 +158,7 @@ export function createPaystackCheckoutHandler(options: Options) {
         headers:{Authorization:`Bearer ${secret}`,"Content-Type":"application/json",Accept:"application/json"},
         body:JSON.stringify({
           email:identity.email, amount:String(amountMinor), currency:"NGN", reference,
-          callback_url:callback, metadata:{flowpay_transaction_id:transactionId, flowpay_environment:"test"}
+          callback_url:callback, metadata:{flowpay_transaction_id:transactionId, flowpay_environment:environment}
         }),
         signal:AbortSignal.timeout(12000)
       });
@@ -174,7 +186,7 @@ export function createPaystackCheckoutHandler(options: Options) {
       console.error("Could not save Paystack checkout link:",error instanceof Error?error.message:"database error");
       send(res,503,{error:"CHECKOUT_LINK_PERSISTENCE_FAILED",transactionId,status:"pending"}); return true;
     }
-    send(res,201,{transactionId,providerReference:reference,status:"pending",environment:"test",checkoutUrl});
+    send(res,201,{transactionId,providerReference:reference,status:"pending",environment,checkoutUrl});
     return true;
   };
 }

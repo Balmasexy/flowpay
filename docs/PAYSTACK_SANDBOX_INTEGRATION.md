@@ -2,13 +2,17 @@
 
 Paystack is integrated inside the existing FlowPay API. It is a separate provider adapter and uses FlowPay customer authentication, pending deposit records, a provider-specific clearing account, the existing double-entry ledger, and the shared provider-event receipt table.
 
-## Test-only safety boundary
+## Paystack environment safety boundary
 
-- Set `PAYSTACK_ENVIRONMENT=test` and use a Paystack test secret beginning with `sk_test_`.
-- Live credentials and live mode are rejected by the checkout and webhook handlers.
+- Test mode accepts a secret beginning with `sk_test_` only when the API is not running with `NODE_ENV=production`.
+- Live mode accepts a secret beginning with `sk_live_` only when `NODE_ENV=production` and `PAYSTACK_LIVE_PAYMENTS_ENABLED=true`.
+- The selected environment is returned by the authenticated deposit provider status and shown in the customer checkout UI.
+- Test and live checkout idempotency keys are environment-scoped. Keep test and live API services on separate databases.
 - The customer identity and email are loaded from the verified FlowPay session; the browser cannot substitute an email or customer ID.
 - The only supported currency is NGN. The browser submits an amount in kobo as an integer string.
 - A deposit is credited only after a valid Paystack signature, independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, and a pending FlowPay deposit have all been confirmed.
+- Live mode is not activated by this code change. It requires the actual live secret and explicit feature switch to be configured securely in Render after Paystack has approved the business for go-live.
+- Live dedicated virtual accounts and live bank payouts remain separate, disabled capabilities; see `docs/PAYSTACK_LIVE_MODE_READINESS.md`.
 - The webhook posts a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
 - Duplicate webhook delivery cannot post a second credit. A previously received event can resume a pending deposit if its ledger posting did not complete.
 - No test clearing account balance represents money held at Paystack or a bank. Sandbox credits are not real funds.

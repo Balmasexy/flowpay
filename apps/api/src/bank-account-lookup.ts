@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -41,9 +42,8 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("INVALID_PAYLOAD");
   return parsed as Record<string, unknown>;
 }
-function paystackTestSecret(): string | null {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-  return process.env.PAYSTACK_ENVIRONMENT === "test" && secret.startsWith("sk_test_") ? secret : null;
+function paystackRuntime() {
+  return getPaystackRuntime();
 }
 async function paystackGet(secret: string, path: string): Promise<PaystackResponse> {
   const response = await fetch("https://api.paystack.co" + path, {
@@ -118,12 +118,14 @@ export function createBankAccountLookupHandler(options: Options) {
       else send(res, 503, { error: "BANK_LOOKUP_AUTH_UNAVAILABLE" });
       return true;
     }
-    const secret = paystackTestSecret();
-    if (!secret) { send(res, 503, { error: "PAYSTACK_BANK_SANDBOX_NOT_CONFIGURED" }); return true; }
+    const runtime = paystackRuntime();
+    const secret = runtime?.secretKey ?? "";
+    const environment = runtime?.environment ?? null;
+    if (!runtime || !environment) { send(res, 503, { error: "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED" }); return true; }
     try {
       if (req.method === "GET" && pathname === "/customer/banks") {
         const banks = await fetchBanks(secret);
-        send(res, 200, { banks, country: "NG", currency: "NGN", provider: "Paystack", environment: "test" });
+        send(res, 200, { banks, country: "NG", currency: "NGN", provider: "Paystack", environment });
         return true;
       }
       let input: Record<string, unknown>;
@@ -168,7 +170,7 @@ export function createBankAccountLookupHandler(options: Options) {
       }
       send(res, 200, {
         verified: true, accountNumber, bankCode, bankName: bank.name,
-        accountName, provider: "Paystack", environment: "test"
+        accountName, provider: "Paystack", environment
       });
       return true;
     } catch (error) {

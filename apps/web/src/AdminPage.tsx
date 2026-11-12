@@ -5,6 +5,15 @@ import {
   ExternalLink, CheckCircle2, XCircle, AlertCircle, Clock3
 } from "lucide-react";
 
+type VirtualBankAccount = {
+  assigned: boolean;
+  status: string;
+  accountNumber: string | null;
+  bankName: string | null;
+  accountName: string | null;
+  environment: "test" | "live" | null;
+};
+
 type ReceiptQueueItem = {
   id: string;
   customerId: string;
@@ -25,6 +34,7 @@ const sections = [
   { label: "Overview", icon: Activity },
   { label: "Customers", icon: Users },
   { label: "Accounts & wallets", icon: Wallet },
+  { label: "Super Admin virtual account", icon: Wallet },
   { label: "Transactions", icon: ArrowLeftRight },
   { label: "Deposit receipts", icon: FileCheck2 },
   { label: "Cards", icon: CreditCard },
@@ -60,6 +70,14 @@ export default function AdminPage({ token }: { token: string }) {
   const [busyId, setBusyId] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [virtualAccount, setVirtualAccount] = useState<VirtualBankAccount | null>(null);
+  const [virtualAccountConsent, setVirtualAccountConsent] = useState(false);
+  const [virtualBvn, setVirtualBvn] = useState("");
+  const [virtualBankAccountNumber, setVirtualBankAccountNumber] = useState("");
+  const [virtualBankCode, setVirtualBankCode] = useState("");
+  const [virtualAccountBusy, setVirtualAccountBusy] = useState(false);
+  const [virtualAccountMessage, setVirtualAccountMessage] = useState("");
+  const [virtualAccountError, setVirtualAccountError] = useState("");
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 
   useEffect(() => {
@@ -85,6 +103,25 @@ export default function AdminPage({ token }: { token: string }) {
         if (authRoot.authorized !== true || authRoot.role !== "super_admin") {
           if (active) { setAccess("denied"); setLoadError("This account is not authorised for FlowPay Super Admin access."); }
           return;
+        }
+        const virtualResponse = await fetch(apiBase + "/customer/dedicated-bank-account", {
+          method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+        });
+        const virtualData: unknown = await virtualResponse.json().catch(() => ({}));
+        const virtualRoot = virtualData && typeof virtualData === "object" ? virtualData as Record<string, unknown> : {};
+        const virtualRaw = virtualRoot.virtualBankAccount && typeof virtualRoot.virtualBankAccount === "object"
+          ? virtualRoot.virtualBankAccount as Record<string, unknown> : null;
+        if (active && virtualResponse.ok && virtualRaw && typeof virtualRaw.assigned === "boolean") {
+          setVirtualAccount({
+            assigned: virtualRaw.assigned,
+            status: typeof virtualRaw.status === "string" ? virtualRaw.status : "unknown",
+            accountNumber: typeof virtualRaw.accountNumber === "string" ? virtualRaw.accountNumber : null,
+            bankName: typeof virtualRaw.bankName === "string" ? virtualRaw.bankName : null,
+            accountName: typeof virtualRaw.accountName === "string" ? virtualRaw.accountName : null,
+            environment: virtualRoot.environment === "live" || virtualRoot.environment === "test" ? virtualRoot.environment : null
+          });
+        } else if (active && !virtualResponse.ok) {
+          setVirtualAccountError("Virtual bank account status is unavailable. Refresh to retry.");
         }
         const queueResponse = await fetch(apiBase + "/admin/deposit-receipts", {
           method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
@@ -112,6 +149,53 @@ export default function AdminPage({ token }: { token: string }) {
     void load();
     return () => { active = false; };
   }, [token, apiBase, refresh]);
+
+  const requestVirtualAccount = async () => {
+    if (!virtualAccountConsent || virtualAccountBusy) return;
+    if (virtualAccount?.environment === "live" && (!/^\d{11}$/.test(virtualBvn) || !/^\d{10}$/.test(virtualBankAccountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(virtualBankCode))) {
+      setVirtualAccountError("Enter the 11-digit BVN and the 10-digit BVN-linked bank account number with its bank code."); return;
+    }
+    setVirtualAccountBusy(true);
+    setVirtualAccountError("");
+    setVirtualAccountMessage("");
+    try {
+      const response = await fetch(apiBase + "/customer/dedicated-bank-account", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ consent: true, ...(virtualAccount?.environment === "live" ? { bvn: virtualBvn, accountNumber: virtualBankAccountNumber, bankCode: virtualBankCode } : {}) })
+      });
+      const payload: unknown = await response.json().catch(() => ({}));
+      const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+      const raw = root.virtualBankAccount && typeof root.virtualBankAccount === "object"
+        ? root.virtualBankAccount as Record<string, unknown> : null;
+      if (raw && typeof raw.assigned === "boolean") {
+        setVirtualAccount({
+          assigned: raw.assigned,
+          status: typeof raw.status === "string" ? raw.status : "unknown",
+          accountNumber: typeof raw.accountNumber === "string" ? raw.accountNumber : null,
+          bankName: typeof raw.bankName === "string" ? raw.bankName : null,
+          accountName: typeof raw.accountName === "string" ? raw.accountName : null,
+          environment: root.environment === "live" || root.environment === "test" ? root.environment : null
+        });
+      }
+      if (!response.ok) {
+        const detail = typeof root.message === "string" ? root.message : typeof root.error === "string" ? root.error : "Paystack did not assign a virtual bank account.";
+        throw new Error(detail);
+      }
+      setVirtualAccountMessage(typeof root.message === "string"
+        ? root.message
+        : raw?.assigned === true
+          ? "Paystack confirmed the Super Admin virtual bank account."
+          : "The request was accepted. The account number will appear only after provider confirmation.");
+    } catch (error) {
+      setVirtualAccountError(error instanceof Error ? error.message : "Virtual bank account request failed.");
+    } finally {
+      setVirtualBvn("");
+      setVirtualAccountBusy(false);
+      setRefresh(value => value + 1);
+    }
+  };
 
   const review = async (item: ReceiptQueueItem, decision: "approve" | "reject") => {
     const reviewNote = (notes[item.id] ?? "").trim();
@@ -170,6 +254,38 @@ export default function AdminPage({ token }: { token: string }) {
           : access === "denied" ? <section className="fp-admin-lock"><LockKeyhole size={25}/><div><h2>Super Admin access required</h2><p>{loadError}</p></div></section>
           : access === "error" ? <section className="fp-admin-lock"><AlertCircle size={25}/><div><h2>Review queue unavailable</h2><p>{loadError}</p></div></section>
           : <>
+            <section className="fp-admin-review-guidance" aria-labelledby="fp-admin-dva-title">
+              <Wallet size={18}/>
+              <div style={{ flex: 1 }}>
+                <h2 id="fp-admin-dva-title" style={{ margin: "0 0 6px" }}>Super Admin virtual bank account</h2>
+                {virtualAccount?.assigned && virtualAccount.accountNumber && virtualAccount.bankName && virtualAccount.accountName
+                  ? <div className="fp-admin-receipt-details">
+                      <div><span>Account number</span><b>{virtualAccount.accountNumber}</b></div>
+                      <div><span>Bank</span><b>{virtualAccount.bankName}</b></div>
+                      <div><span>Account name</span><b>{virtualAccount.accountName}</b></div>
+                    </div>
+                  : <p style={{ margin: 0 }}>Status: <b>{virtualAccount?.status ?? "not confirmed"}</b>. No bank account number is shown until Paystack confirms assignment.</p>}
+                {virtualAccountMessage && <p role="status">{virtualAccountMessage}</p>}
+                {virtualAccountError && <p role="alert">{virtualAccountError}</p>}
+                <label className="fp-admin-confirm" style={{ marginTop: 10 }}>
+                  <input type="checkbox" checked={virtualAccountConsent} onChange={event => setVirtualAccountConsent(event.target.checked)} disabled={virtualAccountBusy || virtualAccount?.assigned === true}/>
+                  I consent to FlowPay sending my registered profile details to Paystack to request this account. For a live financial-services account, Paystack also receives my BVN and the linked bank account details below for identity validation.
+                </label>
+                {virtualAccount?.environment === "live" && !virtualAccount?.assigned && <>
+                  <label htmlFor="super-admin-bvn">BVN (11 digits)</label>
+                  <input id="super-admin-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event => setVirtualBvn(event.target.value.replace(/\D/g, "").slice(0, 11))} placeholder="Enter BVN for Paystack validation" disabled={virtualAccountBusy}/>
+                  <label htmlFor="super-admin-bank-account">BVN-linked bank account number</label>
+                  <input id="super-admin-bank-account" inputMode="numeric" autoComplete="off" maxLength={10} value={virtualBankAccountNumber} onChange={event => setVirtualBankAccountNumber(event.target.value.replace(/\D/g, "").slice(0, 10))} placeholder="10-digit account number" disabled={virtualAccountBusy}/>
+                  <label htmlFor="super-admin-bank-code">Bank code</label>
+                  <input id="super-admin-bank-code" autoComplete="off" maxLength={12} value={virtualBankCode} onChange={event => setVirtualBankCode(event.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 12))} placeholder="Bank code from Paystack bank directory" disabled={virtualAccountBusy}/>
+                  <p style={{ margin: "6px 0", fontSize: 12 }}>The BVN is sent to Paystack for validation only; FlowPay does not store it in its virtual-account table.</p>
+                </>}
+                <button type="button" className="fp-admin-refresh" onClick={() => void requestVirtualAccount()} disabled={!virtualAccountConsent || virtualAccountBusy || virtualAccount?.assigned === true || (virtualAccount?.environment === "live" && (virtualBvn.length !== 11 || virtualBankAccountNumber.length !== 10 || !virtualBankCode))} style={{ marginTop: 10 }}>
+                  {virtualAccountBusy ? "Requesting account…" : "Request Super Admin virtual account"}
+                </button>
+                <p style={{ margin: "8px 0 0", fontSize: 12 }}>Availability depends on Paystack live-mode eligibility and required customer identity validation. The existing API may reject requests until provider access is enabled.</p>
+              </div>
+            </section>
             {actionMessage && <div className="fp-admin-feedback success"><CheckCircle2 size={17}/>{actionMessage}</div>}
             {actionError && <div className="fp-admin-feedback error"><AlertCircle size={17}/>{actionError}</div>}
             <div className="fp-admin-review-guidance">

@@ -7,6 +7,7 @@ import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
+import { getPaystackRuntime } from "./paystack-mode.js";
 import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
@@ -15,6 +16,7 @@ import { createPaystackBankTransfersHandler } from "./paystack-bank-transfers.js
 import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
+import { createVtpassBillsHandler } from "./vtpass-bills.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -47,6 +49,7 @@ const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, 
 const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer });
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
+const vtpassBillsHandler = createVtpassBillsHandler({ pool, jwks, issuer, audience });
 
 function send(res: import("node:http").ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
@@ -66,6 +69,7 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
   if (await depositReceiptsHandler(req, res)) return;
+  if (await vtpassBillsHandler(req, res)) return;
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
   if (await paystackWebhookHandler(req, res)) return;
@@ -80,7 +84,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -297,17 +301,22 @@ const server = createServer(async (req, res) => {
           status: row.status, createdAt: row.created_at, verifiedAt: row.verified_at
         }))
       ].sort((a, b) => new Date(b.verifiedAt ?? b.createdAt).getTime() - new Date(a.verifiedAt ?? a.createdAt).getTime()).slice(0, 100);
-      const paystackConfigured = paystackAvailable &&
-        process.env.PAYSTACK_ENVIRONMENT === "test" &&
-        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
+      const paystackRuntime = getPaystackRuntime();
+      const paystackConfigured = paystackAvailable && Boolean(paystackRuntime) &&
         (process.env.PAYSTACK_CALLBACK_URL ?? "").startsWith("https://") &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR) > 0 &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
       send(res, 200, {
-        deposits, environment: "test", livePaymentsEnabled: false,
-        depositProviders: { paystack: paystackConfigured, flutterwave: false }
+        deposits,
+        environment: paystackRuntime?.environment ?? null,
+        livePaymentsEnabled: paystackRuntime?.environment === "live",
+        depositProviders: {
+          paystack: paystackConfigured,
+          paystackEnvironment: paystackRuntime?.environment ?? null,
+          flutterwave: false
+        }
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
@@ -518,30 +527,49 @@ const server = createServer(async (req, res) => {
         throw new Error("FLOWPAY_ACCOUNT_NUMBER_ASSIGNMENT_FAILED");
       }
 
+      const providerDomain = process.env.PAYSTACK_ENVIRONMENT === "live" && process.env.NODE_ENV === "production"
+        ? "live" : "test";
       const virtualAccountSchema = await pool.query<{ available: boolean }>(
-        "SELECT to_regclass('public.fp_paystack_dedicated_accounts') IS NOT NULL AS available"
+        "SELECT to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS available"
       );
       const virtualAccount = virtualAccountSchema.rows[0]?.available === true
         ? await pool.query(
             `SELECT account_number, bank_name, account_name, status
+               FROM public.fp_paystack_dedicated_accounts_v2
+              WHERE user_id = $1 AND provider_domain = $2
+              LIMIT 1`,
+            [identity.rows[0].id, providerDomain]
+          )
+        : await pool.query(
+            `SELECT account_number, bank_name, account_name, status
                FROM public.fp_paystack_dedicated_accounts
-              WHERE user_id = $1 AND status = 'assigned'
+              WHERE user_id = $1
               LIMIT 1`,
             [identity.rows[0].id]
-          )
-        : { rows: [] as Array<Record<string, unknown>> };
+          );
       const assignedVirtualAccount = virtualAccount.rows[0] ?? null;
       send(res, 200, {
         walletAccounts: accounts.rows.map(row => ({
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
         flowpayAccountNumber: String(flowpayAccount.rows[0].account_number).trim(),
-        virtualBankAccount: assignedVirtualAccount ? {
-          assigned: true,
-          accountNumber: String(assignedVirtualAccount.account_number),
-          bankName: String(assignedVirtualAccount.bank_name),
-          accountName: String(assignedVirtualAccount.account_name)
-        } : { assigned: false, accountNumber: null, bankName: null, accountName: null },
+        virtualBankAccount: assignedVirtualAccount &&
+          assignedVirtualAccount.status === "assigned" &&
+          /^[0-9]{10}$/.test(String(assignedVirtualAccount.account_number ?? "")) &&
+          typeof assignedVirtualAccount.bank_name === "string" &&
+          typeof assignedVirtualAccount.account_name === "string" ? {
+            assigned: true,
+            status: "assigned",
+            environment: providerDomain,
+            accountNumber: String(assignedVirtualAccount.account_number).trim(),
+            bankName: String(assignedVirtualAccount.bank_name),
+            accountName: String(assignedVirtualAccount.account_name)
+          } : {
+            assigned: false,
+            status: typeof assignedVirtualAccount?.status === "string" ? assignedVirtualAccount.status : "not_requested",
+            environment: providerDomain,
+            accountNumber: null, bankName: null, accountName: null
+          },
         profileRole: identity.rows[0].role,
         message: "Your 10-digit FlowPay number is for wallet-to-wallet transfers. The separate bank virtual account appears only after Paystack confirms assignment."
       });

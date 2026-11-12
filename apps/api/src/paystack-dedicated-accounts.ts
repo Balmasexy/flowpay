@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { getPaystackRuntime } from "./paystack-mode.js";
 
 type Options = {
   pool: Pool | null;
@@ -41,13 +42,14 @@ async function readJson(req: IncomingMessage): Promise<PaystackRecord> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVALID_PAYLOAD");
   return value as PaystackRecord;
 }
-function sandboxEnabled() {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
-  return process.env.PAYSTACK_ENVIRONMENT === "test" &&
-    secret.startsWith("sk_test_") &&
-    process.env.FLOWPAY_RUNTIME_ENV === "development" &&
-    process.env.NODE_ENV !== "production" &&
-    process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED === "true";
+function dedicatedAccountsEnabled(environment: "test" | "live") {
+  if (environment === "test") {
+    return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED === "true";
+  }
+  return process.env.NODE_ENV === "production" &&
+    process.env.PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED === "true";
 }
 function phoneE164(value: string): string | null {
   const digits = value.replace(/\D/g, "");
@@ -106,6 +108,7 @@ type DedicatedAccountRow = {
   account_number: string | null;
   bank_name: string | null;
   account_name: string | null;
+  provider_domain: "test" | "live";
   status: string;
 };
 function view(row: DedicatedAccountRow | null) {
@@ -127,23 +130,44 @@ function view(row: DedicatedAccountRow | null) {
 }
 
 export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: PaystackRecord) {
-  if (!sandboxEnabled()) return false;
+  const runtime = getPaystackRuntime();
+  if (!runtime || !dedicatedAccountsEnabled(runtime.environment)) return false;
+  const environment = runtime.environment;
   const eventName = typeof event.event === "string" ? event.event : "";
   if (![
     "dedicatedaccount.assign.success",
     "dedicatedaccount.assign.failed",
+    "assigndedicatedaccount.failed",
     "customeridentification.success",
     "customeridentification.failed"
   ].includes(eventName)) return false;
   const data = record(event.data);
-  const customerCode = typeof data.customer_code === "string" ? data.customer_code : "";
-  if (!customerCode) return true;
-  if (eventName === "customeridentification.failed" || eventName === "dedicatedaccount.assign.failed") {
+  const nestedCustomer = record(data.customer);
+  const customerCode = typeof data.customer_code === "string" ? data.customer_code
+    : typeof nestedCustomer.customer_code === "string" ? nestedCustomer.customer_code : "";
+  const email = typeof data.email === "string" ? data.email.trim().toLowerCase()
+    : typeof nestedCustomer.email === "string" ? nestedCustomer.email.trim().toLowerCase() : "";
+  if (!customerCode && !email) return true;
+  const match = `provider_domain = $2 AND
+    (($1 <> '' AND paystack_customer_code = $1) OR ($3 <> '' AND lower(customer_email) = $3))`;
+  if (eventName === "customeridentification.failed" || eventName === "dedicatedaccount.assign.failed" ||
+      eventName === "assigndedicatedaccount.failed") {
     await pool.query(
-      `UPDATE public.fp_paystack_dedicated_accounts
-          SET status = 'failed', last_error_code = $2, updated_at = NOW()
-        WHERE paystack_customer_code = $1 AND status <> 'assigned'`,
-      [customerCode, eventName.replace(/[^a-z.]/g, "").slice(0, 80)]
+      `UPDATE public.fp_paystack_dedicated_accounts_v2
+          SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+              status = 'failed', last_error_code = $4, last_provider_event = $4, updated_at = NOW()
+        WHERE ${match} AND status <> 'assigned'`,
+      [customerCode, environment, email, eventName.replace(/[^a-z.]/g, "").slice(0, 80)]
+    );
+    return true;
+  }
+  if (eventName === "customeridentification.success") {
+    await pool.query(
+      `UPDATE public.fp_paystack_dedicated_accounts_v2
+          SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+              last_provider_event = $4, updated_at = NOW()
+        WHERE ${match} AND status = 'pending'`,
+      [customerCode, environment, email, eventName]
     );
     return true;
   }
@@ -157,12 +181,14 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
         account.assigned === true && account.active === true &&
         (account.currency === undefined || account.currency === "NGN")) {
       await pool.query(
-        `UPDATE public.fp_paystack_dedicated_accounts
-            SET dedicated_account_id = $2, account_number = $3,
-                bank_name = $4, account_name = $5, status = 'assigned',
+        `UPDATE public.fp_paystack_dedicated_accounts_v2
+            SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
+                dedicated_account_id = $4, account_number = $5,
+                bank_name = $6, account_name = $7, status = 'assigned',
+                assigned_at = NOW(), last_provider_event = $8,
                 last_error_code = NULL, updated_at = NOW()
-          WHERE paystack_customer_code = $1`,
-        [customerCode, String(account.id ?? ""), accountNumber, bankName, accountName]
+          WHERE ${match}`,
+        [customerCode, environment, email, String(account.id ?? ""), accountNumber, bankName, accountName, eventName]
       );
     }
   }
@@ -197,17 +223,23 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
+    const runtime = getPaystackRuntime();
+    if (!runtime) {
+      send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
+      return true;
+    }
+    const environment = runtime.environment;
     try {
       const saved = await pool.query<DedicatedAccountRow>(
         `SELECT user_id, paystack_customer_code, dedicated_account_id,
-                account_number, bank_name, account_name, status
-           FROM public.fp_paystack_dedicated_accounts
-          WHERE user_id = $1 LIMIT 1`,
-        [identity.id]
+                account_number, bank_name, account_name, provider_domain, status
+           FROM public.fp_paystack_dedicated_accounts_v2
+          WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
+        [identity.id, environment]
       );
       const current = saved.rows[0] ?? null;
       if (get) {
-        send(res, 200, { provider: "Paystack", environment: "test", virtualBankAccount: view(current), livePaymentsEnabled: false });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" });
         return true;
       }
 
@@ -217,67 +249,72 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         const message = error instanceof Error ? error.message : "INVALID_PAYLOAD";
         send(res, message === "PAYLOAD_TOO_LARGE" ? 413 : 400, { error: message }); return true;
       }
-      if (Object.keys(input).some(key => key !== "consent") || input.consent !== true) {
+      if (Object.keys(input).some(key => !["consent","bvn","accountNumber","bankCode"].includes(key)) || input.consent !== true) {
         send(res, 400, { error: "EXPRESS_CONSENT_REQUIRED" }); return true;
       }
       if (current?.status === "assigned") {
-        send(res, 200, { provider: "Paystack", environment: "test", virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: false });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: environment === "live" });
         return true;
       }
       if (current?.status === "pending") {
         send(res, 202, {
-          provider: "Paystack", environment: "test",
+          provider: "Paystack", environment,
           virtualBankAccount: view(current),
           message: "A Paystack dedicated-account request is already pending for this profile. FlowPay will not submit a duplicate request.",
-          livePaymentsEnabled: false
+          livePaymentsEnabled: environment === "live"
         });
         return true;
       }
-      if (!sandboxEnabled()) {
+      if (!dedicatedAccountsEnabled(environment)) {
         send(res, 503, {
           error: "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED",
-          message: "Dedicated-account assignment is not enabled on an isolated development API. No account was created.",
-          requiredConfiguration: [
-            "PAYSTACK_ENVIRONMENT=test",
-            "PAYSTACK_SECRET_KEY=sk_test_…",
-            "FLOWPAY_RUNTIME_ENV=development",
-            "PAYSTACK_DEDICATED_ACCOUNTS_ENABLED=true"
-          ],
-          livePaymentsEnabled: false
+          message: "Dedicated-account assignment is not enabled for this Paystack environment. No account was created.",
+          requiredConfiguration: environment === "live"
+            ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true"]
+            : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_DEDICATED_ACCOUNTS_ENABLED=true"],
+          livePaymentsEnabled: environment === "live"
         });
         return true;
       }
       const identityFields = splitLegalName(identity.name);
       const phone = phoneE164(identity.phone);
+      const bvn = typeof input.bvn === "string" ? input.bvn.trim() : "";
+      const bankAccountNumber = typeof input.accountNumber === "string" ? input.accountNumber.trim() : "";
+      const bankCode = typeof input.bankCode === "string" ? input.bankCode.trim() : "";
+      if (environment === "live" && (!/^\d{11}$/.test(bvn) || !/^\d{10}$/.test(bankAccountNumber) || !/^[A-Za-z0-9_-]{2,12}$/.test(bankCode))) {
+        send(res, 422, { error: "BVN_LINKED_BANK_ACCOUNT_REQUIRED", required: ["11-digit BVN", "10-digit BVN-linked bank account number", "bank code"] });
+        return true;
+      }
       if (!identityFields || !identity.email.includes("@") || !phone) {
         send(res, 422, { error: "CUSTOMER_PROFILE_INCOMPLETE", required: ["full legal name", "email", "Nigerian phone number"] });
         return true;
       }
 
       const requestClaim = await pool.query(
-        `INSERT INTO public.fp_paystack_dedicated_accounts AS existing
-           (user_id, status, consent_at, last_error_code)
-         VALUES ($1, 'pending', NOW(), NULL)
-         ON CONFLICT (user_id) DO UPDATE
-           SET status = 'pending',
+        `INSERT INTO public.fp_paystack_dedicated_accounts_v2 AS existing
+           (user_id, provider_domain, customer_email, status, consent_at, last_error_code)
+         VALUES ($1, $2, lower($3), 'pending', NOW(), NULL)
+         ON CONFLICT (user_id, provider_domain) DO UPDATE
+           SET customer_email = EXCLUDED.customer_email,
+               status = 'pending',
                consent_at = EXCLUDED.consent_at,
                last_error_code = NULL,
                updated_at = NOW()
          WHERE existing.status = 'failed'
          RETURNING user_id`,
-        [identity.id]
+        [identity.id, environment, identity.email]
       );
       if (requestClaim.rowCount !== 1) {
         const latest = await pool.query<DedicatedAccountRow>(
           `SELECT user_id, paystack_customer_code, dedicated_account_id,
-                  account_number, bank_name, account_name, status
-             FROM public.fp_paystack_dedicated_accounts
-            WHERE user_id = $1 LIMIT 1`,
-          [identity.id]
+                  account_number, bank_name, account_name, provider_domain, status
+             FROM public.fp_paystack_dedicated_accounts_v2
+            WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
+          [identity.id, environment]
         );
         const latestRow = latest.rows[0] ?? current;
         send(res, latestRow?.status === "assigned" ? 200 : 202, {
-          provider: "Paystack", environment: "test",
+          provider: "Paystack", environment,
           virtualBankAccount: view(latestRow),
           duplicate: true,
           message: "A dedicated-account request already exists for this profile. FlowPay did not create another Paystack account.",
@@ -286,9 +323,9 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         return true;
       }
 
-      const secret = process.env.PAYSTACK_SECRET_KEY!.trim();
+      const secret = runtime.secretKey;
       let customerCode = current?.paystack_customer_code ?? null;
-      if (!customerCode) {
+      if (environment === "test" && !customerCode) {
         const createdCustomer = await paystack(secret, "/customer", {
           email: identity.email,
           first_name: identityFields.firstName,
@@ -298,33 +335,51 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         const customerData = record(createdCustomer.body.data);
         customerCode = typeof customerData.customer_code === "string" ? customerData.customer_code : null;
         if (!createdCustomer.ok || !customerCode || !/^CUS_[A-Za-z0-9]+$/.test(customerCode) ||
-            (customerData.domain !== undefined && customerData.domain !== "test")) {
+            (customerData.domain !== undefined && customerData.domain !== environment)) {
           await pool.query(
-            `UPDATE public.fp_paystack_dedicated_accounts
+            `UPDATE public.fp_paystack_dedicated_accounts_v2
                 SET status = 'failed', last_error_code = 'PAYSTACK_CUSTOMER_CREATE_FAILED', updated_at = NOW()
-              WHERE user_id = $1`,
-            [identity.id]
+              WHERE user_id = $1 AND provider_domain = $2`,
+            [identity.id, environment]
           );
           send(res, 502, { error: "PAYSTACK_CUSTOMER_CREATE_FAILED", message: "Paystack could not create the test customer. No virtual bank account was assigned." });
           return true;
         }
         await pool.query(
-          `UPDATE public.fp_paystack_dedicated_accounts
-              SET paystack_customer_code = $2, updated_at = NOW()
-            WHERE user_id = $1`,
-          [identity.id, customerCode]
+          `UPDATE public.fp_paystack_dedicated_accounts_v2
+              SET paystack_customer_code = $3, updated_at = NOW()
+            WHERE user_id = $1 AND provider_domain = $2`,
+          [identity.id, environment, customerCode]
         );
       }
 
-      const assigned = await paystack(secret, "/dedicated_account", {
-        customer: customerCode,
-        preferred_bank: "test-bank"
-      });
+      const assignmentPayload: PaystackRecord = environment === "live"
+        ? {
+            email: identity.email,
+            first_name: identityFields.firstName,
+            last_name: identityFields.lastName,
+            phone,
+            preferred_bank: "wema-bank",
+            country: "NG",
+            account_number: bankAccountNumber,
+            bvn,
+            bank_code: bankCode
+          }
+        : { customer: customerCode, preferred_bank: "test-bank" };
+      const assigned = await paystack(
+        secret,
+        environment === "live" ? "/dedicated_account/assign" : "/dedicated_account",
+        assignmentPayload
+      );
       const account = record(assigned.body.data);
       const bank = record(account.bank);
       const accountNumber = typeof account.account_number === "string" ? account.account_number : "";
       const bankName = typeof bank.name === "string" ? bank.name.trim() : "";
       const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
+      const responseDomain = typeof account.domain === "string" ? account.domain : environment;
+      const assignedCustomer = record(account.customer);
+      const assignedCustomerCode = typeof account.customer_code === "string" ? account.customer_code : typeof assignedCustomer.customer_code === "string" ? assignedCustomer.customer_code : customerCode;
+      const assignedCustomerEmail = typeof account.email === "string" ? account.email.trim().toLowerCase() : typeof assignedCustomer.email === "string" ? assignedCustomer.email.trim().toLowerCase() : identity.email.toLowerCase();
       if (!assigned.ok) {
         const providerMessage = typeof assigned.body.message === "string"
           ? assigned.body.message.replace(/[\r\n\t]+/g, " ").slice(0, 240)
@@ -334,53 +389,58 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           providerMessage
         });
         await pool.query(
-          `UPDATE public.fp_paystack_dedicated_accounts
+          `UPDATE public.fp_paystack_dedicated_accounts_v2
               SET status = 'failed', last_error_code = 'PAYSTACK_DEDICATED_ACCOUNT_FAILED', updated_at = NOW()
-            WHERE user_id = $1`,
-          [identity.id]
+            WHERE user_id = $1 AND provider_domain = $2`,
+          [identity.id, environment]
         );
         send(res, 502, {
           error: "PAYSTACK_DEDICATED_ACCOUNT_FAILED",
-          message: "Paystack did not issue a test virtual bank account. No placeholder number was saved.",
+          message: "Paystack did not confirm a dedicated bank account assignment. No placeholder number was saved.",
           providerStatus: assigned.status,
           providerMessage,
-          livePaymentsEnabled: false
+          livePaymentsEnabled: environment === "live"
         });
         return true;
       }
-      if (account.assigned === true && account.active === true &&
+      if (responseDomain === environment && account.assigned === true && account.active === true &&
           /^\d{10}$/.test(accountNumber) && bankName && accountName &&
           account.currency === "NGN") {
         const result = await pool.query<DedicatedAccountRow>(
-          `UPDATE public.fp_paystack_dedicated_accounts
-              SET dedicated_account_id = $2, account_number = $3, bank_name = $4,
-                  account_name = $5, status = 'assigned', last_error_code = NULL,
-                  updated_at = NOW()
-            WHERE user_id = $1
+          `UPDATE public.fp_paystack_dedicated_accounts_v2
+              SET customer_email = COALESCE($4,customer_email),
+                  paystack_customer_code = COALESCE($3,paystack_customer_code),
+                  dedicated_account_id = $5, account_number = $6, bank_name = $7,
+                  account_name = $8, status = 'assigned', assigned_at = NOW(),
+                  last_provider_event = 'dedicatedaccount.assign.success',
+                  last_error_code = NULL, updated_at = NOW()
+            WHERE user_id = $1 AND provider_domain = $2
             RETURNING user_id, paystack_customer_code, dedicated_account_id,
-                      account_number, bank_name, account_name, status`,
-          [identity.id, String(account.id ?? ""), accountNumber, bankName, accountName]
+                      account_number, bank_name, account_name, provider_domain, status`,
+          [identity.id, environment, assignedCustomerCode, assignedCustomerEmail, String(account.id ?? ""), accountNumber, bankName, accountName]
         );
         send(res, 201, {
-          provider: "Paystack", environment: "test",
+          provider: "Paystack", environment,
           virtualBankAccount: view(result.rows[0]),
-          livePaymentsEnabled: false,
-          message: "Paystack confirmed a test virtual bank account assignment. This is separate from the FlowPay wallet number and virtual card."
+          livePaymentsEnabled: environment === "live",
+          message: "Paystack confirmed the " + environment + " dedicated bank account assignment. This is separate from the FlowPay wallet number and virtual card."
         });
         return true;
       }
 
       await pool.query(
-        `UPDATE public.fp_paystack_dedicated_accounts
-            SET status = 'pending', last_error_code = NULL, updated_at = NOW()
-          WHERE user_id = $1`,
-        [identity.id]
+        `UPDATE public.fp_paystack_dedicated_accounts_v2
+            SET customer_email = COALESCE($4,customer_email),
+                paystack_customer_code = COALESCE($3,paystack_customer_code),
+                status = 'pending', last_error_code = NULL, updated_at = NOW()
+          WHERE user_id = $1 AND provider_domain = $2`,
+        [identity.id, environment, assignedCustomerCode, assignedCustomerEmail]
       );
       send(res, 202, {
-        provider: "Paystack", environment: "test",
+        provider: "Paystack", environment,
         virtualBankAccount: { assigned: false, status: "pending", accountNumber: null, bankName: null, accountName: null },
         message: "Paystack accepted the dedicated-account request. The verified account number will appear after assignment confirmation.",
-        livePaymentsEnabled: false
+        livePaymentsEnabled: environment === "live"
       });
       return true;
     } catch (error) {

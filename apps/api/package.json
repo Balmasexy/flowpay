@@ -11,12 +11,14 @@
     "test:flutterwave-webhook": "tsx --test scripts/test-flutterwave-webhook.ts",
     "test:paystack-webhook": "tsx --test scripts/test-paystack-webhook.ts",
     "test:paystack-checkout-50000": "tsx --test scripts/test-paystack-checkout-50000.ts",
+    "test:paystack-mode": "tsx --test scripts/test-paystack-mode.ts",
     "test:flowpay-transfers": "tsx --test scripts/test-flowpay-transfers.ts",
     "test:paystack-bank-lookup": "tsx --test scripts/test-paystack-bank-lookup.ts",
     "test:paystack-bank-transfers": "tsx --test scripts/test-paystack-bank-transfers.ts",
     "test:paystack-dedicated-accounts": "tsx --test scripts/test-paystack-dedicated-accounts.ts",
     "test:customer-ai": "tsx --test scripts/test-customer-ai.ts",
-    "test:deposit-receipts": "tsx --test scripts/test-deposit-receipts.ts"
+    "test:deposit-receipts": "tsx --test scripts/test-deposit-receipts.ts",
+    "test:vtpass-bills": "tsx --test scripts/test-vtpass-bills.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",

@@ -196,9 +196,9 @@ export default function App() {
               onNetworkChange={setNetwork}
             />
           ) : servicePage ? (
-            <ServicePreview path={path}/>
+            <ServicePreview path={path} token={authSession.data.session?.token ?? ""}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments"/> : path === "/bulk-verification" ? <BulkOperations mode="verification"/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={authSession.data.session?.token ?? ""}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={authSession.data.session?.token ?? ""}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
@@ -233,7 +233,7 @@ function pageDescription(path: string) {
   const descriptions: Record<string,string> = {
     "/search":"Search your FlowPay account and available services.",
     "/money-received":"Add money and review verified wallet deposits.",
-    "/payment-return/paystack":"Check the verified status of your Paystack test deposit.",
+    "/payment-return/paystack":"Check the verified status of your Paystack deposit.",
     "/money-sent":"Review your recorded outgoing transfer history.",
     "/bulk-payments":"Bulk payment tools are restricted until approved business services are connected.",
     "/bulk-verification":"Customer verification tools require approved verification services.",

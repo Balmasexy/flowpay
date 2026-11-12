@@ -396,7 +396,18 @@ export function createFlowPayTransfersHandler(options: Options) {
               AND transaction.status = 'posted'`,
           [senderWallets[0].id]
         );
-        const available = BigInt(balance.rows[0]?.balance_minor ?? "0");
+        const reservations = await client.query(
+          `SELECT COALESCE(SUM(reservation.amount_minor),0)::text AS amount_minor
+             FROM (
+               SELECT amount_minor FROM public.fp_paystack_bank_transfers
+                WHERE account_id = $1 AND status IN ('initiating','pending','otp','unknown')
+               UNION ALL
+               SELECT amount_minor FROM public.fp_vtpass_bill_payments
+                WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
+             ) AS reservation`,
+          [senderWallets[0].id]
+        );
+        const available = BigInt(balance.rows[0]?.balance_minor ?? "0") - BigInt(reservations.rows[0]?.amount_minor ?? "0");
         const amount = BigInt(input.amountMinor);
         if (available < amount) {
           await client.query("ROLLBACK");

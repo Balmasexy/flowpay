@@ -5,7 +5,10 @@ type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
   flowpayAccountNumber: string | null;
   walletAccounts: WalletAccount[];
-  virtualBankAccount: { assigned: boolean; accountNumber: string | null; bankName: string | null; accountName: string | null };
+  virtualBankAccount: {
+    assigned: boolean; status: string; environment: "test" | "live";
+    accountNumber: string | null; bankName: string | null; accountName: string | null;
+  };
   message: string;
 };
 
@@ -31,7 +34,12 @@ function parseAccountDetails(value: unknown): AccountDetails | null {
   return {
     flowpayAccountNumber: optionalText(body.flowpayAccountNumber, 10),
     walletAccounts,
-    virtualBankAccount: { assigned: virtual.assigned, accountNumber, bankName, accountName },
+    virtualBankAccount: {
+      assigned: virtual.assigned,
+      status: typeof virtual.status === "string" ? virtual.status.slice(0, 30) : virtual.assigned ? "assigned" : "not_requested",
+      environment: virtual.environment === "live" ? "live" : "test",
+      accountNumber, bankName, accountName
+    },
     message: typeof body.message === "string" ? body.message.slice(0, 300) : "Account information is read-only.",
   };
 }
@@ -55,6 +63,15 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
   const [data, setData] = useState<AccountDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [virtualConsent, setVirtualConsent] = useState(false);
+  const [virtualBvn, setVirtualBvn] = useState("");
+  const [linkedBankAccount, setLinkedBankAccount] = useState("");
+  const [linkedBankCode, setLinkedBankCode] = useState("");
+  const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
+  const [banksError, setBanksError] = useState("");
+  const [virtualRequestBusy, setVirtualRequestBusy] = useState(false);
+  const [virtualRequestError, setVirtualRequestError] = useState("");
+  const [virtualRequestMessage, setVirtualRequestMessage] = useState("");
 
   const load = useCallback(async () => {
     if (!token || token.split(".").length !== 3) {
@@ -72,6 +89,20 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       if (!response.ok) throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : typeof errorBody?.error === "string" ? errorBody.error.slice(0, 200) : "Unable to load account details.");
       const parsed = parseAccountDetails(body);
       if (!parsed) throw new Error("The account service returned incomplete or invalid account details.");
+      if (parsed.virtualBankAccount.environment === "live" && !parsed.virtualBankAccount.assigned) {
+        const bankResponse = await fetch(apiBase + "/customer/banks", {
+          method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+        });
+        const bankBody = asRecord(await bankResponse.json().catch(() => null));
+        const bankItems = Array.isArray(bankBody?.banks) ? bankBody.banks.map(item => asRecord(item)).filter((item): item is Record<string, unknown> => Boolean(item && typeof item.code === "string" && typeof item.name === "string"))
+          .map(item => ({ code: String(item.code), name: String(item.name) })) : [];
+        setBanks(bankItems);
+        setBanksError(bankResponse.ok ? "" : "Live Paystack bank directory is unavailable. Refresh to try again.");
+        if (bankItems.length && !linkedBankCode) setLinkedBankCode(bankItems[0].code);
+      } else {
+        setBanks([]);
+        setBanksError("");
+      }
       setData(parsed);
     } catch (cause) {
       setData(null); setError(cause instanceof Error ? cause.message : "Unable to load account details.");
@@ -79,6 +110,41 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const requestVirtualBankAccount = async () => {
+    if (!data || !virtualConsent || virtualRequestBusy) return;
+    const live = data.virtualBankAccount.environment === "live";
+    if (live && (!/^\\d{11}$/.test(virtualBvn) || !/^\\d{10}$/.test(linkedBankAccount) || !linkedBankCode)) {
+      setVirtualRequestError("Enter your 11-digit BVN and the 10-digit bank account linked to it.");
+      return;
+    }
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    if (!apiBase) { setVirtualRequestError("FlowPay API address is not configured."); return; }
+    setVirtualRequestBusy(true); setVirtualRequestError(""); setVirtualRequestMessage("");
+    try {
+      const response = await fetch(apiBase + "/customer/dedicated-bank-account", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          consent: true,
+          ...(live ? { bvn: virtualBvn, accountNumber: linkedBankAccount, bankCode: linkedBankCode } : {})
+        })
+      });
+      const body = asRecord(await response.json().catch(() => null));
+      if (!response.ok) {
+        throw new Error(typeof body?.message === "string" ? body.message : typeof body?.error === "string" ? body.error : "Paystack did not accept the virtual-account request.");
+      }
+      const raw = asRecord(body?.virtualBankAccount);
+      const assigned = raw?.assigned === true && typeof raw.accountNumber === "string" && typeof raw.bankName === "string" && typeof raw.accountName === "string";
+      setVirtualRequestMessage(typeof body?.message === "string" ? body.message : assigned ? "Paystack confirmed your bank account." : "Your request is pending provider confirmation. No placeholder account number has been created.");
+      await load();
+    } catch (cause) {
+      setVirtualRequestError(cause instanceof Error ? cause.message : "Virtual bank account request failed.");
+    } finally {
+      setVirtualBvn("");
+      setVirtualRequestBusy(false);
+    }
+  };
 
   return <section className="fp-panel fp-detail-panel fp-account-page">
     <div className="fp-account-hero">
@@ -91,7 +157,31 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       <div className="fp-account-detail-grid">
         <article className="fp-account-type-card fp-account-wallet-card"><span className="fp-account-type-icon"><Wallet size={19}/></span><span className="fp-money-eyebrow">FLOWPAY WALLET</span><h3>To FlowPay</h3><p>Use this unique 10-digit FlowPay number when another FlowPay customer sends you money.</p><div className="fp-account-type-value">{data?.flowpayAccountNumber || "Not yet assigned"}</div><span className="fp-account-live-label"><Check size={14}/> {data?.flowpayAccountNumber ? "Assigned to your customer profile" : "Awaiting assignment"}</span>{data?.flowpayAccountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)}><Copy size={14}/> Copy number</button>}</article>
         <article className="fp-account-type-card fp-account-bank-card"><span className="fp-account-type-icon"><Building2 size={19}/></span><span className="fp-money-eyebrow">BANK TRANSFER ACCOUNT</span><h3>Receive from any bank</h3>
-          {data?.virtualBankAccount.assigned ? <><p>Provider-confirmed bank account linked to your FlowPay customer profile.</p><div className="fp-account-type-value">{data.virtualBankAccount.accountNumber}</div><div className="fp-account-bank-details"><span>Bank</span><b>{data.virtualBankAccount.bankName}</b><span>Account name</span><b>{data.virtualBankAccount.accountName}</b></div><span className="fp-account-live-label"><Check size={14}/> Provider assignment confirmed</span></> : <><p>A dedicated bank NUBAN has not yet been issued for this customer. The FlowPay transfer number above cannot receive transfers from outside banks.</p><div className="fp-account-pending"><Clock3 size={18}/><span><b>Bank account not issued</b><small>Paystack eligibility checks, any required customer identity validation, and your express consent are required before a dedicated account can be issued.</small></span></div><span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> No placeholder bank number displayed</span></>}
+          {data?.virtualBankAccount.assigned ? <><p>Provider-confirmed {data.virtualBankAccount.environment} bank account linked to your FlowPay customer profile.</p><div className="fp-account-type-value">{data.virtualBankAccount.accountNumber}</div><div className="fp-account-bank-details"><span>Bank</span><b>{data.virtualBankAccount.bankName}</b><span>Account name</span><b>{data.virtualBankAccount.accountName}</b></div><span className="fp-account-live-label"><Check size={14}/> Provider assignment confirmed</span></> : <><p>A dedicated bank NUBAN has not yet been issued. The FlowPay transfer number above cannot receive transfers from outside banks.</p><div className="fp-account-pending"><Clock3 size={18}/><span><b>{data?.virtualBankAccount.status === "pending" ? "Request awaiting Paystack" : "Bank account not issued"}</b><small>{data?.virtualBankAccount.status === "pending" ? "Your account request is already being processed. FlowPay will display the number only after Paystack confirms assignment." : "Paystack must approve FlowPay's DVA access. This request is sent only after your explicit consent."}</small></span></div><span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> No placeholder bank number displayed</span>
+            {data?.virtualBankAccount.status !== "pending" && <>
+              <label style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:12,fontSize:13}}>
+                <input type="checkbox" checked={virtualConsent} onChange={event=>setVirtualConsent(event.target.checked)} disabled={virtualRequestBusy}/>
+                I expressly consent to FlowPay sending the profile information required by Paystack to request a dedicated bank account. For a live financial-services account, Paystack will also receive my BVN and the bank account details linked to it for validation.
+              </label>
+              {data?.virtualBankAccount.environment === "live" && <>
+                <label htmlFor="customer-dva-bvn">BVN (11 digits)</label>
+                <input id="customer-dva-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event=>setVirtualBvn(event.target.value.replace(/\\D/g,"").slice(0,11))} placeholder="Enter BVN for Paystack validation" disabled={virtualRequestBusy}/>
+                <label htmlFor="customer-dva-bank">BVN-linked bank</label>
+                <select id="customer-dva-bank" value={linkedBankCode} onChange={event=>setLinkedBankCode(event.target.value)} disabled={virtualRequestBusy || !banks.length}>
+                  {banks.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}
+                </select>
+                <label htmlFor="customer-dva-account">BVN-linked account number</label>
+                <input id="customer-dva-account" inputMode="numeric" autoComplete="off" maxLength={10} value={linkedBankAccount} onChange={event=>setLinkedBankAccount(event.target.value.replace(/\\D/g,"").slice(0,10))} placeholder="10-digit bank account number" disabled={virtualRequestBusy}/>
+                {banksError && <p className="fp-preview-warning" role="alert">{banksError}</p>}
+                <small>The BVN is sent to Paystack for validation and is not saved in FlowPay.</small>
+              </>}
+              {virtualRequestError && <p className="fp-preview-warning" role="alert">{virtualRequestError}</p>}
+              {virtualRequestMessage && <p className="fp-muted" role="status">{virtualRequestMessage}</p>}
+              <button type="button" className="fp-primary" style={{marginTop:12}} onClick={()=>void requestVirtualBankAccount()} disabled={!virtualConsent || virtualRequestBusy || (data?.virtualBankAccount.environment === "live" && (virtualBvn.length !== 11 || linkedBankAccount.length !== 10 || !linkedBankCode))}>
+                {virtualRequestBusy ? "Requesting bank account…" : "Request dedicated bank account"}
+              </button>
+            </>}
+          </>}
         </article>
       </div>
       <div className="fp-account-wallets"><div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">LEDGER ACCOUNTS</span><h3>Your FlowPay wallets</h3></div><span className="fp-money-count">{data?.walletAccounts.length ?? 0} currencies</span></div>

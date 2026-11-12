@@ -7,6 +7,7 @@ on:
       - feat/api-foundation
       - feat/customer-banking-routes-no-sidebar
       - feat/to-bank-paystack-sandbox-payouts
+      - feat/paystack-live-test-mode-support
     paths:
       - "apps/**"
       - ".github/workflows/**"
@@ -67,6 +68,12 @@ jobs:
 
       - name: Test NGN 50,000 Paystack sandbox deposit checkout
         run: npm run test:paystack-checkout-50000 --prefix apps/api
+
+      - name: Test fail-closed Paystack live and test mode selection
+        run: npm run test:paystack-mode --prefix apps/api
+
+      - name: Test VTpass bill payment validation and status handling
+        run: npm run test:vtpass-bills --prefix apps/api
 
       - name: Test Paystack Nigerian bank directory and account resolution
         run: npm run test:paystack-bank-lookup --prefix apps/api
@@ -167,3 +174,56 @@ jobs:
         run: npm run build --prefix apps/web
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
+
+  build-android:
+    name: Build FlowPay Android APK and AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.9.1"
+
+      - name: Configure release signing when private keystore secrets exist
+        env:
+          FLOWPAY_ANDROID_KEYSTORE_BASE64: ${{ secrets.FLOWPAY_ANDROID_KEYSTORE_BASE64 }}
+          FLOWPAY_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.FLOWPAY_ANDROID_KEYSTORE_PASSWORD }}
+          FLOWPAY_ANDROID_KEY_ALIAS: ${{ secrets.FLOWPAY_ANDROID_KEY_ALIAS }}
+          FLOWPAY_ANDROID_KEY_PASSWORD: ${{ secrets.FLOWPAY_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${FLOWPAY_ANDROID_KEYSTORE_BASE64:-}" && -n "${FLOWPAY_ANDROID_KEYSTORE_PASSWORD:-}" && -n "${FLOWPAY_ANDROID_KEY_ALIAS:-}" && -n "${FLOWPAY_ANDROID_KEY_PASSWORD:-}" ]]; then
+            keystore="$RUNNER_TEMP/flowpay-upload-key.jks"
+            printf '%s' "$FLOWPAY_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            chmod 600 "$keystore"
+            echo "FLOWPAY_ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEYSTORE_PASSWORD=$FLOWPAY_ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEY_ALIAS=$FLOWPAY_ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "FLOWPAY_ANDROID_KEY_PASSWORD=$FLOWPAY_ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "No Android release keystore configured; the AAB will be built unsigned."
+          fi
+
+      - name: Build Android debug APK and release AAB
+        run: gradle --no-daemon --stacktrace -p apps/android :app:assembleDebug :app:bundleRelease
+
+      - name: Upload Android build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpay-android-apk-and-aab
+          path: |
+            apps/android/app/build/outputs/apk/debug/app-debug.apk
+            apps/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
