@@ -125,6 +125,12 @@ export function createStoryblokPreviewHandler(
       }
 
       const payload: unknown = await upstream.json();
+      if (!payload || typeof payload !== "object" || !("story" in payload) ||
+          !payload.story || typeof payload.story !== "object" ||
+          !("id" in payload.story) || Number(payload.story.id) !== Number(storyId)) {
+        respond(res, 403, { error: "STORYBLOK_PREVIEW_STORY_MISMATCH" });
+        return true;
+      }
       respond(res, 200, payload);
     } catch {
       respond(res, 502, { error: "STORYBLOK_UPSTREAM_UNAVAILABLE" });
