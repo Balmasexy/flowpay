@@ -87,6 +87,16 @@ test("rejects a preview URL for another Storyblok space", async () => {
   assert.equal(res.body?.error, "STORYBLOK_PREVIEW_SPACE_MISMATCH");
 });
 
+test("rejects a signed URL when its requested slug resolves to another story ID", async () => {
+  const handler = createStoryblokPreviewHandler(config, async () =>
+    new Response(JSON.stringify({ story: { id: 111222, content: { component: "page" } } }), { status: 200 })
+  );
+  const res = makeResponse();
+  await handler(makeRequest(signedUrl()), res.response);
+  assert.equal(res.status, 403);
+  assert.equal(res.body?.error, "STORYBLOK_PREVIEW_STORY_MISMATCH");
+});
+
 test("rejects unsafe story paths and unconfigured preview secrets", async () => {
   const handler = createStoryblokPreviewHandler(config, async () => new Response("{}", { status: 200 }));
   const unsafe = makeResponse();
