@@ -356,7 +356,8 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       const bankName = typeof bank.name === "string" ? bank.name.trim() : "";
       const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
       const responseDomain = typeof account.domain === "string" ? account.domain : environment;
-      const assignedCustomerCode = typeof account.customer_code === "string" ? account.customer_code : customerCode;
+      const assignedCustomer = record(account.customer);
+      const assignedCustomerCode = typeof account.customer_code === "string" ? account.customer_code : typeof assignedCustomer.customer_code === "string" ? assignedCustomer.customer_code : customerCode;
       if (!assigned.ok) {
         const providerMessage = typeof assigned.body.message === "string"
           ? assigned.body.message.replace(/[\r\n\t]+/g, " ").slice(0, 240)
