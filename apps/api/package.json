@@ -27,7 +27,9 @@
     "pg": "^8.16.3",
     "jose": "^6.1.0",
     "smile-identity-core": "3.2.1",
-    "@simplewebauthn/server": "13.3.3"
+    "@simplewebauthn/server": "13.3.3",
+    "better-auth": "1.7.6",
+    "@better-auth/passkey": "1.7.6"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
