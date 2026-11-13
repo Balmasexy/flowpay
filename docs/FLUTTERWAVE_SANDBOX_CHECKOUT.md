@@ -4,15 +4,30 @@
 
 This change adds an authenticated backend endpoint that creates a Flutterwave Standard hosted checkout in **test mode only**. It persists a unique pending FlowPay ledger transaction and Flutterwave deposit reference before requesting the provider checkout URL. The provider call is server-side; Flutterwave secret keys never reach the browser.
 
-This is deliberately not a funds-posting or live-payment release:
+This is deliberately not a live-payment release. Test settlement is enabled only on an isolated development API/database:
 
 - The endpoint refuses to run unless `FLW_ENVIRONMENT=test` and `FLW_SECRET_KEY` starts with `FLWSECK_TEST-`.
 - It does not create ledger entries, change customer balances, or mark a deposit as posted.
 - It does not implement a provider webhook or final transaction verification in this stage.
-- Transfers and live payment flags remain disabled.
+- Live payment flags remain disabled. The sandbox checkout and settlement endpoints reject production runtime or a non-development runtime label.
 - The customer-facing Money Received page continues to list only posted deposits.
 
 Flutterwave requires a server-side Standard checkout request and says the final transaction state must be verified server-side before value is provided. See the [Standard checkout guide](https://developer.flutterwave.com/docs/flutterwave-standard-1), [webhook guide](https://developer.flutterwave.com/docs/webhooks), and [authentication guide](https://developer.flutterwave.com/docs/authentication).
+
+## Required isolated test runtime
+
+The Flutterwave test credentials and customer wallet ledger must never be connected to the live production API/database. Configure the sandbox API only with:
+
+- `FLOWPAY_RUNTIME_ENV=development`
+- `NODE_ENV` other than `production`
+- `FLW_ENVIRONMENT=test`
+- `FLW_SECRET_KEY=FLWSECK_TEST-...`
+- `FLW_WEBHOOK_SECRET_HASH` equal to the Flutterwave dashboard webhook secret hash
+- `FLW_REDIRECT_URL=https://<test-web-origin>/payment-return/flutterwave`
+- Positive `FLW_DEPOSIT_MIN_MINOR` and `FLW_DEPOSIT_MAX_MINOR` values
+- A separate development `DATABASE_URL` containing the Flutterwave clearing account and `fp_payment_events` receipt table
+
+The live production API intentionally rejects Flutterwave sandbox checkout, webhook settlement and status recovery. Use the production Paystack live integration for approved real-money payment paths. Do not point the Flutterwave sandbox API at the production Neon project.
 
 ## Endpoint
 
