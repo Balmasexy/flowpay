@@ -800,7 +800,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
         accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
         environment, livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
-        message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
+        message: result.status === "success" ? `Paystack confirmed the ${environment === "live" ? "live" : "sandbox"} bank transfer. FlowPay posted the matching wallet debit.` : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
       return true;
     } catch (error) {
