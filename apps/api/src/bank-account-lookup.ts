@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -43,7 +43,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   return parsed as Record<string, unknown>;
 }
 function paystackRuntime() {
-  return getPaystackRuntime();
+  return getPaystackBankRuntime();
 }
 async function paystackGet(secret: string, path: string): Promise<PaystackResponse> {
   const response = await fetch("https://api.paystack.co" + path, {

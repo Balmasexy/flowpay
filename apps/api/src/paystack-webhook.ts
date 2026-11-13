@@ -1,5 +1,5 @@
 import { processPaystackDedicatedAccountWebhook } from "./paystack-dedicated-accounts.js";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime, getPaystackRuntime } from "./paystack-mode.js";
 import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -79,7 +79,7 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/webhooks/paystack") return false;
 
-    const paystackRuntime = getPaystackRuntime();
+    const paystackRuntime = getPaystackBankRuntime();
     const secret = paystackRuntime?.secretKey ?? "";
     const environment = paystackRuntime?.environment ?? null;
     if (!paystackRuntime || !environment) {
@@ -132,6 +132,13 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     }
     if (event.event !== "charge.success") {
       send(res, 200, { received: true, ignored: true });
+      return true;
+    }
+    // Bank payouts have their own key/runtime and explicit transfer gate.
+    // Charge events must still obey the separate live-deposit switch.
+    const paymentRuntime = getPaystackRuntime();
+    if (!paymentRuntime || paymentRuntime.environment !== environment) {
+      send(res, 200, { received: true, ignored: true, reason: "PAYSTACK_LIVE_PAYMENTS_DISABLED" });
       return true;
     }
     const data = event.data && typeof event.data === "object" && !Array.isArray(event.data)

@@ -8,7 +8,7 @@ import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
 import { createPaystackVirtualTerminalsHandler } from "./paystack-virtual-terminals.js";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime, getPaystackRuntime } from "./paystack-mode.js";
 import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
@@ -226,7 +226,7 @@ const server = createServer(async (req, res) => {
       const payoutSchema = await pool.query<{ available: boolean }>(
         "SELECT to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS available"
       );
-      const paystackRuntime = getPaystackRuntime();
+      const paystackRuntime = getPaystackBankRuntime();
       const bankPayoutsEnabled = payoutSchema.rows[0]?.available === true &&
         Boolean(paystackRuntime && isPaystackBankPayoutsEnabled(paystackRuntime.environment));
       const bankPayoutRows = payoutSchema.rows[0]?.available === true
