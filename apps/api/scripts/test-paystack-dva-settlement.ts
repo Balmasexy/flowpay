@@ -137,6 +137,16 @@ test("recognizes dedicated_nuban when Paystack places the channel under authoriz
   assert.equal(context.ledgerValues.length, 1);
 });
 
+test("accepts Paystack-generated DVA transfer references without hosted-checkout prefix", async () => {
+  const context = setup();
+  const result = await settleVerifiedPaystackDvaCharge(
+    context.pool, "live", verified({ reference: "PAYSTACK-DVA-REF-9988776655" }), "f".repeat(64)
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.body.walletCredited, true);
+  assert.equal(context.ledgerValues.length, 1);
+});
+
 test("does not credit a DVA charge when the verified Paystack customer code does not match", async () => {
   const context = setup();
   const result = await settleVerifiedPaystackDvaCharge(
