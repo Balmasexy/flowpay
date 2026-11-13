@@ -8,7 +8,7 @@ FlowPay re-resolves the bank account before recipient creation, submits a unique
 
 ## One matching Paystack key for every bank step
 
-There is **one Paystack runtime per API service**, selected by `PAYSTACK_ENVIRONMENT` and `PAYSTACK_SECRET_KEY` through `getPaystackRuntime()`. Do not create a different secret specifically for bank transfers. The same selected key and environment are used for:
+There is **one Paystack credential pair per API service**, selected by `PAYSTACK_ENVIRONMENT` and `PAYSTACK_SECRET_KEY`. Bank operations use the bank runtime, which validates that the key prefix matches the selected environment but does not depend on the separate live-deposit switch. Do not create a different secret specifically for bank transfers. The same selected key and environment are used for:
 
 1. the Nigerian bank directory;
 2. account-name resolution;
@@ -29,7 +29,7 @@ Configure these only on the isolated sandbox API connected to a disposable or De
 - `PAYSTACK_TRANSFERS_ENABLED=true`
 - `NODE_ENV` must not be `production`
 
-The test payout gate remains closed unless all required sandbox switches and the matching test key/environment are present. A successful Paystack test transfer is simulated; it does **not** move real money. Use only Paystack's published sandbox bank details, never a production customer's bank account.
+The test bank runtime requires a matching test key and a non-production Node runtime. The test payout gate additionally requires all sandbox switches. Keep this service isolated from production and connect it to a separate development database. A successful Paystack test transfer is simulated; it does **not** move real money. Use only Paystack's published sandbox bank details, never a production customer's bank account.
 
 ### Production API service
 
@@ -37,8 +37,9 @@ The production service must use the matching live configuration:
 
 - `PAYSTACK_ENVIRONMENT=live`
 - `PAYSTACK_SECRET_KEY=sk_live_…` (store the actual secret only in Render's encrypted environment settings)
-- `PAYSTACK_LIVE_PAYMENTS_ENABLED=true`
 - `PAYSTACK_LIVE_TRANSFERS_ENABLED=true` only after Paystack has enabled/approved Transfers for the FlowPay business and operational controls are confirmed
+
+The bank directory and account-name verification need only the matching production live key and `NODE_ENV=production`. They do **not** require `PAYSTACK_LIVE_PAYMENTS_ENABLED=true`; that switch continues to govern live deposit checkout and charge-success processing. The bank payout route separately requires `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`.
 - `NODE_ENV=production`
 
 The live transfer switch is separate from the general live-payment switch. A correctly configured live checkout key does not, by itself, prove that Paystack Transfers is approved or funded. Keep `PAYSTACK_LIVE_TRANSFERS_ENABLED` unset or `false` until Paystack has confirmed transfer access, the merchant balance/funding route is ready, and OTP/approval, fees, limits, failure, reversal, webhook and reconciliation procedures have been reviewed. A live bank transfer moves real money.
@@ -51,9 +52,9 @@ The live transfer switch is separate from the general live-payment switch. A cor
 2. FlowPay verifies the beneficiary name with Paystack.
 3. Customer reviews the beneficiary, masked account number, bank and amount.
 4. Customer authorizes with the transaction PIN.
-5. FlowPay re-resolves the beneficiary, creates the provider recipient in the selected domain, locks the customer's NGN wallet, checks posted balance less pending payout reservations, and creates an idempotent pending payout record.
+5. FlowPay re-resolves the beneficiary, creates the provider recipient in the selected domain, locks the customer's NGN wallet, checks posted balance less pending payout reservations, and creates an idempotent pending payout record. Paystack independently requires a registered business, a payout-enabled integration, valid recipient, and enough Paystack balance to cover the transfer and provider fee.
 6. FlowPay submits and verifies the transfer. Only an authoritative success in the same Paystack domain posts one balanced customer-wallet debit and Paystack clearing-account credit. A final unsuccessful result fails the pending ledger transaction without debiting the wallet.
-7. Pending, OTP and uncertain transfers remain reserved and can be refreshed through the status endpoint. Signed transfer webhooks are verified through the same selected secret before reconciliation.
+7. Pending, OTP and uncertain transfers remain reserved and can be refreshed through the status endpoint. An `otp` status is not success: Paystack requires the merchant's authorized business contact to complete its transfer approval step. The business OTP must never be requested from the customer or placed in browser code. Signed transfer webhooks are verified through the same selected secret before reconciliation.
 
 ## API routes
 
@@ -83,4 +84,4 @@ Tests must verify matching key prefixes and provider domains, the closed-by-defa
 
 ## Activation boundary
 
-Code now selects and reports the same Paystack environment throughout bank lookup and transfer handling. That does not prove that the Render production secret is live or that Paystack has approved/enabled live Transfers. Render's stored secrets cannot be read through this repository workflow. Verify the masked key's prefix and environment directly in the production API service's Render Environment page; only after provider approval and the operational review should an authorized operator enable `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`.
+Code now selects and reports the same Paystack environment throughout bank lookup and transfer handling. Bank lookup can work with a matching live key even while live deposits remain disabled. That does not prove that the Render production secret is live or that Paystack has approved/enabled live Transfers. Render's stored secrets cannot be read through this repository workflow. Verify the masked key's prefix and environment directly in the production API service's Render Environment page; only after provider approval and the operational review should an authorized operator enable `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`.
