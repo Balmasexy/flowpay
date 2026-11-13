@@ -228,7 +228,49 @@ export default function CustomerCards({ token, registeredName }: { token: string
       </button>
     </div>
 
-    <div className="fp-detail-list">
+    <div
+      aria-label="FlowPay virtual card preview"
+      style={{
+        position:"relative",overflow:"hidden",minHeight:210,marginTop:18,padding:22,
+        borderRadius:22,color:"#fff",background:"linear-gradient(125deg,#ff7a18 0%,#f04f24 52%,#9b2c2c 100%)",
+        boxShadow:"0 16px 34px rgba(173,65,25,.22)",display:"flex",flexDirection:"column",justifyContent:"space-between"
+      }}
+    >
+      <div aria-hidden="true" style={{position:"absolute",width:210,height:210,border:"1px solid rgba(255,255,255,.16)",borderRadius:"50%",right:-42,top:-92}}/>
+      <div aria-hidden="true" style={{position:"absolute",width:170,height:170,border:"1px solid rgba(255,255,255,.13)",borderRadius:"50%",right:38,bottom:-112}}/>
+      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div style={{fontSize:18,fontWeight:900,letterSpacing:".08em"}}>flow<span style={{fontWeight:400}}>pay</span></div>
+        <span style={{fontSize:10,fontWeight:800,letterSpacing:".12em",padding:"6px 9px",borderRadius:99,background:"rgba(255,255,255,.17)",border:"1px solid rgba(255,255,255,.24)"}}>
+          {cards.find(card=>card.type==="virtual")?.status?.toUpperCase() ?? "PREVIEW ONLY"}
+        </span>
+      </div>
+      <div style={{position:"relative",display:"grid",gap:12}}>
+        <div style={{fontSize:11,opacity:.82,letterSpacing:".12em"}}>VIRTUAL CARD</div>
+        <div style={{fontSize:22,fontWeight:650,letterSpacing:".13em",fontVariantNumeric:"tabular-nums"}}>
+          {cards.find(card=>card.type==="virtual")?.last4
+            ? "••••  ••••  ••••  " + cards.find(card=>card.type==="virtual")?.last4
+            : "••••  ••••  ••••  ••••"}
+        </div>
+        <div style={{display:"flex",alignItems:"end",justifyContent:"space-between",gap:12}}>
+          <div style={{display:"grid",gap:4,minWidth:0}}>
+            <span style={{fontSize:9,opacity:.75,letterSpacing:".12em"}}>CARDHOLDER</span>
+            <strong style={{fontSize:13,letterSpacing:".06em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {(cardholderName || registeredName?.trim() || "FLOWPAY CUSTOMER").toUpperCase()}
+            </strong>
+          </div>
+          <div style={{display:"grid",gap:4,textAlign:"right",flexShrink:0}}>
+            <span style={{fontSize:9,opacity:.75,letterSpacing:".12em"}}>VALID THRU</span>
+            <strong style={{fontSize:13,letterSpacing:".06em"}}>
+              {(() => { const card=cards.find(item=>item.type==="virtual"); return card?.expiryMonth && card?.expiryYear ? String(card.expiryMonth).padStart(2,"0") + "/" + String(card.expiryYear).slice(-2) : "••/••"; })()}
+            </strong>
+          </div>
+        </div>
+      </div>
+      <div style={{position:"relative",fontSize:10,opacity:.82}}>
+        {cards.some(card=>card.type==="virtual") ? "Issuer-linked card preview · Sensitive details protected" : "Design preview · No card has been issued"}
+      </div>
+    </div>
+    <div className="fp-detail-list" style={{marginTop:14}}>
       <div><span>Cardholder name</span><b>{cardholderName || registeredName?.trim() || "Not available on this profile"}</b></div>
       <div><span>Card number</span><b>Available only after issuer-confirmed issuance</b></div>
     </div>
