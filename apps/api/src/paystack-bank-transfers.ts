@@ -48,7 +48,7 @@ function validAmount(value: unknown): value is string {
   const amount = BigInt(value);
   return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER);
 }
-function payoutsEnabled(environment: "test" | "live"): boolean {
+export function isPaystackBankPayoutsEnabled(environment: "test" | "live"): boolean {
   if (environment === "test") {
     return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
       process.env.NODE_ENV !== "production" &&
@@ -440,7 +440,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
               provider_transfer_id = COALESCE($4, provider_transfer_id),
               transfer_code = COALESCE($5, transfer_code),
               status_note = CASE WHEN $2 = 'otp'
-                THEN 'Paystack requires the business owner to approve this sandbox transfer.'
+                THEN 'Paystack requires an authorized business owner to approve this transfer.'
                 ELSE 'Paystack has not reported a final transfer status.'
               END,
               updated_at = NOW()
@@ -459,7 +459,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
   const runtime = getPaystackRuntime();
-  if (!runtime || !payoutsEnabled(runtime.environment)) {
+  if (!runtime || !isPaystackBankPayoutsEnabled(runtime.environment)) {
     return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
   }
   const eventType = typeof event.event === "string" ? event.event : "";
@@ -497,7 +497,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
     const runtime = getPaystackRuntime();
     const secret = runtime?.secretKey ?? "";
     const environment = runtime?.environment ?? null;
-    if (!runtime || !environment || (isSubmit && !payoutsEnabled(environment))) {
+    if (!runtime || !environment || (isSubmit && !isPaystackBankPayoutsEnabled(environment))) {
       send(res, 503, {
         error: "PAYSTACK_BANK_PAYOUTS_NOT_ENABLED",
         environment,
@@ -800,7 +800,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
         accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
         environment, livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
-        message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
+        message: result.status === "success" ? `Paystack confirmed the ${environment === "live" ? "live" : "sandbox"} bank transfer. FlowPay posted the matching wallet debit.` : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
       return true;
     } catch (error) {
