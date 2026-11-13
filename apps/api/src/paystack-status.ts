@@ -168,7 +168,7 @@ async function settleVerifiedDeposit(
   }
 }
 
-async function markVerifiedFailure(pool: Pool, deposit: Deposit, providerStatus: string): Promise<void> {
+async function markVerifiedFailure(pool: Pool, deposit: Deposit): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -317,7 +317,7 @@ export function createPaystackDepositStatusHandler(options: Options) {
             });
             verification = "provider_verified";
           } else if (exactMatch && ["failed", "abandoned"].includes(providerStatus)) {
-            await markVerifiedFailure(pool, deposit, providerStatus);
+            await markVerifiedFailure(pool, deposit);
             verification = "provider_confirmed_failure";
           }
         } catch (error) {
