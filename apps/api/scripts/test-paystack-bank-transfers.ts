@@ -381,6 +381,59 @@ test("a definite Paystack rejection releases the reservation without a wallet de
   assert.ok(String(context.notificationValues[0][9]).includes("not accepted by Paystack"));
 });
 
+test("a verified Paystack transfer.failed webhook alerts the customer without a wallet debit", async () => {
+  const context = await setup();
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    assert.ok(url.endsWith("/transfer/verify/" + payoutRecord().reference));
+    return new Response(JSON.stringify({
+      status: true,
+      data: {
+        domain: "test", status: "failed", reference: payoutRecord().reference,
+        amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123",
+        id: 987654321,
+        recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+      }
+    }), { status: 200 });
+  };
+  const result = await processPaystackTransferWebhook(context.pool, "sk_test_unit_test_secret", {
+    event: "transfer.failed", data: { reference: payoutRecord().reference }
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "failed");
+  assert.equal(context.ledgerValues.length, 0);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "failed");
+});
+
+test("a verified Paystack transfer.reversed webhook credits back the wallet and alerts the customer", async () => {
+  const context = await setup({ ledgerStatus: "posted" });
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    assert.ok(url.endsWith("/transfer/verify/" + payoutRecord().reference));
+    return new Response(JSON.stringify({
+      status: true,
+      data: {
+        domain: "test", status: "reversed", reference: payoutRecord().reference,
+        amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123",
+        id: 987654321,
+        recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+      }
+    }), { status: 200 });
+  };
+  const result = await processPaystackTransferWebhook(context.pool, "sk_test_unit_test_secret", {
+    event: "transfer.reversed", data: { reference: payoutRecord().reference }
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "reversed");
+  assert.deepEqual(context.ledgerValues, [[reversalId, walletId, "5000000", clearingId, "-5000000"]]);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "reversed");
+  assert.ok(String(context.notificationValues[0][9]).includes("returned to your FlowPay wallet"));
+});
+
 test("incorrect transaction PIN is rejected before beneficiary creation", async () => {
   const context = await setup({ wrongPin: true });
   let providerCalls = 0;
