@@ -102,7 +102,8 @@ export function createFlutterwaveDepositStatusHandler(options:Options){
 
     if(deposit.status==="pending"){
       const secret=process.env.FLW_SECRET_KEY?.trim()??"";
-      if(process.env.FLW_ENVIRONMENT!=="test" || !secret.startsWith("FLWSECK_TEST-")){
+      if(process.env.FLW_ENVIRONMENT!=="test" || !secret.startsWith("FLWSECK_TEST-") ||
+         process.env.FLOWPAY_RUNTIME_ENV!=="development" || process.env.NODE_ENV==="production"){
         send(res,503,{error:"FLUTTERWAVE_SANDBOX_CONFIGURATION_REQUIRED"});return true;
       }
       const providerId=deposit.provider_transaction_id??suppliedTransactionId;
