@@ -131,7 +131,9 @@ function view(row: DedicatedAccountRow | null) {
 
 export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: PaystackRecord) {
   const runtime = getPaystackBankRuntime();
-  if (!runtime || !dedicatedAccountsEnabled(runtime.environment)) return false;
+  // Assignment controls only new DVA requests; provider webhooks must still
+  // finish a previously accepted assignment when that switch is turned off.
+  if (!runtime) return false;
   const environment = runtime.environment;
   const eventName = typeof event.event === "string" ? event.event : "";
   if (![
