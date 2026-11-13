@@ -44,6 +44,7 @@ async function makeContext(options: SetupOptions = {}) {
 
   const statements: { sql: string; values?: unknown[] }[] = [];
   const ledgerValues: unknown[][] = [];
+  const notificationValues: unknown[][] = [];
   const client = {
     query: async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
@@ -107,6 +108,10 @@ async function makeContext(options: SetupOptions = {}) {
         return { rowCount: 1, rows: [{ id: transactionId }] };
       }
       if (sql.includes("INSERT INTO public.fp_internal_transfer_details")) return { rowCount: 1, rows: [] };
+      if (sql.includes("INSERT INTO public.fp_customer_notifications")) {
+        notificationValues.push(values ?? []);
+        return { rowCount: 1, rows: [] };
+      }
       if (sql.includes("INSERT INTO public.fp_ledger_entries")) {
         ledgerValues.push(values ?? []);
         return { rowCount: 2, rows: [] };
@@ -145,7 +150,7 @@ async function makeContext(options: SetupOptions = {}) {
     } as unknown as ServerResponse;
     return { res, result: () => ({ status, body: body ? JSON.parse(body) : null }) };
   };
-  return { handler, request, response, statements, ledgerValues };
+  return { handler, request, response, statements, ledgerValues, notificationValues };
 }
 
 function transferBody(overrides: Record<string, unknown> = {}) {
@@ -173,6 +178,17 @@ test("posts a ₦50,000 transfer with one balanced sender debit and recipient cr
   ]);
   assert.ok(context.statements.some(item => item.sql === "COMMIT"));
   assert.ok(context.statements.some(item => item.sql.includes("SET status = 'posted'")));
+  assert.equal(context.notificationValues.length, 2);
+  const sent = context.notificationValues.find(values => values[0] === senderId);
+  const received = context.notificationValues.find(values => values[0] === recipientId);
+  assert.ok(sent);
+  assert.ok(received);
+  assert.equal(sent?.[5], "sent");
+  assert.equal(sent?.[6], "success");
+  assert.equal(received?.[5], "received");
+  assert.equal(received?.[6], "success");
+  assert.ok(String(sent?.[9]).includes(accountName));
+  assert.ok(String(received?.[9]).includes("Test Sender"));
 });
 
 test("does not create a ledger transaction when the sender balance is insufficient", async () => {
