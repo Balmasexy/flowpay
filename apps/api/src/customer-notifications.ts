@@ -8,6 +8,15 @@ type Options = {
   issuer?: string;
   audience?: string;
 };
+export function formatNgnMinor(amountMinor: string): string {
+  const amount = Number(amountMinor) / 100;
+  try {
+    return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(amount);
+  } catch {
+    return "NGN " + amount.toFixed(2);
+  }
+}
+
 type TransferNotification = {
   userId: string;
   eventKey: string;
