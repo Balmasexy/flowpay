@@ -1002,3 +1002,31 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .fp-notification-panel{position:fixed;top:64px;right:8px;max-height:calc(100vh - 88px)}
   .fp-notification-toast{top:68px;right:10px}
 }
+
+
+/* FlowPay login OTP and recovery controls */
+.fp-login-form-wrap .fp-login-back[type="button"] {
+  border:0;
+  background:transparent;
+  padding:7px 0;
+  color:#a9510e;
+  cursor:pointer;
+  font-size:10px;
+  text-align:left;
+}
+.fp-login-form-wrap .fp-login-back[type="button"]:disabled { opacity:.55; cursor:not-allowed; }
+.fp-login-help .fp-login-text-button {
+  border:0;
+  padding:0;
+  background:transparent;
+  color:#c76113;
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+  text-decoration:none;
+}
+.fp-login-help .fp-login-text-button:hover { text-decoration:underline; }
+.fp-login-form-wrap input[inputmode="numeric"] {
+  letter-spacing:5px;
+  font-variant-numeric:tabular-nums;
+}
