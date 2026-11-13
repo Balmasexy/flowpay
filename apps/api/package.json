@@ -20,7 +20,8 @@
     "test:customer-ai": "tsx --test scripts/test-customer-ai.ts",
     "test:deposit-receipts": "tsx --test scripts/test-deposit-receipts.ts",
     "test:vtpass-bills": "tsx --test scripts/test-vtpass-bills.ts",
-    "test:storyblok-preview": "tsx --test scripts/test-storyblok-preview.ts"
+    "test:storyblok-preview": "tsx --test scripts/test-storyblok-preview.ts",
+    "test:passkey-prototype": "tsx --test scripts/test-passkey-prototype.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
