@@ -10,6 +10,7 @@ ALTER TABLE public.fp_accounts
     (account_type = 'system' AND system_account_role IN (
       'flutterwave_ngn_clearing',
       'paystack_ngn_clearing',
+      'manual_receipt_ngn_clearing',
       'vtpass_ngn_clearing'
     ))
   );
