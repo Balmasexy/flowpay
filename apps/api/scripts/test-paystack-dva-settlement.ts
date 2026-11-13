@@ -176,7 +176,7 @@ test("accepts Paystack-generated DVA transfer references without hosted-checkout
 test("does not credit a DVA charge when the verified Paystack customer code does not match", async () => {
   const context = setup();
   const result = await settleVerifiedPaystackDvaCharge(
-    context.pool, "live", verified({ customer: { customer_code: "CUS_someone_else" } }), "b".repeat(64)
+    context.pool, "live", verified({ customer: { customer_code: "CUS_other123" } }), "b".repeat(64)
   );
   assert.equal(result.status, 202);
   assert.equal(result.body.reason, "DEDICATED_ACCOUNT_CUSTOMER_MISMATCH");
