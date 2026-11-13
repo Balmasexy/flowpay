@@ -30,8 +30,13 @@ type PasskeyRow = {
   counter: string | number;
   transports: string | null;
 };
+type SessionAuth = {
+  api: {
+    getSession(input: { headers: Headers }): Promise<{ user: { id: string } } | null>;
+  };
+};
 type Options = {
-  auth: ReturnType<typeof betterAuth>;
+  auth: SessionAuth;
   pool: Pool;
   handler: ReturnType<typeof toNodeHandler>;
   rpID: string;
@@ -438,7 +443,7 @@ export function createPasskeyPrototypeService() {
         }
       }
     });
-    service={auth,pool,handler:toNodeHandler(auth),rpID,origin};
+    service={auth:auth as unknown as SessionAuth,pool,handler:toNodeHandler(auth),rpID,origin};
     disabledReason="";
   }
 
