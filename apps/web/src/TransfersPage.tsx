@@ -62,6 +62,8 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   const [banks, setBanks] = useState<Bank[]>([]);
   const [banksLoading, setBanksLoading] = useState(true);
   const [banksError, setBanksError] = useState("");
+  const [bankDirectoryMessage, setBankDirectoryMessage] = useState("");
+  const [bankRequiredConfiguration, setBankRequiredConfiguration] = useState<string[]>([]);
   const [bankDirectoryReload, setBankDirectoryReload] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
   const [bankCode, setBankCode] = useState("");
@@ -147,6 +149,8 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     const controller = new AbortController();
     setBanksLoading(true);
     setBanksError("");
+    setBankDirectoryMessage("");
+    setBankRequiredConfiguration([]);
     fetch(apiAddress() + "/customer/banks", {
       method: "GET", credentials: "omit", signal: controller.signal,
       headers: { Authorization: "Bearer " + token }
@@ -154,6 +158,10 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok || !Array.isArray(body.banks)) {
         const key = typeof body.error === "string" ? body.error : "BANK_LIST_UNAVAILABLE";
+        if (typeof body.message === "string") setBankDirectoryMessage(body.message);
+        if (Array.isArray(body.requiredConfiguration)) {
+          setBankRequiredConfiguration(body.requiredConfiguration.filter((item: unknown): item is string => typeof item === "string"));
+        }
         throw new Error(key);
       }
       const items = body.banks.filter((item: unknown): item is Bank => {
