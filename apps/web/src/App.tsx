@@ -4,6 +4,7 @@ import BulkOperations from "./BulkOperations";
 import StoryblokPublicPage from "./StoryblokPublicPage";
 import BalmzAiAssistant from "./BalmzAiAssistant";
 import LoginPage from "./LoginPage";
+import PasskeyPrototypePage from "./PasskeyPrototypePage";
 import SignupPage from "./SignupPage";
 import CustomerProfile from "./CustomerProfile";
 import CustomerActivity from "./CustomerActivity";
@@ -145,6 +146,7 @@ export default function App() {
     return <StoryblokPublicPage slug={slug} />;
   }
   if (path === "/login") return <LoginPage />;
+  if (path === "/passkey-lab") return <PasskeyPrototypePage />;
   if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
   if (path === "/admin" || path.startsWith("/admin/")) {
     if (!authConfigured) return <LoginPage />;
