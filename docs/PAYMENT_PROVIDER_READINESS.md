@@ -22,6 +22,27 @@ Live payout submissions require Paystack Transfers approval and:
 
 The separate `PAYSTACK_LIVE_PAYMENTS_ENABLED` flag governs live Paystack deposit checkout, not the independent live bank-payout gate. Live bank transfers move real money and must not be switched on just to make the button look active.
 
+## Paystack deposits and webhook settlement
+
+The backend supports authenticated NGN checkout, idempotent pending-deposit creation, hosted Paystack checkout, transaction verification, customer-owned status lookup, webhook settlement, and balanced customer-wallet / Paystack-clearing ledger posting. The authenticated status endpoint also re-checks a pending reference against Paystack so webhook delays do not leave a successful deposit permanently pending.
+
+Register the production webhook URL in the Paystack dashboard:
+
+`https://flowpay-backend-qz79.onrender.com/webhooks/paystack`
+
+Subscribe the endpoint to `charge.success`, `transfer.success`, `transfer.failed`, and `transfer.reversed`. Dedicated-account assignment and customer-identification events are processed by the same endpoint when that feature is enabled. Paystack retries a webhook when the endpoint does not return a successful response; the handler is idempotent and checks the ledger before acknowledging a previously posted transaction.
+
+For current Paystack signing, configure `PAYSTACK_WEBHOOK_SECRET` with the webhook signing secret beginning `whsec_`. The API verifies the `Paystack-Signature` header against the raw request body, accepts any matching rotation signature, and rejects timestamps more than five minutes away from server time. During transition, it continues to accept the legacy `x-paystack-signature` header signed by `PAYSTACK_SECRET_KEY` when the new header is absent. A present but invalid/stale `Paystack-Signature` is rejected rather than falling back to the legacy header. Never put either secret in the web app or APK.
+
+Live deposits require the matching live API key/mode plus:
+- `PAYSTACK_LIVE_PAYMENTS_ENABLED=true`
+- `PAYSTACK_CALLBACK_URL=https://flowpay-web-jx7i.onrender.com/payment-return/paystack`
+- `PAYSTACK_DEPOSIT_MIN_MINOR` and `PAYSTACK_DEPOSIT_MAX_MINOR` in kobo
+
+Disabling new checkout does not disable webhook or status reconciliation for an already-created deposit. Status lookup remains available for the authenticated customer, and pending references are checked with Paystack using the configured API key.
+
+Dedicated virtual-account assignment is a separate approval-dependent capability controlled by `PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true`; it is not switched on by the deposit flag. Live transfers are separately controlled by `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`. Both require the relevant Paystack product approval and explicit operational authorization.
+
 For an isolated sandbox service (not the production API), configure `PAYSTACK_ENVIRONMENT=test`, a matching `sk_test_` secret, `FLOWPAY_RUNTIME_ENV=development`, `NODE_ENV` other than `production`, and `PAYSTACK_TRANSFERS_ENABLED=true`. The test API must use an isolated development database and test customers.
 
 ## Readiness endpoint
@@ -29,7 +50,8 @@ For an isolated sandbox service (not the production API), configure `PAYSTACK_EN
 `GET /ready` reports database status and individual provider readiness:
 - Paystack bank directory and beneficiary verification
 - Paystack bank payouts, including schema and transfer-switch readiness
-- Paystack deposits
+- Paystack deposits, including webhook signing mode and callback-side recovery
+- Paystack dedicated-account assignment readiness
 - Flutterwave sandbox deposits
 
 The endpoint reports readiness booleans and mode only. It never returns secret values. It does not globally mark all payments disabled just because one provider is not configured.
