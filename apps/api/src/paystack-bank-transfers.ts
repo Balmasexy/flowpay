@@ -853,8 +853,13 @@ async function markFailedBeforeProviderAcceptance(pool: Pool, reference: string,
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const payout = await client.query<{ transaction_id: string }>(
-      `SELECT transaction_id FROM public.fp_paystack_bank_transfers
+    const payout = await client.query<{
+      transaction_id: string; user_id: string; reference: string; amount_minor: string;
+      bank_name: string; account_number_last4: string;
+    }>(
+      `SELECT transaction_id, user_id, reference, amount_minor::text AS amount_minor,
+              bank_name, account_number_last4
+         FROM public.fp_paystack_bank_transfers
         WHERE reference = $1 FOR UPDATE`,
       [reference]
     );
@@ -880,6 +885,18 @@ async function markFailedBeforeProviderAcceptance(pool: Pool, reference: string,
         WHERE transaction_id = $1`,
       [payout.rows[0].transaction_id, note]
     );
+    await enqueueTransferNotification(client, {
+      userId: payout.rows[0].user_id,
+      eventKey: `paystack-bank:${payout.rows[0].transaction_id}:failed`,
+      transactionId: payout.rows[0].transaction_id,
+      reference: payout.rows[0].reference,
+      transferType: "bank",
+      direction: "sent",
+      status: "failed",
+      amountMinor: payout.rows[0].amount_minor,
+      title: "Bank transfer failed",
+      message: `Your ${formatNgnMinor(payout.rows[0].amount_minor)} transfer to ${payout.rows[0].bank_name} (account ending ${payout.rows[0].account_number_last4.trim()}) was not accepted by Paystack. No wallet debit was posted.`
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
