@@ -10,6 +10,7 @@ const originalFetch = globalThis.fetch;
 const originalEnvironment = {
   environment: process.env.PAYSTACK_ENVIRONMENT,
   secret: process.env.PAYSTACK_SECRET_KEY,
+  webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET,
   nodeEnv: process.env.NODE_ENV,
   livePayments: process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED
 };
@@ -23,6 +24,7 @@ function setup(options: {
 } = {}) {
   process.env.PAYSTACK_ENVIRONMENT = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
+  process.env.PAYSTACK_WEBHOOK_SECRET = "";
   const queries: string[] = [];
   let connections = 0;
   let rawPayload = Buffer.from(JSON.stringify({
@@ -95,12 +97,13 @@ function setup(options: {
     }
   }), { status: 200 });
 
-  const request = (signature?: string) => Object.assign(Readable.from([rawPayload]), {
+  const request = (signature?: string, paystackSignature?: string) => Object.assign(Readable.from([rawPayload]), {
     method: "POST",
     url: "/webhooks/paystack",
     headers: {
       "x-paystack-signature": signature ?? createHmac("sha512", process.env.PAYSTACK_SECRET_KEY!)
-        .update(rawPayload).digest("hex")
+        .update(rawPayload).digest("hex"),
+      ...(paystackSignature === undefined ? {} : { "paystack-signature": paystackSignature })
     }
   }) as unknown as IncomingMessage;
 
@@ -139,6 +142,53 @@ test("credits a verified NGN 50,000 Paystack sandbox deposit exactly once", asyn
   assert.equal(response.result().body.walletCredited, true);
   assert.ok(context.queries.some(query => query.includes("INSERT INTO public.fp_ledger_entries")));
   assert.ok(context.queries.some(query => query.includes("UPDATE public.fp_paystack_deposits")));
+});
+
+test("accepts the timestamped Paystack-Signature header and checks every rotation signature", async () => {
+  const context = setup();
+  process.env.PAYSTACK_WEBHOOK_SECRET = "whsec_unit_test_signing_secret";
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha512", process.env.PAYSTACK_WEBHOOK_SECRET)
+    .update(String(timestamp) + ".")
+    .update(Buffer.from(JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 123456789,
+        reference: "flowpay-ps-00000000000000000000000000000001",
+        status: "success", amount: 250000, currency: "NGN"
+      }
+    })))
+    .digest("hex");
+  // The first v1 entry represents an older signing key; the second is current.
+  const header = `t=${timestamp},v1=whk_previous:${"0".repeat(128)},v1=whk_current:${signature}`;
+  const response = context.response();
+  await createPaystackWebhookHandler({ pool: context.pool })(context.request(undefined, header), response.res);
+  assert.equal(response.result().status, 200);
+  assert.equal(response.result().body.walletCredited, true);
+});
+
+test("rejects a stale Paystack-Signature and does not fall back to a valid legacy header", async () => {
+  const context = setup();
+  process.env.PAYSTACK_WEBHOOK_SECRET = "whsec_unit_test_signing_secret";
+  const staleTimestamp = Math.floor(Date.now() / 1000) - 301;
+  const signature = createHmac("sha512", process.env.PAYSTACK_WEBHOOK_SECRET)
+    .update(String(staleTimestamp) + ".")
+    .update(Buffer.from(JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 123456789,
+        reference: "flowpay-ps-00000000000000000000000000000001",
+        status: "success", amount: 250000, currency: "NGN"
+      }
+    })))
+    .digest("hex");
+  const response = context.response();
+  await createPaystackWebhookHandler({ pool: context.pool })(
+    context.request(undefined, `t=${staleTimestamp},v1=whk_current:${signature}`),
+    response.res
+  );
+  assert.equal(response.result().status, 401);
+  assert.equal(context.connections(), 0);
 });
 
 test("invalid signature is rejected before provider verification or database access", async () => {
@@ -206,6 +256,8 @@ process.on("exit", () => {
   else process.env.PAYSTACK_ENVIRONMENT = originalEnvironment.environment;
   if (originalEnvironment.secret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
   else process.env.PAYSTACK_SECRET_KEY = originalEnvironment.secret;
+  if (originalEnvironment.webhookSecret === undefined) delete process.env.PAYSTACK_WEBHOOK_SECRET;
+  else process.env.PAYSTACK_WEBHOOK_SECRET = originalEnvironment.webhookSecret;
   if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = originalEnvironment.nodeEnv;
   if (originalEnvironment.livePayments === undefined) delete process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED;
