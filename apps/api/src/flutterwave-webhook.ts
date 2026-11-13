@@ -4,14 +4,7 @@ import type { Pool } from "pg";
 import { settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
 
 type Options = { pool: Pool | null };
-type Deposit = {
-  transaction_id: string;
-  provider_tx_ref: string;
-  provider_transaction_id: string | null;
-  amount_minor: string;
-  currency: string;
-  status: "pending" | "posted" | "failed";
-};
+
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status);
