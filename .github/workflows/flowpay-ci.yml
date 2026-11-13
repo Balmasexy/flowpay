@@ -142,7 +142,14 @@ jobs:
           node --input-type=module -e '
             import fs from "node:fs";
             const readiness = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-ready.json", "utf8"));
-            if (readiness.database !== "not_configured" || readiness.payments !== "disabled") {
+            const payments = readiness.payments ?? {};
+            const paystack = payments.paystack ?? {};
+            const flutterwave = payments.flutterwave ?? {};
+            if (readiness.database !== "not_configured" ||
+                paystack.bankDirectory !== false ||
+                paystack.bankTransfers !== false ||
+                paystack.deposits !== false ||
+                flutterwave.deposits !== false) {
               throw new Error("Unsafe or unexpected /ready response: " + JSON.stringify(readiness));
             }
           '
