@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 
 type Options = {
   pool: Pool | null;
@@ -130,7 +130,7 @@ function view(row: DedicatedAccountRow | null) {
 }
 
 export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: PaystackRecord) {
-  const runtime = getPaystackRuntime();
+  const runtime = getPaystackBankRuntime();
   if (!runtime || !dedicatedAccountsEnabled(runtime.environment)) return false;
   const environment = runtime.environment;
   const eventName = typeof event.event === "string" ? event.event : "";
