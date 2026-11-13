@@ -90,6 +90,9 @@ jobs:
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api
 
+      - name: Test private customer transfer notifications and read controls
+        run: npm run test:customer-notifications --prefix apps/api
+
       - name: Test authenticated FlowPay BALMZ AI customer assistant
         run: npm run test:customer-ai --prefix apps/api
 
