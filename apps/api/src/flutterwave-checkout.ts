@@ -80,7 +80,7 @@ async function markProviderFailure(pool: Pool, transactionId: string) {
     await client.query("BEGIN");
     await client.query(
       `UPDATE public.fp_flutterwave_deposits
-          SET status = 'failed'
+          SET status = 'failed', updated_at = NOW()
         WHERE transaction_id = $1 AND status = 'pending'`,
       [transactionId]
     );
@@ -191,9 +191,13 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     const redirectUrl = validHttpsUrl(process.env.FLW_REDIRECT_URL?.trim());
     const minMinor = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
     const maxMinor = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
+    const webhookSecretHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
     if (
+      process.env.NODE_ENV === "production" ||
+      process.env.FLOWPAY_RUNTIME_ENV !== "development" ||
       process.env.FLW_ENVIRONMENT !== "test" ||
       !secretKey.startsWith("FLWSECK_TEST-") ||
+      !webhookSecretHash ||
       !redirectUrl ||
       !Number.isSafeInteger(minMinor) || minMinor <= 0 ||
       !Number.isSafeInteger(maxMinor) || maxMinor < minMinor
@@ -222,6 +226,20 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     }
     try {
       await client.query("BEGIN");
+      const settlementPrerequisites = await client.query<{ clearing: boolean; eventTable: boolean }>(
+        `SELECT
+           EXISTS (
+             SELECT 1 FROM public.fp_accounts
+              WHERE account_type='system' AND currency='NGN'
+                AND system_account_role='flutterwave_ngn_clearing' AND status='active'
+           ) AS clearing,
+           to_regclass('public.fp_payment_events') IS NOT NULL AS "eventTable"`
+      );
+      if (settlementPrerequisites.rows[0]?.clearing !== true || settlementPrerequisites.rows[0]?.eventTable !== true) {
+        await client.query("ROLLBACK");
+        send(res, 503, { error: "FLUTTERWAVE_SETTLEMENT_NOT_CONFIGURED" });
+        return true;
+      }
       const accounts = await client.query<{ id: string }>(
         `SELECT id
            FROM public.fp_accounts
@@ -252,9 +270,10 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
         transactionId = inserted.rows[0].id;
         await client.query(
           `INSERT INTO public.fp_flutterwave_deposits
-             (transaction_id, user_id, account_id, provider_tx_ref, amount_minor, currency, status)
-           VALUES ($1, $2, $3, $4, $5, 'NGN', 'pending')`,
-          [transactionId, userId, accounts.rows[0].id, providerReference, String(amountMinor)]
+             (transaction_id, user_id, account_id, idempotency_key, provider_reference,
+              provider_tx_ref, amount_minor, currency, status)
+           VALUES ($1, $2, $3, $4, $5, $5, $6, 'NGN', 'pending')`,
+          [transactionId, userId, accounts.rows[0].id, databaseIdempotencyKey, providerReference, String(amountMinor)]
         );
         wasCreated = true;
       } else {
@@ -369,7 +388,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     try {
       const saved = await pool.query(
         `UPDATE public.fp_flutterwave_deposits
-            SET checkout_url = $2
+            SET checkout_url = $2, updated_at = NOW()
           WHERE transaction_id = $1 AND status = 'pending'`,
         [transactionId, checkoutUrl]
       );
