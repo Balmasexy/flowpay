@@ -9,7 +9,9 @@ import { createPaystackWebhookHandler } from "../src/paystack-webhook.js";
 const originalFetch = globalThis.fetch;
 const originalEnvironment = {
   environment: process.env.PAYSTACK_ENVIRONMENT,
-  secret: process.env.PAYSTACK_SECRET_KEY
+  secret: process.env.PAYSTACK_SECRET_KEY,
+  nodeEnv: process.env.NODE_ENV,
+  livePayments: process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED
 };
 
 function setup(options: {
@@ -164,6 +166,21 @@ test("non-test provider transactions are rejected before database access", async
   assert.equal(context.connections(), 0);
 });
 
+test("reconciles an accepted live deposit after the new-deposit switch is disabled", async () => {
+  const context = setup({ domain: "live" });
+  process.env.PAYSTACK_ENVIRONMENT = "live";
+  process.env.PAYSTACK_SECRET_KEY = "sk_live_unit_test_secret";
+  process.env.NODE_ENV = "production";
+  process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = "false";
+  const response = context.response();
+  await createPaystackWebhookHandler({ pool: context.pool })(context.request(), response.res);
+  assert.equal(response.result().status, 200);
+  assert.equal(response.result().body.providerVerified, true);
+  assert.equal(response.result().body.status, "posted");
+  assert.equal(response.result().body.walletCredited, true);
+  assert.ok(context.queries.some(query => query.includes("INSERT INTO public.fp_ledger_entries")));
+});
+
 test("a duplicate receipt can resume a verified deposit that was not yet posted", async () => {
   const context = setup({ duplicate: true, transactionStatus: "pending" });
   const response = context.response();
@@ -189,4 +206,8 @@ process.on("exit", () => {
   else process.env.PAYSTACK_ENVIRONMENT = originalEnvironment.environment;
   if (originalEnvironment.secret === undefined) delete process.env.PAYSTACK_SECRET_KEY;
   else process.env.PAYSTACK_SECRET_KEY = originalEnvironment.secret;
+  if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalEnvironment.nodeEnv;
+  if (originalEnvironment.livePayments === undefined) delete process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED;
+  else process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = originalEnvironment.livePayments;
 });
