@@ -588,13 +588,15 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
                 onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
               <button className="fp-primary" type="button" onClick={() => void submitBankTransfer()}
                 disabled={bankTransferBusy || !pinSet || !/^\d{6}$/.test(transactionPin)}>
-                {bankTransferBusy ? "Submitting to Paystack…" : `Confirm bank transfer · ${bankPayoutEnvironment === "live" ? "Live" : "Test"} mode`}
+                {bankTransferBusy ? "Submitting to Paystack…" : `Confirm bank transfer · ${bankPayoutEnvironment === "live" ? "Live mode" : bankPayoutEnvironment === "test" ? "Test mode" : "Provider not configured"}`}
               </button>
             </>}
             <small className="fp-muted">
               {bankPayoutEnvironment === "live"
                 ? "Live mode: this submits a real bank payout through Paystack after you confirm."
-                : "Test mode is simulated and does not move real money."}
+                : bankPayoutEnvironment === "test"
+                  ? "Test mode is simulated and does not move real money."
+                  : "The To Bank route remains available, but Paystack provider configuration is required before a payout can be submitted."}
             </small>
           </div>}
           {bankTransferResult && <div className="fp-preview-warning" role="status" aria-live="polite">
