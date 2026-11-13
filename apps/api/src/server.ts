@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
+import { createFlutterwaveDepositStatusHandler } from "./flutterwave-status.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
 import { createPaystackVirtualTerminalsHandler } from "./paystack-virtual-terminals.js";
@@ -42,6 +43,7 @@ const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
+const flutterwaveDepositStatusHandler = createFlutterwaveDepositStatusHandler({ pool, jwks, issuer, audience });
 const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, audience });
 const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
 const paystackVirtualTerminalsHandler = createPaystackVirtualTerminalsHandler({ pool, jwks, issuer, audience });
@@ -88,6 +90,7 @@ const server = createServer(async (req, res) => {
   if (await vtpassBillsHandler(req, res)) return;
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
+  if (await flutterwaveDepositStatusHandler(req, res)) return;
   if (await paystackWebhookHandler(req, res)) return;
   if (await paystackVirtualTerminalsHandler(req, res)) return;
   if (await paystackDepositStatusHandler(req, res)) return;
@@ -372,14 +375,25 @@ const server = createServer(async (req, res) => {
              FROM public.fp_flutterwave_deposits AS d
             WHERE d.user_id = $1 AND d.status = 'posted'
             ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [userId]),
-        pool.query<{ available: boolean; clearing_account_available: boolean }>(
+        pool.query<{
+          available: boolean; clearing_account_available: boolean;
+          flutterwave_available: boolean; flutterwave_clearing_account_available: boolean;
+          payment_events_available: boolean;
+        }>(
           `SELECT
              to_regclass('public.fp_paystack_deposits') IS NOT NULL AS available,
+             to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_available,
+             to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events_available,
              EXISTS (
                SELECT 1 FROM public.fp_accounts
                 WHERE account_type = 'system' AND currency = 'NGN'
                   AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
-             ) AS clearing_account_available`)
+             ) AS clearing_account_available,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'flutterwave_ngn_clearing' AND status = 'active'
+             ) AS flutterwave_clearing_account_available`)
       ]);
       const paystackAvailable = paystackTable.rows[0]?.available === true &&
         paystackTable.rows[0]?.clearing_account_available === true;
@@ -410,6 +424,22 @@ const server = createServer(async (req, res) => {
         Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR) > 0 &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
+      const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
+      const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
+      const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
+      const flwRedirectUrl = process.env.FLW_REDIRECT_URL?.trim() ?? "";
+      const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      let flwRedirectIsHttps = false;
+      try { flwRedirectIsHttps = new URL(flwRedirectUrl).protocol === "https:"; } catch { flwRedirectIsHttps = false; }
+      const flutterwaveConfigured = paystackTable.rows[0]?.flutterwave_available === true &&
+        paystackTable.rows[0]?.flutterwave_clearing_account_available === true &&
+        paystackTable.rows[0]?.payment_events_available === true &&
+        Boolean(jwks && issuer && audience) &&
+        process.env.FLW_ENVIRONMENT === "test" &&
+        flwSecret.startsWith("FLWSECK_TEST-") && flwRedirectIsHttps &&
+        flwWebhookHash.length > 0 &&
+        Number.isSafeInteger(flwMin) && flwMin > 0 &&
+        Number.isSafeInteger(flwMax) && flwMax >= flwMin;
       send(res, 200, {
         deposits,
         environment: paystackRuntime?.environment ?? null,
@@ -417,7 +447,7 @@ const server = createServer(async (req, res) => {
         depositProviders: {
           paystack: paystackConfigured,
           paystackEnvironment: paystackRuntime?.environment ?? null,
-          flutterwave: false
+          flutterwave: flutterwaveConfigured
         }
       });
     } catch (error) {
