@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import {
-  ArrowLeft, Fingerprint, KeyRound, LockKeyhole, LogIn, LogOut,
-  RefreshCw, ShieldCheck, Smartphone, UserPlus
+  ArrowLeft, Fingerprint, KeyRound, LogOut,
+  RefreshCw, ShieldCheck, Smartphone
 } from "lucide-react";
 import { passkeyPrototypeApiBase, passkeyPrototypeAuthClient } from "./passkey-prototype-auth-client";
 
@@ -63,8 +63,7 @@ export default function PasskeyPrototypePage() {
   const [approval,setApproval]=useState<Record<string,unknown>|null>(null);
 
   const amountMinor=useMemo(()=>amountToMinor(amount),[amount]);
-  const canUseWebAuthn=typeof window!=="undefined" && "PublicKeyCredential" in window &&
-    Boolean(navigator.credentials && navigator.credentials.create && navigator.credentials.get);
+  const canUseWebAuthn=typeof window!=="undefined" && window.isSecureContext && "PublicKeyCredential" in window;
 
   const loadSecurity=useCallback(async()=>{
     if(!user) { setPasskeys([]); setStatus(null); return; }
