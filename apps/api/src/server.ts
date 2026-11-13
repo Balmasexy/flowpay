@@ -117,7 +117,7 @@ const server = createServer(async (req, res) => {
         status: "not_ready",
         database: "not_configured",
         payments: {
-          paystack: { bankDirectory: false, bankTransfers: false, deposits: false },
+          paystack: { bankDirectory: false, bankTransfers: false, deposits: false, dedicatedAccounts: false },
           flutterwave: { deposits: false }
         }
       });
@@ -127,12 +127,13 @@ const server = createServer(async (req, res) => {
       const [database, schema] = await Promise.all([
         pool.query<{ database_name: string }>("SELECT current_database() AS database_name"),
         pool.query<{
-          bank_payouts: boolean; paystack_deposits: boolean; clearing_account: boolean;
+          bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; clearing_account: boolean;
           flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
         }>(
           `SELECT
              to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS bank_payouts,
              to_regclass('public.fp_paystack_deposits') IS NOT NULL AS paystack_deposits,
+             to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS dedicated_accounts,
              to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
              to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
              EXISTS (
@@ -158,7 +159,21 @@ const server = createServer(async (req, res) => {
         paystackDepositRuntime && isHttpsUrl(paystackCallback) &&
         Number.isSafeInteger(paystackMin) && paystackMin > 0 &&
         Number.isSafeInteger(paystackMax) && paystackMax >= paystackMin &&
-        schema.rows[0]?.paystack_deposits === true
+        schema.rows[0]?.paystack_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.clearing_account === true
+      );
+      const dedicatedAccountsGate = paystackBankRuntime?.environment === "test"
+        ? process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+          process.env.NODE_ENV !== "production" &&
+          process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED === "true"
+        : paystackBankRuntime?.environment === "live"
+          ? process.env.NODE_ENV === "production" &&
+            process.env.PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED === "true"
+          : false;
+      const dedicatedAccountsReady = Boolean(
+        jwksUrl && issuer && dedicatedAccountsGate &&
+        schema.rows[0]?.dedicated_accounts === true && paystackBankRuntime
       );
       const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
       const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
@@ -192,7 +207,8 @@ const server = createServer(async (req, res) => {
           bankTransferGate: paystackBankRuntime
             ? (bankTransfersReady ? "ready" : "configured_but_not_enabled")
             : "provider_not_configured",
-          deposits: paystackDepositsReady
+          deposits: paystackDepositsReady,
+          dedicatedAccounts: dedicatedAccountsReady
         },
         flutterwave: {
           environment: process.env.FLW_ENVIRONMENT === "test" ? "test" : null,
