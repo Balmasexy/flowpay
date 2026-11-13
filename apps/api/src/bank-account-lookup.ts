@@ -121,7 +121,21 @@ export function createBankAccountLookupHandler(options: Options) {
     const runtime = paystackRuntime();
     const secret = runtime?.secretKey ?? "";
     const environment = runtime?.environment ?? null;
-    if (!runtime || !environment) { send(res, 503, { error: "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED" }); return true; }
+    if (!runtime || !environment) {
+      const selectedEnvironment = process.env.PAYSTACK_ENVIRONMENT === "test" ||
+        process.env.PAYSTACK_ENVIRONMENT === "live" ? process.env.PAYSTACK_ENVIRONMENT : null;
+      send(res, 503, {
+        error: "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED",
+        environment: selectedEnvironment,
+        requiredConfiguration: selectedEnvironment === "live"
+          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY must be an sk_live_ key", "NODE_ENV=production"]
+          : selectedEnvironment === "test"
+            ? ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY must be an sk_test_ key", "NODE_ENV must not be production"]
+            : ["PAYSTACK_ENVIRONMENT=live and a matching sk_live_ key on production, or an isolated non-production test API with PAYSTACK_ENVIRONMENT=test and a matching sk_test_ key"],
+        message: "The bank directory remains available in FlowPay, but the API has no valid Paystack bank-provider configuration."
+      });
+      return true;
+    }
     try {
       if (req.method === "GET" && pathname === "/customer/banks") {
         const banks = await fetchBanks(secret);
