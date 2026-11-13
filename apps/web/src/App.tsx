@@ -275,6 +275,7 @@ function RouteContent({path,go,user,token,onPhotoChange,transferMode}:{path:stri
   if (path === "/search") return <FlowPaySearch go={go}/>;
   if (path === "/money-received") return <MoneyReceived token={token}/>;
   if (path === "/payment-return/paystack") return <MoneyReceived token={token} paymentReturn/>;
+  if (path === "/payment-return/flutterwave") return <MoneyReceived token={token} paymentReturn paymentProvider="flutterwave"/>;
   if (path === "/money-sent") return <MoneySent token={token}/>;
   if (path === "/account-number") return <CustomerAccountDetails token={token} go={go}/>;
   if (path === "/more") return <MorePage go={go}/>;
