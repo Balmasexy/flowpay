@@ -22,6 +22,7 @@ function verified(overrides: Record<string, unknown> = {}) {
     currency: "NGN",
     channel: "dedicated_nuban",
     authorization: {
+      channel: "dedicated_nuban",
       receiver_bank_account_number: accountNumber,
       receiver_bank: "Wema Bank",
       sender_name: "Test Sender"
@@ -123,6 +124,17 @@ test("credits a verified Paystack dedicated NUBAN transfer to its assigned custo
   ]);
   assert.equal(context.eventValues.length, 1);
   assert.ok(context.statements.some(item => item.sql.includes("status = 'posted'")));
+});
+
+test("recognizes dedicated_nuban when Paystack places the channel under authorization", async () => {
+  const context = setup();
+  const charge = verified({ channel: undefined });
+  const result = await settleVerifiedPaystackDvaCharge(
+    context.pool, "live", charge, "e".repeat(64)
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.body.walletCredited, true);
+  assert.equal(context.ledgerValues.length, 1);
 });
 
 test("does not credit a DVA charge when the verified Paystack customer code does not match", async () => {
