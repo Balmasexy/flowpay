@@ -239,7 +239,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       );
       const current = saved.rows[0] ?? null;
       if (get) {
-        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true" });
         return true;
       }
 
@@ -253,7 +253,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         send(res, 400, { error: "EXPRESS_CONSENT_REQUIRED" }); return true;
       }
       if (current?.status === "assigned") {
-        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: environment === "live" });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true" });
         return true;
       }
       if (current?.status === "pending") {
@@ -261,7 +261,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           provider: "Paystack", environment,
           virtualBankAccount: view(current),
           message: "A Paystack dedicated-account request is already pending for this profile. FlowPay will not submit a duplicate request.",
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -270,9 +270,9 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           error: "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED",
           message: "Dedicated-account assignment is not enabled for this Paystack environment. No account was created.",
           requiredConfiguration: environment === "live"
-            ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true"]
+            ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true"]
             : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_DEDICATED_ACCOUNTS_ENABLED=true"],
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -399,7 +399,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           message: "Paystack did not confirm a dedicated bank account assignment. No placeholder number was saved.",
           providerStatus: assigned.status,
           providerMessage,
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -422,7 +422,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         send(res, 201, {
           provider: "Paystack", environment,
           virtualBankAccount: view(result.rows[0]),
-          livePaymentsEnabled: environment === "live",
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true",
           message: "Paystack confirmed the " + environment + " dedicated bank account assignment. This is separate from the FlowPay wallet number and virtual card."
         });
         return true;
@@ -440,7 +440,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         provider: "Paystack", environment,
         virtualBankAccount: { assigned: false, status: "pending", accountNumber: null, bankName: null, accountName: null },
         message: "Paystack accepted the dedicated-account request. The verified account number will appear after assignment confirmation.",
-        livePaymentsEnabled: environment === "live"
+        livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
       });
       return true;
     } catch (error) {
