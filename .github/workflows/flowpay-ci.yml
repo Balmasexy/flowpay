@@ -63,6 +63,9 @@ jobs:
       - name: Test Flutterwave webhook verification and replay protection
         run: npm run test:flutterwave-webhook --prefix apps/api
 
+      - name: Test Flutterwave sandbox checkout persistence and isolation
+        run: npm run test:flutterwave-checkout --prefix apps/api
+
       - name: Test Paystack webhook verification and replay protection
         run: npm run test:paystack-webhook --prefix apps/api
 
