@@ -1,6 +1,7 @@
 import { processPaystackDedicatedAccountWebhook } from "./paystack-dedicated-accounts.js";
 import { getPaystackBankRuntime } from "./paystack-mode.js";
 import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
+import { settleVerifiedPaystackDvaCharge } from "./paystack-dva-settlement.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
@@ -239,6 +240,13 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       return true;
     }
 
+    const eventDigest = createHash("sha256").update(raw).digest("hex");
+    if (verified.channel === "dedicated_nuban") {
+      const settlement = await settleVerifiedPaystackDvaCharge(pool, environment, verified, eventDigest);
+      send(res, settlement.status, settlement.body);
+      return true;
+    }
+
     let client: PoolClient;
     try {
       client = await pool.connect();
@@ -246,8 +254,6 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       send(res, 503, { error: "WEBHOOK_DATABASE_UNAVAILABLE" });
       return true;
     }
-
-    const eventDigest = createHash("sha256").update(raw).digest("hex");
     try {
       await client.query("BEGIN");
       const result = await client.query<Deposit>(
