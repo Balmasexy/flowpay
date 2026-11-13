@@ -170,7 +170,7 @@ const server = createServer(async (req, res) => {
         schema.rows[0]?.flutterwave_deposits === true &&
         schema.rows[0]?.payment_events === true &&
         schema.rows[0]?.flutterwave_clearing_account === true &&
-        pool && jwks && issuer && audience &&
+        jwksUrl && issuer && audience &&
         process.env.FLW_ENVIRONMENT === "test" &&
         flwSecret.startsWith("FLWSECK_TEST-") &&
         isHttpsUrl((process.env.FLW_REDIRECT_URL ?? "").trim()) &&
@@ -178,7 +178,7 @@ const server = createServer(async (req, res) => {
         Number.isSafeInteger(flwMax) && flwMax >= flwMin &&
         flwWebhookHash.length > 0
       );
-      const bankDirectoryReady = Boolean(pool && jwks && issuer && audience && paystackBankRuntime);
+      const bankDirectoryReady = Boolean(jwksUrl && issuer && audience && paystackBankRuntime);
       const bankTransfersReady = Boolean(
         bankDirectoryReady && payoutSchemaReady &&
         isPaystackBankPayoutsEnabled(paystackBankRuntime!.environment)
@@ -450,7 +450,7 @@ const server = createServer(async (req, res) => {
       const flutterwaveConfigured = paystackTable.rows[0]?.flutterwave_available === true &&
         paystackTable.rows[0]?.flutterwave_clearing_account_available === true &&
         paystackTable.rows[0]?.payment_events_available === true &&
-        Boolean(jwks && issuer && audience) &&
+        Boolean(jwksUrl && issuer && audience) &&
         process.env.NODE_ENV !== "production" &&
         process.env.FLOWPAY_RUNTIME_ENV === "development" &&
         process.env.FLW_ENVIRONMENT === "test" &&
