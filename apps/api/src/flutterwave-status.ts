@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
+import { failVerifiedFlutterwaveDeposit, settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
 
 type Options = {
   pool: Pool | null;
@@ -126,7 +126,8 @@ export function createFlutterwaveDepositStatusHandler(options:Options){
           ? String(verified.id) : typeof verified.id==="string" && /^\d{1,30}$/.test(verified.id) ? verified.id : "";
         const verifiedAmount=amountToMinor(verified.amount);
         const verifiedReference=typeof verified.tx_ref==="string"?verified.tx_ref:"";
-        if(response.ok && root.status==="success" && verified.status==="successful"){
+        const verifiedStatus=typeof verified.status==="string"?verified.status.toLowerCase():"";
+        if(response.ok && root.status==="success" && ["successful","failed"].includes(verifiedStatus)){
           if(verifiedId!==providerId || verifiedReference!==deposit.provider_tx_ref ||
              verifiedAmount!==deposit.amount_minor || verified.currency!=="NGN"){
             send(res,202,{deposit:{reference:deposit.provider_tx_ref,amountMinor:deposit.amount_minor,
@@ -136,19 +137,25 @@ export function createFlutterwaveDepositStatusHandler(options:Options){
           }
           try{
             const digest=createHash("sha256").update(JSON.stringify(verified)).digest("hex");
-            const settled=await settleVerifiedFlutterwaveDeposit(pool,{
+            const context={
               providerReference:deposit.provider_tx_ref,
               providerTransactionId:verifiedId,
               amountMinor:verifiedAmount,
-              currency:"NGN",
+              currency:"NGN" as const,
               eventId:"verify:"+verifiedId,
-              eventType:"transaction.verify",
+              eventType:"transaction.verify" as const,
               payloadSha256:digest
-            });
-            deposit={...deposit,status:settled.status,provider_transaction_id:verifiedId,verified_at:new Date().toISOString()};
+            };
+            if(verifiedStatus==="failed"){
+              const failed=await failVerifiedFlutterwaveDeposit(pool,context);
+              deposit={...deposit,status:failed.status,provider_transaction_id:verifiedId,verified_at:new Date().toISOString()};
+            }else{
+              const settled=await settleVerifiedFlutterwaveDeposit(pool,context);
+              deposit={...deposit,status:settled.status,provider_transaction_id:verifiedId,verified_at:new Date().toISOString()};
+            }
           }catch(error){
             const code=error instanceof Error?error.message:"FLUTTERWAVE_SETTLEMENT_UNAVAILABLE";
-            console.error("FlowPay Flutterwave status settlement failed:",code);
+            console.error("FlowPay Flutterwave status reconciliation failed:",code);
             send(res,503,{error:code==="FLUTTERWAVE_CLEARING_ACCOUNT_NOT_CONFIGURED"?code:"FLUTTERWAVE_SETTLEMENT_UNAVAILABLE"});
             return true;
           }
