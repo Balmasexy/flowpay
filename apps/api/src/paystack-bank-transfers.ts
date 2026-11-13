@@ -540,7 +540,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         environment,
         livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
         requiredConfiguration: environment === "live"
-          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_TRANSFERS_ENABLED=true"]
+          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "NODE_ENV=production", "PAYSTACK_LIVE_TRANSFERS_ENABLED=true"]
           : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_TRANSFERS_ENABLED=true"]
       }); return true;
     }
