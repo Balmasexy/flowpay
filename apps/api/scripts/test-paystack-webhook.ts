@@ -25,6 +25,7 @@ function setup(options: {
   process.env.PAYSTACK_ENVIRONMENT = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
   process.env.PAYSTACK_WEBHOOK_SECRET = "";
+  process.env.NODE_ENV = "test";
   const queries: string[] = [];
   let connections = 0;
   let rawPayload = Buffer.from(JSON.stringify({
