@@ -2,6 +2,7 @@ import { createHmac, randomUUID, scrypt as scryptCallback, timingSafeEqual } fro
 import { getPaystackRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -311,6 +312,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:success`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "success",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer successful",
+        message: `You sent ${formatNgnMinor(payout.amount_minor)} to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}). Paystack confirmed the transfer.`
+      });
       await client.query("COMMIT");
       return { status: "success", duplicate: false };
     }
@@ -405,6 +418,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:reversed`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "reversed",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer reversed",
+        message: `Your ${formatNgnMinor(payout.amount_minor)} transfer to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}) was reversed by Paystack and returned to your FlowPay wallet.`
+      });
       await client.query("COMMIT");
       return { status: "reversed", duplicate: duplicateReversal };
     }
@@ -429,6 +454,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerStatus, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:failed`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "failed",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer failed",
+        message: `Your ${formatNgnMinor(payout.amount_minor)} transfer to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}) was not completed by Paystack. No wallet debit was posted.`
+      });
       await client.query("COMMIT");
       return { status: providerStatus, duplicate: tx.rows[0].status === "failed" };
     }
