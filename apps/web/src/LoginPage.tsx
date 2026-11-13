@@ -19,8 +19,7 @@ export default function LoginPage() {
     setError("");
   }
 
-  async function sendSignInCode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function requestSignInCode() {
     clearFeedback();
     if (!authConfigured) {
       setError("Sign-in is not configured on this deployment yet. Please try again later.");
@@ -52,6 +51,11 @@ export default function LoginPage() {
     }
   }
 
+  async function sendSignInCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await requestSignInCode();
+  }
+
   async function verifySignInCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     clearFeedback();
@@ -77,8 +81,7 @@ export default function LoginPage() {
     }
   }
 
-  async function sendPasswordResetCode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function requestPasswordResetCode() {
     clearFeedback();
     if (!authConfigured) {
       setError("Password recovery is not configured on this deployment yet.");
@@ -87,6 +90,7 @@ export default function LoginPage() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
       setError("Enter the email address registered to your FlowPay account.");
+      setStep("forgot-email");
       return;
     }
     setBusy(true);
@@ -107,6 +111,11 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function sendPasswordResetCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await requestPasswordResetCode();
   }
 
   async function resetPassword(event: FormEvent<HTMLFormElement>) {
@@ -149,11 +158,8 @@ export default function LoginPage() {
 
   function startForgotPassword() {
     clearFeedback();
-    if (email.trim()) {
-      setStep("forgot-email");
-      return;
-    }
-    setStep("forgot-email");
+    if (email.trim()) void requestPasswordResetCode();
+    else setStep("forgot-email");
   }
 
   function backToSignIn() {
@@ -212,9 +218,7 @@ export default function LoginPage() {
           <button className="fp-login-submit" type="submit" disabled={busy || code.length !== 6}>
             {busy ? "Verifying code…" : "Verify and sign in"} <ArrowRight size={16}/>
           </button>
-          <button className="fp-login-back" type="button" disabled={busy} onClick={() => void sendSignInCode({
-            preventDefault: () => undefined
-          } as FormEvent<HTMLFormElement>)}>Resend code</button>
+          <button className="fp-login-back" type="button" disabled={busy} onClick={() => void requestSignInCode()}>Resend code</button>
           <button className="fp-login-back" type="button" disabled={busy} onClick={backToSignIn}>Use a different email</button>
         </form>}
 
@@ -246,6 +250,7 @@ export default function LoginPage() {
           <button className="fp-login-submit" type="submit" disabled={busy || code.length !== 6 || newPassword.length < 8 || newPassword !== confirmPassword}>
             {busy ? "Resetting password…" : "Verify code and reset password"} <ArrowRight size={16}/>
           </button>
+          <button className="fp-login-back" type="button" disabled={busy} onClick={() => void requestPasswordResetCode()}>Resend recovery code</button>
           <button className="fp-login-back" type="button" disabled={busy} onClick={backToSignIn}>Back to sign in</button>
         </form>}
 
