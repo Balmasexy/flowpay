@@ -399,6 +399,10 @@ process.on("exit", () => {
   else process.env.PAYSTACK_TRANSFERS_ENABLED = originalEnvironment.transfers;
   if (originalEnvironment.runtime === undefined) delete process.env.FLOWPAY_RUNTIME_ENV;
   else process.env.FLOWPAY_RUNTIME_ENV = originalEnvironment.runtime;
+  if (originalEnvironment.livePayments === undefined) delete process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED;
+  else process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = originalEnvironment.livePayments;
+  if (originalEnvironment.liveTransfers === undefined) delete process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED;
+  else process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = originalEnvironment.liveTransfers;
   if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = originalEnvironment.nodeEnv;
 });
