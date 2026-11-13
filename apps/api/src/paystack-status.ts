@@ -168,7 +168,7 @@ async function settleVerifiedDeposit(
   }
 }
 
-async function markVerifiedFailure(pool: Pool, deposit: Deposit): Promise<void> {
+async function markVerifiedFailure(pool: Pool, deposit: Deposit): Promise<boolean> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -188,11 +188,11 @@ async function markVerifiedFailure(pool: Pool, deposit: Deposit): Promise<void> 
       // A provider reversal/refund after posting needs a separately balanced
       // refund workflow; never relabel a credited deposit as a simple failure.
       await client.query("COMMIT");
-      return;
+      return false;
     }
     if (transaction.rows[0].status !== "pending" || locked.rows[0].status !== "pending") {
       await client.query("COMMIT");
-      return;
+      return false;
     }
     const entries = await client.query<{ entry_count: number }>(
       "SELECT COUNT(*)::int AS entry_count FROM public.fp_ledger_entries WHERE transaction_id = $1",
@@ -210,6 +210,7 @@ async function markVerifiedFailure(pool: Pool, deposit: Deposit): Promise<void> 
       [deposit.transaction_id]
     );
     await client.query("COMMIT");
+    return true;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;
@@ -316,8 +317,8 @@ export function createPaystackDepositStatusHandler(options: Options) {
             });
             verification = "provider_verified";
           } else if (exactMatch && ["failed", "abandoned"].includes(providerStatus)) {
-            await markVerifiedFailure(pool, deposit);
-            verification = "provider_confirmed_failure";
+            const markedFailed = await markVerifiedFailure(pool, deposit);
+            verification = markedFailed ? "provider_confirmed_failure" : "requires_reconciliation";
           }
         } catch (error) {
           // A temporary provider/database error must not be misreported as a
