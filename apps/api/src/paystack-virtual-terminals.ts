@@ -40,9 +40,9 @@ function normalizeDestinations(value: unknown): Array<{ target: string; name?: s
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
     const row = item as JsonRecord;
-    const target = typeof row.target === "string" ? row.target.replace(/[\\s()-]/g, "") : "";
+    const target = typeof row.target === "string" ? row.target.replace(/[\s()-]/g, "") : "";
     const name = typeof row.name === "string" ? row.name.trim() : "";
-    if (!/^\\+?[1-9]\\d{7,14}$/.test(target) || (name && (name.length > 60 || /[<>]/.test(name)))) return null;
+    if (!/^\+?[1-9]\d{7,14}$/.test(target) || (name && (name.length > 60 || /[<>]/.test(name)))) return null;
     output.push({ target, ...(name ? { name } : {}) });
   }
   if (new Set(output.map(item => item.target)).size !== output.length) return null;
@@ -56,7 +56,7 @@ function validTerminalCode(value: string): boolean {
 async function authorize(req: IncomingMessage, options: Options): Promise<"ok" | "unauthorized" | "unavailable"> {
   const { pool, jwks, issuer, audience } = options;
   if (!pool || !jwks || !issuer || !audience) return "unavailable";
-  const match = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i);
+  const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!match) return "unauthorized";
   try {
     const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
@@ -98,7 +98,7 @@ async function providerRequest(secret: string, path: string, method: "GET" | "PO
 
 export function createPaystackVirtualTerminalsHandler(options: Options) {
   return async function handlePaystackVirtualTerminals(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\\/+$/, "") || "/";
+    const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (!pathname.startsWith("/admin/paystack/virtual-terminals")) return false;
     if (!["GET", "POST", "PUT"].includes(req.method ?? "")) {
       send(res, 405, { error: "METHOD_NOT_ALLOWED" });
@@ -118,7 +118,7 @@ export function createPaystackVirtualTerminalsHandler(options: Options) {
     }
 
     const prefix = "/admin/paystack/virtual-terminals";
-    const suffix = pathname.slice(prefix.length).replace(/^\\/+/, "");
+    const suffix = pathname.slice(prefix.length).replace(/^\/+/, "");
     try {
       if (!suffix && req.method === "GET") {
         const url = new URL(req.url ?? "/", "http://localhost");
@@ -128,7 +128,7 @@ export function createPaystackVirtualTerminalsHandler(options: Options) {
         const search = url.searchParams.get("search");
         const next = url.searchParams.get("next");
         if (status === "active" || status === "inactive") params.set("status", status);
-        if (perPage && /^\\d{1,2}$/.test(perPage) && Number(perPage) >= 1 && Number(perPage) <= 50) params.set("perPage", perPage);
+        if (perPage && /^\d{1,2}$/.test(perPage) && Number(perPage) >= 1 && Number(perPage) <= 50) params.set("perPage", perPage);
         if (search && search.length <= 60) params.set("search", search);
         if (next && next.length <= 300) params.set("next", next);
         const result = await providerRequest(runtime.secretKey, "/virtual_terminal" + (params.size ? "?" + params.toString() : ""), "GET");
