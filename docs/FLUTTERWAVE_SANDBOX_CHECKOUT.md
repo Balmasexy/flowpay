@@ -83,32 +83,21 @@ No provider keys or environment settings are added to Render by this PR. Do not 
 
 Migration `012_flutterwave_pending_checkout_sessions.sql` only makes the existing `fp_flutterwave_deposits.checkout_url` nullable so the pending reference can be persisted before the external checkout call. Existing checkout URLs and historical rows remain unchanged. The migration is additive and is not applied automatically by the API.
 
-## Required next stage before any wallet credit
+## Sandbox webhook settlement and recovery
 
-1. Add and test the public Flutterwave webhook using the configured `verif-hash` secret, then independently verify the provider transaction by ID/reference.
-2. Verify exact `tx_ref`, NGN currency, amount, account ownership, provider status, and transaction identity against the pending database record.
-3. Add duplicate-event and duplicate-verification tests using `fp_payment_events`.
-4. Establish and test the FlowPay ledger debit/credit sign convention in a disposable database, then post both customer and clearing-account entries atomically under row locks. Never infer wallet balance from a provider redirect or an unverified webhook.
-5. Add a status/recovery endpoint and reconciliation for pending or uncertain provider requests.
-6. Complete sandbox end-to-end tests and independently review them before any live configuration or activation.
+The test webhook is `POST /webhooks/flutterwave`. It validates the dashboard `verif-hash` using a constant-time comparison and independently calls Flutterwave's transaction verification endpoint. It requires the provider transaction ID, `tx_ref`, NGN currency and exact amount to match the pending FlowPay deposit.
 
-No live payment, bank transfer, or production release is enabled by this foundation.
+After successful verification, `settleVerifiedFlutterwaveDeposit`:
+- Locks the pending deposit, transaction, customer wallet and Flutterwave clearing account.
+- Adds a unique `fp_payment_events` receipt and rejects duplicate receipts that do not match the same transaction and payload digest.
+- Writes one positive customer-wallet entry and one equal negative `flutterwave_ngn_clearing` entry in the same transaction.
+- Marks the ledger transaction and provider deposit as posted only after the balanced entries are written.
+- Validates an already-posted duplicate has exactly the same balanced ledger entries and does not post another credit.
 
+The authenticated `GET /customer/flutterwave/deposits/status?reference=...` endpoint is customer-owner scoped. After a redirect it can also accept Flutterwave's `transaction_id`, independently verify the provider transaction by ID, and recover a pending deposit if a webhook was delayed. It returns `walletCredited: true` only after the ledger posting transaction commits.
 
-## Verified sandbox webhook (stage 2)
+The checkout uses one FlowPay idempotency record per customer submission. The provider reference is stored in both required `provider_reference` and `provider_tx_ref` columns. Retries return the saved hosted checkout instead of creating another provider session.
 
-The API exposes `POST /webhooks/flutterwave` for Flutterwave's `charge.completed` notification. Configure the Flutterwave dashboard webhook URL to this HTTPS endpoint and set the dashboard webhook secret hash in the API service as `FLW_WEBHOOK_SECRET_HASH`. The API checks the incoming `verif-hash` header with a constant-time comparison before parsing or acting on the event.
+**Sandbox settlement remains strictly isolated.** Checkout, webhook settlement and status recovery require `FLOWPAY_RUNTIME_ENV=development`, `NODE_ENV` other than `production`, `FLW_ENVIRONMENT=test`, a matching test secret, and the webhook secret hash. Production FlowPay rejects this sandbox path. No live Flutterwave key or live payout route is enabled by these changes.
 
-For a successful event, the handler independently calls Flutterwave's transaction verification endpoint and requires the provider transaction ID, transaction reference, NGN currency, and exact amount to match the pending FlowPay deposit. It records a unique event receipt in the existing `fp_payment_events` table and stores the provider transaction ID / verification timestamp. Duplicate event IDs are acknowledged without repeating processing.
-
-**Wallet credit remains intentionally disabled.** A verified webhook only records provider verification; the FlowPay deposit and ledger transaction remain `pending`, no ledger entries are written, and the response explicitly reports `walletCredited: false`. The event table stores an SHA-256 digest and identifiers only, not raw provider payloads.
-
-Additional API environment variable:
-
-| Variable | Requirement |
-|---|---|
-| `FLW_WEBHOOK_SECRET_HASH` | Exact webhook secret hash configured in the Flutterwave dashboard; test environment only |
-
-Migration `013_flutterwave_webhook_receipts.sql` adds nullable verification metadata to the existing provider-event table. It does not alter customer, account, balance, or ledger-entry rows. Apply it only after review and explicit approval.
-
-The next gate is an isolated-database test of the existing ledger's sign convention and balanced entry posting. Do not change a deposit to `posted` or credit a customer balance until that independent test and atomic posting implementation are complete.
+The repository test suite covers checkout persistence/idempotency, invalid webhook signatures, amount mismatches, duplicate webhooks, inactive customer wallets, non-empty pending ledger entries and production runtime rejection. These are mocked provider tests; a final real sandbox run still requires the isolated development Render API, its development database, and the Flutterwave dashboard's sandbox webhook configuration.
