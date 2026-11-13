@@ -22,7 +22,8 @@
     "test:vtpass-bills": "tsx --test scripts/test-vtpass-bills.ts",
     "test:storyblok-preview": "tsx --test scripts/test-storyblok-preview.ts",
     "test:flutterwave-checkout": "tsx --test scripts/test-flutterwave-checkout.ts",
-    "test:paystack-status": "tsx --test scripts/test-paystack-status.ts"
+    "test:paystack-status": "tsx --test scripts/test-paystack-status.ts",
+    "test:paystack-dva-settlement": "tsx --test scripts/test-paystack-dva-settlement.ts"
   },
   "dependencies": {
     "tsx": "^4.23.15",
