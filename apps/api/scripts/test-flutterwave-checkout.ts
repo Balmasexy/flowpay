@@ -70,8 +70,11 @@ async function setup(options:{duplicate?:boolean;prerequisites?:boolean}={}){
   const pool={
     query:async(sql:string,values?:unknown[])=>{
       queries.push({sql,values});
-      assert.ok(sql.includes('FROM neon_auth."user"'));
-      return {rowCount:1,rows:[{id:userId,email:"sandbox-customer@example.test",name:"Sandbox Customer"}]};
+      if(sql.includes('FROM neon_auth."user"')) {
+        return {rowCount:1,rows:[{id:userId,email:"sandbox-customer@example.test",name:"Sandbox Customer"}]};
+      }
+      if(sql.includes("UPDATE public.fp_flutterwave_deposits")) return {rowCount:1,rows:[]};
+      throw new Error("Unexpected pool query: "+sql);
     },
     connect:async()=>client
   } as unknown as Pool;
