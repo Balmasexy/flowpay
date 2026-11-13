@@ -223,7 +223,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
-    const runtime = getPaystackRuntime();
+    const runtime = getPaystackBankRuntime();
     if (!runtime) {
       send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
       return true;
