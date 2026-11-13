@@ -145,7 +145,8 @@ export async function settleVerifiedFlutterwaveDeposit(
       await client.query(
         `UPDATE public.fp_flutterwave_deposits
             SET status='posted',provider_transaction_id=$2,
-                verified_at=COALESCE(verified_at,NOW())
+                verified_at=COALESCE(verified_at,NOW()),
+                posted_at=COALESCE(posted_at,NOW()),updated_at=NOW()
           WHERE transaction_id=$1`,
         [deposit.transaction_id,input.providerTransactionId]
       );
@@ -195,7 +196,8 @@ export async function settleVerifiedFlutterwaveDeposit(
     const updated = await client.query(
       `UPDATE public.fp_flutterwave_deposits
           SET status='posted',provider_transaction_id=$2,
-              verified_at=COALESCE(verified_at,NOW())
+              verified_at=COALESCE(verified_at,NOW()),
+              posted_at=NOW(),updated_at=NOW()
         WHERE transaction_id=$1 AND status='pending'`,
       [deposit.transaction_id,input.providerTransactionId]
     );
