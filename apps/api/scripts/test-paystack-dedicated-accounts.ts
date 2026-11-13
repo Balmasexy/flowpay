@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createLocalJWKSet, SignJWT, type JWTPayload } from "jose";
 import { test } from "node:test";
-import { createPaystackDedicatedAccountsHandler } from "../src/paystack-dedicated-accounts.js";
+import { createPaystackDedicatedAccountsHandler, processPaystackDedicatedAccountWebhook } from "../src/paystack-dedicated-accounts.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnvironment = {
@@ -75,7 +75,7 @@ async function setup() {
     } as unknown as ServerResponse;
     return { res, result: () => ({ status, body: body ? JSON.parse(body) : null }) };
   };
-  return { handler, request, response, queries };
+  return { handler, request, response, queries, pool };
 }
 
 test("requires express consent before any provider request", async () => {
@@ -144,6 +144,31 @@ test("accepts issuer-verified Neon JWTs without an audience claim and stores onl
   const assignedUpdate = context.queries.find(item => item.sql.includes("account_number = $6") && item.sql.includes("status = 'assigned'"));
   assert.ok(assignedUpdate, "account data must be stored only in the provider-confirmed assignment update");
   assert.equal(assignedUpdate.values?.[5], "9930000737");
+});
+
+test("persists Paystack single-step assignment success even after new DVA assignment is disabled", async () => {
+  const context = await setup();
+  delete process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED;
+  const handled = await processPaystackDedicatedAccountWebhook(context.pool, {
+    event: "assigndedicatedaccount.success",
+    data: {
+      customer_code: "CUS_test123",
+      email: "test@example.invalid",
+      id: 12345,
+      assigned: true,
+      active: true,
+      currency: "NGN",
+      account_number: "9930000737",
+      account_name: "FlowPay / Test Customer",
+      bank: { name: "Test Bank" }
+    }
+  });
+  assert.equal(handled, true);
+  const saved = context.queries.find(item =>
+    item.sql.includes("account_number = $5") && item.sql.includes("status = 'assigned'")
+  );
+  assert.ok(saved, "the asynchronous provider assignment confirmation must be persisted");
+  assert.equal(saved.values?.[4], "9930000737");
 });
 
 process.on("exit", () => {
