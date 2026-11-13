@@ -49,7 +49,9 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
 
     const secretHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
     const secretKey = process.env.FLW_SECRET_KEY?.trim() ?? "";
-    if (!pool || !secretHash || !secretKey.startsWith("FLWSECK_TEST-") || process.env.FLW_ENVIRONMENT !== "test") {
+    if (!pool || !secretHash || !secretKey.startsWith("FLWSECK_TEST-") ||
+        process.env.FLW_ENVIRONMENT !== "test" || process.env.FLOWPAY_RUNTIME_ENV !== "development" ||
+        process.env.NODE_ENV === "production") {
       send(res, 503, { error: "FLUTTERWAVE_WEBHOOK_NOT_CONFIGURED" });
       return true;
     }
