@@ -62,6 +62,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   const [banks, setBanks] = useState<Bank[]>([]);
   const [banksLoading, setBanksLoading] = useState(true);
   const [banksError, setBanksError] = useState("");
+  const [bankDirectoryReload, setBankDirectoryReload] = useState(0);
   const [bankSearch, setBankSearch] = useState("");
   const [bankCode, setBankCode] = useState("");
   const [bankAccountNumber, setBankAccountNumber] = useState("");
@@ -171,7 +172,12 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       }
     }).finally(() => { if (!controller.signal.aborted) setBanksLoading(false); });
     return () => controller.abort();
-  }, [token]);
+  }, [token, bankDirectoryReload]);
+
+  const retryBankDirectory = () => {
+    setBanksError("");
+    setBankDirectoryReload(value => value + 1);
+  };
 
   useEffect(() => {
     if (mode !== "flowpay") { setRecipientLookup("idle"); return; }
@@ -344,7 +350,15 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       });
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok || typeof body.reference !== "string" || typeof body.status !== "string") {
-        throw new Error(typeof body.error === "string" ? body.error : "BANK_TRANSFER_NOT_SUBMITTED");
+        const code = typeof body.error === "string" ? body.error : "BANK_TRANSFER_NOT_SUBMITTED";
+        if (code === "PAYSTACK_BANK_PAYOUTS_NOT_ENABLED") {
+          const required = Array.isArray(body.requiredConfiguration)
+            ? body.requiredConfiguration.filter((item: unknown): item is string => typeof item === "string")
+            : [];
+          throw new Error("The To Bank option is available, but Paystack has not enabled transfer submission on this API. No payment was sent. " +
+            (required.length ? "Required API settings: " + required.join(", ") : "Check the Paystack mode and transfer approval settings in Render."));
+        }
+        throw new Error(code);
       }
       const final = body.final === true || ["success", "failed", "reversed", "blocked", "abandoned", "rejected"].includes(body.status);
       setBankTransferResult({
@@ -509,7 +523,17 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           Live mode: confirming submits a real Paystack bank transfer. Verify the beneficiary and amount carefully before authorizing.
         </div>}
         {banksLoading && <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p>}
-        {banksError && <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). You can still enter the account number and amount; select a bank once the directory is available.</div>}
+        {banksError && <div className="fp-preview-warning" role="alert">
+            <b>Bank directory unavailable ({banksError})</b>
+            <div>{banksError === "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED"
+              ? "FlowPay's production API does not currently detect a matching Paystack environment and secret key. The To Bank service remains visible, but bank choices and beneficiary verification require that provider connection."
+              : banksError === "PAYSTACK_BANK_API_UNAVAILABLE"
+                ? "Paystack did not return its bank directory. Check the API credential, provider access and Paystack service response."
+                : "The provider bank list could not be loaded. Retry after checking the API connection."}</div>
+            <button type="button" className="fp-outline" onClick={retryBankDirectory} disabled={banksLoading}>
+              <RefreshCw size={15}/> {banksLoading ? "Loading banks…" : "Reload bank list"}
+            </button>
+          </div>}
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
             <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
@@ -563,7 +587,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
                 placeholder="Enter your 6-digit PIN" value={transactionPin}
                 onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
               <button className="fp-primary" type="button" onClick={() => void submitBankTransfer()}
-                disabled={bankTransferBusy || !bankPayoutsEnabled || !pinSet || !/^\d{6}$/.test(transactionPin)}>
+                disabled={bankTransferBusy || !pinSet || !/^\d{6}$/.test(transactionPin)}>
                 {bankTransferBusy ? "Submitting to Paystack…" : `Confirm bank transfer · ${bankPayoutEnvironment === "live" ? "Live" : "Test"} mode`}
               </button>
             </>}
