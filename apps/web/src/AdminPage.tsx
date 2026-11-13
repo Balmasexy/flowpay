@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import PaystackVirtualTerminalManager from "./PaystackVirtualTerminalManager";
 import {
   ShieldCheck, Users, Wallet, ArrowLeftRight, CreditCard, SlidersHorizontal,
   FileText, Settings, LockKeyhole, Activity, FileCheck2, RefreshCw,
@@ -37,6 +38,7 @@ const sections = [
   { label: "Super Admin virtual account", icon: Wallet },
   { label: "Transactions", icon: ArrowLeftRight },
   { label: "Deposit receipts", icon: FileCheck2 },
+  { label: "Paystack Virtual Terminals", icon: CreditCard },
   { label: "Cards", icon: CreditCard },
   { label: "Staff & roles", icon: LockKeyhole },
   { label: "Provider controls", icon: SlidersHorizontal },
@@ -286,6 +288,7 @@ export default function AdminPage({ token }: { token: string }) {
                 <p style={{ margin: "8px 0 0", fontSize: 12 }}>Availability depends on Paystack live-mode eligibility and required customer identity validation. The existing API may reject requests until provider access is enabled.</p>
               </div>
             </section>
+            <PaystackVirtualTerminalManager token={token} apiBase={apiBase}/>
             {actionMessage && <div className="fp-admin-feedback success"><CheckCircle2 size={17}/>{actionMessage}</div>}
             {actionError && <div className="fp-admin-feedback error"><AlertCircle size={17}/>{actionError}</div>}
             <div className="fp-admin-review-guidance">

@@ -7,6 +7,7 @@ import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
+import { createPaystackVirtualTerminalsHandler } from "./paystack-virtual-terminals.js";
 import { getPaystackRuntime } from "./paystack-mode.js";
 import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
@@ -42,6 +43,7 @@ const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
 const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, audience });
 const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
+const paystackVirtualTerminalsHandler = createPaystackVirtualTerminalsHandler({ pool, jwks, issuer, audience });
 const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, jwks, issuer, audience });
 const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
@@ -80,6 +82,7 @@ const server = createServer(async (req, res) => {
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
   if (await paystackWebhookHandler(req, res)) return;
+  if (await paystackVirtualTerminalsHandler(req, res)) return;
   if (await paystackDepositStatusHandler(req, res)) return;
   if (await paystackCheckoutHandler(req, res)) return;
   if (await flutterwaveCheckoutHandler(req, res)) return;
@@ -91,7 +94,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
