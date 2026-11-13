@@ -13,7 +13,9 @@ const originalEnvironment = {
   secret: process.env.PAYSTACK_SECRET_KEY,
   transfers: process.env.PAYSTACK_TRANSFERS_ENABLED,
   runtime: process.env.FLOWPAY_RUNTIME_ENV,
-  nodeEnv: process.env.NODE_ENV
+  nodeEnv: process.env.NODE_ENV,
+  livePayments: process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED,
+  liveTransfers: process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED
 };
 const senderId = "00000000-0000-4000-8000-000000000001";
 const walletId = "00000000-0000-4000-8000-000000000003";
@@ -33,15 +35,20 @@ type SetupOptions = {
   wrongPin?: boolean;
   existing?: boolean;
   held?: string;
+  environment?: "test" | "live";
 };
-function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001") {
+function payoutRecord(
+  reference = "flowpay-bnk-00000000000000000000000000000001",
+  secret = "sk_test_unit_test_secret"
+) {
+  const live = secret.startsWith("sk_live_");
   return {
     transaction_id: transactionId,
     user_id: senderId,
     account_id: walletId,
     reference,
-    recipient_code: "RCP_test123",
-    transfer_code: "TRF_test123",
+    recipient_code: live ? "RCP_live123" : "RCP_test123",
+    transfer_code: live ? "TRF_live123" : "TRF_test123",
     provider_transfer_id: "987654321",
     amount_minor: amountMinor,
     currency: "NGN",
@@ -49,18 +56,22 @@ function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001"
     bank_name: "Zenith Bank",
     account_name: "Test Customer",
     account_number_last4: "0000",
-    account_fingerprint: createHmac("sha256", "sk_test_unit_test_secret").update(accountNumber, "utf8").digest("hex"),
+    account_fingerprint: createHmac("sha256", secret).update(accountNumber, "utf8").digest("hex"),
     status: "success",
     provider_status: "success"
   };
 }
 
 async function setup(options: SetupOptions = {}) {
-  process.env.PAYSTACK_ENVIRONMENT = "test";
-  process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
-  process.env.PAYSTACK_TRANSFERS_ENABLED = "true";
-  process.env.FLOWPAY_RUNTIME_ENV = "development";
-  process.env.NODE_ENV = "test";
+  const environment = options.environment ?? "test";
+  const secret = environment === "live" ? "sk_live_unit_test_secret" : "sk_test_unit_test_secret";
+  process.env.PAYSTACK_ENVIRONMENT = environment;
+  process.env.PAYSTACK_SECRET_KEY = secret;
+  process.env.PAYSTACK_TRANSFERS_ENABLED = environment === "test" ? "true" : "false";
+  process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = environment === "live" ? "true" : "false";
+  process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = environment === "live" ? "true" : "false";
+  process.env.FLOWPAY_RUNTIME_ENV = environment === "live" ? "production" : "development";
+  process.env.NODE_ENV = environment === "live" ? "production" : "test";
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-bank-transfer-test" })
     .setIssuer("https://flowpay.test")
@@ -80,7 +91,7 @@ async function setup(options: SetupOptions = {}) {
       }
       if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("WHERE idempotency_key")) {
         return options.existing
-          ? { rowCount: 1, rows: [payoutRecord()] }
+          ? { rowCount: 1, rows: [payoutRecord(undefined, secret)] }
           : { rowCount: 0, rows: [] };
       }
       if (sql.includes("UPDATE public.fp_paystack_bank_transfers")) {
@@ -112,7 +123,7 @@ async function setup(options: SetupOptions = {}) {
           }
           if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("WHERE idempotency_key")) {
             return options.existing
-              ? { rowCount: 1, rows: [payoutRecord()] }
+              ? { rowCount: 1, rows: [payoutRecord(undefined, secret)] }
               : { rowCount: 0, rows: [] };
           }
           if (sql.includes("system_account_role = 'paystack_ngn_clearing'")) {
@@ -131,7 +142,7 @@ async function setup(options: SetupOptions = {}) {
             return { rowCount: 1, rows: [] };
           }
           if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("FOR UPDATE")) {
-            return { rowCount: 1, rows: [payoutRecord(values?.[0] as string)] };
+            return { rowCount: 1, rows: [payoutRecord(values?.[0] as string, secret)] };
           }
           if (sql.includes("SELECT status FROM public.fp_ledger_transactions")) {
             return { rowCount: 1, rows: [{ status: "pending" }] };
@@ -388,6 +399,10 @@ process.on("exit", () => {
   else process.env.PAYSTACK_TRANSFERS_ENABLED = originalEnvironment.transfers;
   if (originalEnvironment.runtime === undefined) delete process.env.FLOWPAY_RUNTIME_ENV;
   else process.env.FLOWPAY_RUNTIME_ENV = originalEnvironment.runtime;
+  if (originalEnvironment.livePayments === undefined) delete process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED;
+  else process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = originalEnvironment.livePayments;
+  if (originalEnvironment.liveTransfers === undefined) delete process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED;
+  else process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = originalEnvironment.liveTransfers;
   if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = originalEnvironment.nodeEnv;
 });
