@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createLocalJWKSet, SignJWT, type JWTPayload } from "jose";
 import { test } from "node:test";
-import { createPaystackBankTransfersHandler } from "../src/paystack-bank-transfers.js";
+import { createPaystackBankTransfersHandler, processPaystackTransferWebhook } from "../src/paystack-bank-transfers.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnvironment = {
@@ -21,6 +21,7 @@ const senderId = "00000000-0000-4000-8000-000000000001";
 const walletId = "00000000-0000-4000-8000-000000000003";
 const clearingId = "00000000-0000-4000-8000-000000000007";
 const transactionId = "00000000-0000-4000-8000-000000000008";
+const reversalId = "00000000-0000-4000-8000-000000000009";
 const accountNumber = "0000000000";
 const bankCode = "057";
 const amountMinor = "5000000";
@@ -36,6 +37,7 @@ type SetupOptions = {
   existing?: boolean;
   held?: string;
   environment?: "test" | "live";
+  ledgerStatus?: string;
 };
 function payoutRecord(
   reference = "flowpay-bnk-00000000000000000000000000000001",
@@ -136,8 +138,11 @@ async function setup(options: SetupOptions = {}) {
           if (sql.includes("SUM(reservation.amount_minor)") && sql.includes("fp_paystack_bank_transfers") && sql.includes("fp_vtpass_bill_payments")) {
             return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
           }
+          if (sql.includes("SELECT id, status FROM public.fp_ledger_transactions") && sql.includes("idempotency_key")) {
+            return { rowCount: 0, rows: [] };
+          }
           if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
-            return { rowCount: 1, rows: [{ id: transactionId }] };
+            return { rowCount: 1, rows: [{ id: reversalId }] };
           }
           if (sql.includes("INSERT INTO public.fp_paystack_bank_transfers")) {
             return { rowCount: 1, rows: [] };
@@ -146,7 +151,10 @@ async function setup(options: SetupOptions = {}) {
             return { rowCount: 1, rows: [payoutRecord(values?.[0] as string, secret)] };
           }
           if (sql.includes("SELECT status FROM public.fp_ledger_transactions")) {
-            return { rowCount: 1, rows: [{ status: "pending" }] };
+            return { rowCount: 1, rows: [{ status: options.ledgerStatus ?? "pending" }] };
+          }
+          if (sql.includes("SELECT account_id::text AS account_id")) {
+            return { rowCount: 0, rows: [] };
           }
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.fp_ledger_entries")) {
             return { rowCount: 1, rows: [{ count: 0 }] };
@@ -193,7 +201,7 @@ async function setup(options: SetupOptions = {}) {
     } as unknown as ServerResponse;
     return { res, result: () => ({ status, body: body ? JSON.parse(body) : null }) };
   };
-  return { handler, request, response, statements, ledgerValues, notificationValues, connections: () => connections };
+  return { handler, request, response, statements, ledgerValues, notificationValues, connections: () => connections, pool };
 }
 
 function body(overrides: Record<string, unknown> = {}) {
