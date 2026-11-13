@@ -41,7 +41,7 @@ function setup(options: {
     data: {
       id: 987654321,
       tx_ref: "flowpay-flw-test-ref",
-      status: "successful",
+      status: options.providerStatus ?? "successful",
       currency: "NGN",
       amount: options.eventAmount ?? 2500
     }
@@ -142,6 +142,20 @@ test("verified Flutterwave NGN deposit posts one balanced customer/clearing ledg
   assert.ok(ctx.queries.some(query => query.includes("UPDATE public.fp_ledger_transactions")));
   assert.ok(ctx.queries.some(query => query.includes("UPDATE public.fp_flutterwave_deposits")));
   assert.ok(ctx.queries.some(query => query.includes("UPDATE public.fp_payment_events")));
+});
+
+test("marks a provider-verified failed Flutterwave payment failed without crediting the wallet", async () => {
+  const ctx = setup({ providerStatus:"failed" });
+  const res = ctx.response();
+  await createFlutterwaveWebhookHandler({ pool: ctx.pool })(ctx.request(), res.res);
+  const result = res.result();
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.providerVerified, true);
+  assert.equal(result.body.status, "failed");
+  assert.equal(result.body.walletCredited, false);
+  assert.ok(ctx.queries.some(query => query.includes("UPDATE public.fp_ledger_transactions") && query.includes("status='failed'")));
+  assert.ok(ctx.queries.some(query => query.includes("UPDATE public.fp_flutterwave_deposits") && query.includes("status='failed'")));
+  assert.equal(ctx.queries.some(query => query.includes("INSERT INTO public.fp_ledger_entries")), false);
 });
 
 test("rejects an invalid webhook hash before provider verification or database access", async () => {
