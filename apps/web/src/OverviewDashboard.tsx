@@ -14,7 +14,6 @@ type Overview = {
   recentActivity: ActivityItem[];
   transactionSummary: { postedCount: number; reversedCount: number } | null;
   balance: { available: true; balances: { currency: string; amountMinor: string }[] } | { available: false; reason: string };
-  paymentsEnabled: false;
   generatedAt: string;
 };
 
@@ -51,7 +50,7 @@ function parseOverview(value: unknown): Overview | null {
       reversedCount: transactionSummary.reversedCount as number,
     };
   }
-  if (body.paymentsEnabled !== false || typeof body.generatedAt !== "string") return null;
+  if (typeof body.generatedAt !== "string") return null;
   const accounts: AccountSummary[] = [];
   for (const raw of body.accounts) {
     const row = asRecord(raw);
@@ -79,10 +78,10 @@ function parseOverview(value: unknown): Overview | null {
       if (!/^-?\d+$/.test(amountMinor) || !Number.isSafeInteger(Number(amountMinor))) return null;
       balances.push({ currency: row.currency, amountMinor });
     }
-    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: true, balances }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: true, balances }, generatedAt: body.generatedAt };
   }
   if (balance.available === false && typeof balance.reason === "string") {
-    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: false, reason: balance.reason.slice(0, 200) }, paymentsEnabled: false, generatedAt: body.generatedAt };
+    return { accounts, recentActivity, transactionSummary: parsedTransactionSummary, balance: { available: false, reason: balance.reason.slice(0, 200) }, generatedAt: body.generatedAt };
   }
   return null;
 }
