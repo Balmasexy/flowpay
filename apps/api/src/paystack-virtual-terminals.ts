@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 
 type Options = {
   pool: Pool | null;
@@ -111,7 +111,7 @@ export function createPaystackVirtualTerminalsHandler(options: Options) {
       return true;
     }
 
-    const runtime = getPaystackRuntime();
+    const runtime = getPaystackBankRuntime();
     if (!runtime) {
       send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "Paystack live/test mode is not safely enabled on this backend." });
       return true;
