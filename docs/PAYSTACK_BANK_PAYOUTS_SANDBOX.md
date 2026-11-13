@@ -1,35 +1,59 @@
-# Paystack bank transfers — sandbox setup
+# Paystack bank transfers — environment-matched setup
 
-## What this feature adds
+## What this feature does
 
-The customer **To Bank** screen can submit a Nigerian NGN test transfer after the customer confirms the resolved beneficiary and enters the existing six-digit FlowPay transaction PIN. The API creates a Paystack transfer recipient, submits a uniquely referenced transfer, verifies the provider result, reconciles transfer webhooks, and includes payout records in customer transfer history.
+The customer **To Bank** screen can verify a Nigerian bank account and, when the selected environment's payout gate is enabled, submit a Nigerian NGN payout after the customer reviews the beneficiary and amount and authorizes with the existing six-digit FlowPay transaction PIN.
 
-The API re-resolves the bank account before creating a recipient. It stores only the final four account digits and a keyed HMAC fingerprint for idempotency; it does not store the full beneficiary account number. The full account number is passed to Paystack only from the authenticated request and is not returned in a provider URL.
+FlowPay re-resolves the bank account before recipient creation, submits a uniquely referenced transfer, verifies the provider response, reconciles signed transfer webhooks, and includes payout records in customer transfer history. It stores only the final four beneficiary account digits and a keyed HMAC fingerprint for idempotency; it does not persist the full beneficiary account number.
 
-## Sandbox only
+## One matching Paystack key for every bank step
 
-This integration is deliberately limited to Paystack test credentials:
+There is **one Paystack runtime per API service**, selected by `PAYSTACK_ENVIRONMENT` and `PAYSTACK_SECRET_KEY` through `getPaystackRuntime()`. Do not create a different secret specifically for bank transfers. The same selected key and environment are used for:
+
+1. the Nigerian bank directory;
+2. account-name resolution;
+3. transfer-recipient creation;
+4. transfer initiation;
+5. transfer status verification; and
+6. signature validation of the existing `/webhooks/paystack` endpoint and subsequent payout reconciliation.
+
+The runtime rejects mismatched combinations (for example, `PAYSTACK_ENVIRONMENT=live` with an `sk_test_` key). The customer transfer page reads the selected environment from the API instead of hard-coding a test-mode label.
+
+### Test / sandbox API service
+
+Configure these only on the isolated sandbox API connected to a disposable or Development Neon database:
 
 - `PAYSTACK_ENVIRONMENT=test`
-- `PAYSTACK_SECRET_KEY` must be an `sk_test_` key, stored only in Render's encrypted environment settings.
-- `FLOWPAY_RUNTIME_ENV=development` identifies the isolated development deployment. The API also refuses the payout route when `NODE_ENV=production`.
-- `PAYSTACK_TRANSFERS_ENABLED=true` is an explicit feature switch for the sandbox payout submission route.
-- Both switches must be set only on a dedicated development/sandbox API connected to a disposable or Development Neon database. Do not set them on the production FlowPay service.
-- Neither switch is set by this branch, and no Render environment setting is changed by this feature.
+- `PAYSTACK_SECRET_KEY=sk_test_…` (store the actual secret only in Render's encrypted environment settings)
+- `FLOWPAY_RUNTIME_ENV=development`
+- `PAYSTACK_TRANSFERS_ENABLED=true`
+- `NODE_ENV` must not be `production`
 
-The API rejects live Paystack credentials for these routes. The extra runtime guard prevents simulated Paystack success from touching production customer ledgers. Responses identify the environment as `test` and report `livePayoutsEnabled=false`.
+The test payout gate remains closed unless all required sandbox switches and the matching test key/environment are present. A successful Paystack test transfer is simulated; it does **not** move real money. Use only Paystack's published sandbox bank details, never a production customer's bank account.
 
-**A Paystack test-mode success is simulated; it does not move real money to a bank account.** Do not use a production customer's bank account to test this feature. Use only Paystack's published sandbox beneficiary details.
+### Production API service
+
+The production service must use the matching live configuration:
+
+- `PAYSTACK_ENVIRONMENT=live`
+- `PAYSTACK_SECRET_KEY=sk_live_…` (store the actual secret only in Render's encrypted environment settings)
+- `PAYSTACK_LIVE_PAYMENTS_ENABLED=true`
+- `PAYSTACK_LIVE_TRANSFERS_ENABLED=true` only after Paystack has enabled/approved Transfers for the FlowPay business and operational controls are confirmed
+- `NODE_ENV=production`
+
+The live transfer switch is separate from the general live-payment switch. A correctly configured live checkout key does not, by itself, prove that Paystack Transfers is approved or funded. Keep `PAYSTACK_LIVE_TRANSFERS_ENABLED` unset or `false` until Paystack has confirmed transfer access, the merchant balance/funding route is ready, and OTP/approval, fees, limits, failure, reversal, webhook and reconciliation procedures have been reviewed. A live bank transfer moves real money.
+
+**Do not copy a live key into GitHub, browser code, logs, chat, or a sandbox API service.** Render's environment settings are the source of truth. If the secret is rotated, update it on the appropriate Render API service and keep `PAYSTACK_ENVIRONMENT` aligned with its prefix.
 
 ## Customer flow
 
-1. Customer chooses a Nigerian bank from the Paystack directory.
-2. FlowPay calls Paystack account resolution and displays the verified name.
-3. Customer enters an amount and previews the destination.
-4. Customer sets or enters their FlowPay transaction PIN.
-5. FlowPay re-resolves the beneficiary, creates a test NUBAN recipient, locks the customer's NGN wallet, checks the posted balance less pending payout reservations, and creates an idempotent pending payout record.
-6. FlowPay submits the transfer and verifies the returned reference. A verified success posts one balanced customer-wallet debit and Paystack clearing-account credit. A final unsuccessful status fails the pending ledger transaction without debiting the wallet.
-7. Pending/OTP/uncertain transfers remain reserved and can be refreshed through the status endpoint. Transfer webhooks are independently verified with Paystack before reconciliation.
+1. Customer chooses a Nigerian bank from the Paystack directory, returned with the active API environment.
+2. FlowPay verifies the beneficiary name with Paystack.
+3. Customer reviews the beneficiary, masked account number, bank and amount.
+4. Customer authorizes with the transaction PIN.
+5. FlowPay re-resolves the beneficiary, creates the provider recipient in the selected domain, locks the customer's NGN wallet, checks posted balance less pending payout reservations, and creates an idempotent pending payout record.
+6. FlowPay submits and verifies the transfer. Only an authoritative success in the same Paystack domain posts one balanced customer-wallet debit and Paystack clearing-account credit. A final unsuccessful result fails the pending ledger transaction without debiting the wallet.
+7. Pending, OTP and uncertain transfers remain reserved and can be refreshed through the status endpoint. Signed transfer webhooks are verified through the same selected secret before reconciliation.
 
 ## API routes
 
@@ -37,28 +61,26 @@ The API rejects live Paystack credentials for these routes. The extra runtime gu
 - `GET /customer/transfers/bank/status?reference=<reference>` — authenticated owner-only status refresh.
 - Existing `POST /webhooks/paystack` also handles `transfer.success`, `transfer.failed`, and `transfer.reversed` events. No second webhook URL is required.
 
-Subscribe the existing Paystack **test-mode** webhook to the transfer event types as well as the current charge-success event. The API verifies each transfer against Paystack before posting ledger entries.
+Subscribe the matching Paystack environment's webhook to the transfer event types as well as the current charge-success event. Do not point a test webhook at a production secret or a live webhook at a test secret.
 
 ## Database prerequisite
 
-Apply `apps/api/migrations/019_paystack_bank_transfers.sql` to the target FlowPay database only after reviewing its current migration history. It adds a new payout record table and indexes. It does not edit existing customer rows, account balances, deposit records, or ledger entries. It relies on the existing Paystack NGN clearing account from migration 016 and the transaction PIN table from migration 017.
+Apply `apps/api/migrations/019_paystack_bank_transfers.sql` to the target FlowPay database only after reviewing its migration history. It adds payout tracking and indexes, relies on the Paystack NGN clearing account from migration 016 and the transaction PIN table from migration 017, and does not change existing wallet balances or ledger entries.
 
-Do not apply the migration to production as part of this pull request. First rehearse it on a disposable Neon branch and confirm existing customer, account, deposit, and ledger row counts remain unchanged.
+Do not apply migrations to production as part of this pull request. First rehearse them on a disposable Neon branch and confirm existing customer, account, deposit and ledger row counts remain unchanged.
 
-## Test plan
+## Verification
 
-1. Keep Paystack in test mode and use Paystack's official test bank details only.
-2. Rehearse migration 019 on a disposable Neon branch.
-3. Run `npm run typecheck --prefix apps/api`.
-4. Run `npm run test:paystack-bank-transfers --prefix apps/api`.
-5. Confirm a verified test success posts exactly two equal-and-opposite ledger entries.
-6. Confirm insufficient balance and invalid PIN do not call the transfer endpoint or post ledger entries.
-7. Confirm duplicate idempotency requests do not initiate a second transfer.
-8. Confirm transfer webhooks and status refresh reconcile only after an authoritative provider verification.
-9. Confirm pending and uncertain payouts remain reserved until a final provider result is known.
+Run:
 
-Only after sandbox tests and the provider configuration are verified should a separate approval be made to merge, deploy, and set the sandbox feature switch in Render.
+1. `npm run typecheck --prefix apps/api`
+2. `npm run test:paystack-mode --prefix apps/api`
+3. `npm run test:paystack-bank-transfers --prefix apps/api`
+4. `npm run test:paystack-bank-lookup --prefix apps/api`
+5. `npm run build --prefix apps/web`
 
-## Live payouts are out of scope
+Tests must verify matching key prefixes and provider domains, the closed-by-default payout switches, PIN and available-balance guards, one-time idempotency, signed webhook/status reconciliation and balanced ledger entries. Any provider integration test must use mocked responses or Paystack test credentials; CI must not initiate a live bank transfer.
 
-Live payouts remain disabled. They need a separate risk, compliance, business eligibility, provider-balance, fees, OTP/approval, and reconciliation review. The sandbox implementation is not evidence of a live bank payout capability.
+## Activation boundary
+
+Code now selects and reports the same Paystack environment throughout bank lookup and transfer handling. That does not prove that the Render production secret is live or that Paystack has approved/enabled live Transfers. Render's stored secrets cannot be read through this repository workflow. Verify the masked key's prefix and environment directly in the production API service's Render Environment page; only after provider approval and the operational review should an authorized operator enable `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`.
