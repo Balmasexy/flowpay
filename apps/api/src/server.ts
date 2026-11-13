@@ -152,6 +152,7 @@ const server = createServer(async (req, res) => {
       const paystackDepositRuntime = getPaystackRuntime();
       const payoutSchemaReady = schema.rows[0]?.bank_payouts === true &&
         schema.rows[0]?.clearing_account === true;
+      const paystackWebhookSecretConfigured = (process.env.PAYSTACK_WEBHOOK_SECRET ?? "").trim().startsWith("whsec_");
       const paystackCallback = (process.env.PAYSTACK_CALLBACK_URL ?? "").trim();
       const paystackMin = Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
       const paystackMax = Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR);
@@ -208,7 +209,12 @@ const server = createServer(async (req, res) => {
             ? (bankTransfersReady ? "ready" : "configured_but_not_enabled")
             : "provider_not_configured",
           deposits: paystackDepositsReady,
-          dedicatedAccounts: dedicatedAccountsReady
+          dedicatedAccounts: dedicatedAccountsReady,
+          webhookVerificationAvailable: Boolean(paystackBankRuntime),
+          webhookSigningSecretConfigured: paystackWebhookSecretConfigured,
+          webhookSignatureMode: paystackWebhookSecretConfigured
+            ? "timestamped_signing_secret"
+            : paystackBankRuntime ? "legacy_secret_compatible" : "not_configured"
         },
         flutterwave: {
           environment: process.env.FLW_ENVIRONMENT === "test" ? "test" : null,
@@ -229,7 +235,11 @@ const server = createServer(async (req, res) => {
         status: "not_ready",
         database: "unavailable",
         payments: {
-          paystack: { bankDirectory: false, bankTransfers: false, deposits: false },
+          paystack: {
+            bankDirectory: false, beneficiaryVerification: false, bankTransfers: false,
+            deposits: false, dedicatedAccounts: false, webhookVerificationAvailable: false,
+            webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
+          },
           flutterwave: { deposits: false }
         }
       });
