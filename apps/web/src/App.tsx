@@ -24,6 +24,7 @@ import MorePage from "./MorePage";
 import InvitationsPage from "./InvitationsPage";
 import BettingPreview from "./BettingPreview";
 import DocumentsPage from "./DocumentsPage";
+import CustomerNotifications from "./CustomerNotifications";
 import { authClient, authConfigured } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
@@ -162,6 +163,7 @@ export default function App() {
           <span className="fp-logo">F</span><span>flow<span>pay</span></span>
         </button>
         <div className="fp-header-actions">
+          <CustomerNotifications token={authSession.data.session?.token ?? ""} go={go}/>
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
           <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || authSession.data.user.image ? <img src={profilePhoto || authSession.data.user.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
           <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
