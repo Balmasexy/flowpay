@@ -1,5 +1,5 @@
 import { createHmac, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
@@ -495,7 +495,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 }
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
-  const runtime = getPaystackRuntime();
+  const runtime = getPaystackBankRuntime();
   if (!runtime || !isPaystackBankPayoutsEnabled(runtime.environment)) {
     return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
   }
@@ -531,7 +531,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
     if (!pool || !jwks || !issuer || !audience) {
       send(res, 503, { error: "BANK_TRANSFER_SERVICE_NOT_CONFIGURED" }); return true;
     }
-    const runtime = getPaystackRuntime();
+    const runtime = getPaystackBankRuntime();
     const secret = runtime?.secretKey ?? "";
     const environment = runtime?.environment ?? null;
     if (!runtime || !environment || (isSubmit && !isPaystackBankPayoutsEnabled(environment))) {
