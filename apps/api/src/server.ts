@@ -126,15 +126,25 @@ const server = createServer(async (req, res) => {
     try {
       const [database, schema] = await Promise.all([
         pool.query<{ database_name: string }>("SELECT current_database() AS database_name"),
-        pool.query<{ bank_payouts: boolean; paystack_deposits: boolean; clearing_account: boolean }>(
+        pool.query<{
+          bank_payouts: boolean; paystack_deposits: boolean; clearing_account: boolean;
+          flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
+        }>(
           `SELECT
              to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS bank_payouts,
              to_regclass('public.fp_paystack_deposits') IS NOT NULL AS paystack_deposits,
+             to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
+             to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
              EXISTS (
                SELECT 1 FROM public.fp_accounts
                 WHERE account_type = 'system' AND currency = 'NGN'
                   AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
-             ) AS clearing_account`
+             ) AS clearing_account,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'flutterwave_ngn_clearing' AND status = 'active'
+             ) AS flutterwave_clearing_account`
         )
       ]);
       const paystackBankRuntime = getPaystackBankRuntime();
@@ -155,6 +165,12 @@ const server = createServer(async (req, res) => {
       const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
       const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
       const flwDepositsReady = Boolean(
+        process.env.NODE_ENV !== "production" &&
+        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+        schema.rows[0]?.flutterwave_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.flutterwave_clearing_account === true &&
+        pool && jwks && issuer && audience &&
         process.env.FLW_ENVIRONMENT === "test" &&
         flwSecret.startsWith("FLWSECK_TEST-") &&
         isHttpsUrl((process.env.FLW_REDIRECT_URL ?? "").trim()) &&
@@ -435,6 +451,8 @@ const server = createServer(async (req, res) => {
         paystackTable.rows[0]?.flutterwave_clearing_account_available === true &&
         paystackTable.rows[0]?.payment_events_available === true &&
         Boolean(jwks && issuer && audience) &&
+        process.env.NODE_ENV !== "production" &&
+        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
         process.env.FLW_ENVIRONMENT === "test" &&
         flwSecret.startsWith("FLWSECK_TEST-") && flwRedirectIsHttps &&
         flwWebhookHash.length > 0 &&
