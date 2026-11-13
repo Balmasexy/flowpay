@@ -64,16 +64,16 @@
 
 /* Full customer sidebar: desktop web only. Mobile keeps the compact bottom navigation. */
 .fp-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:28px;max-width:1440px}
-.fp-sidebar{align-self:start;position:sticky;top:92px;max-height:calc(100vh - 112px);overflow:auto;background:#191a19;color:#f4f4f1;border-radius:15px;padding:18px 12px;display:flex;flex-direction:column;gap:22px}
+.fp-sidebar{align-self:start;position:sticky;top:92px;max-height:calc(100vh - 112px);overflow:auto;background:#171717;color:#ffffff;border-radius:15px;padding:18px 12px;display:flex;flex-direction:column;gap:22px}
 .fp-sidebar-section{display:grid;gap:4px}
 .fp-sidebar-section>span{padding:5px 10px 8px;color:#858780;font-size:9px;font-weight:800;letter-spacing:1.3px}
 .fp-sidebar-section>button{width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:0;border-radius:8px;background:transparent;color:#c5c6c0;text-align:left;font-size:11px}
 .fp-sidebar-section>button svg{flex-shrink:0;color:#a5a69f}
-.fp-sidebar-section>button:hover{background:#292a28;color:#fff}
-.fp-sidebar-section>button.active{background:#33251b;color:#ff9a50;font-weight:700}
-.fp-sidebar-section>button.active svg{color:#ff9a50}
+.fp-sidebar-section>button:hover{background:#242424;color:#ffffff}
+.fp-sidebar-section>button.active{background:#2b251f;color:#ff7a18;font-weight:700}
+.fp-sidebar-section>button.active svg{color:#ff7a18}
 .fp-sidebar-foot{display:flex;align-items:center;gap:9px;margin-top:auto;padding:13px 9px 2px;border-top:1px solid #383936;color:#aeb0a9;font-size:9px}
-.fp-sidebar-foot svg{color:#ff9a50;flex-shrink:0}
+.fp-sidebar-foot svg{color:#ff7a18;flex-shrink:0}
 @media(max-width:760px){.fp-layout{display:block}.fp-sidebar{display:none}}
 
 
