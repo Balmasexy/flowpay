@@ -264,7 +264,6 @@ export function createPaystackDepositStatusHandler(options: Options) {
           WHERE auth_user.id::text = $1
             AND auth_user."emailVerified" = true
             AND app_user.status = 'active'
-            AND app_user.role = 'customer'
           LIMIT 1`,
         [payload.sub]
       );
