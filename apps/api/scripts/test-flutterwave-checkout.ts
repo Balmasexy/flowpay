@@ -120,7 +120,7 @@ test("creates a Flutterwave sandbox checkout after persisting idempotency and pr
   assert.ok(insert.sql.includes("provider_tx_ref"));
   assert.equal(insert.values?.[3],"flutterwave-deposit:"+userId+":"+idempotencyKey);
   assert.equal(insert.values?.[4],result.body.providerReference);
-  assert.equal(insert.values?.[5],result.body.providerReference);
+  assert.equal(insert.values?.[5],"250000");
   assert.equal(ctx.getProviderCalls(),1);
 });
 
