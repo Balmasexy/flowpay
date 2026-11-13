@@ -435,6 +435,28 @@ test("a verified Paystack transfer.reversed webhook credits back the wallet and 
   assert.ok(String(context.notificationValues[0][9]).includes("returned to your FlowPay wallet"));
 });
 
+test("reconciles an accepted payout webhook after new payout initiation is disabled", async () => {
+  const context = await setup();
+  delete process.env.PAYSTACK_TRANSFERS_ENABLED;
+  const reference = payoutRecord().reference;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status: true,
+    data: {
+      domain: "test", status: "success", reference,
+      amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123",
+      id: 987654321,
+      recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+    }
+  }), { status: 200 });
+  const result = await processPaystackTransferWebhook(context.pool, "sk_test_unit_test_secret", {
+    event: "transfer.success", data: { reference }
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "success");
+  assert.equal(context.ledgerValues.length, 1);
+  assert.equal(context.notificationValues.length, 1);
+});
+
 test("incorrect transaction PIN is rejected before beneficiary creation", async () => {
   const context = await setup({ wrongPin: true });
   let providerCalls = 0;
