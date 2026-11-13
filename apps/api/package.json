@@ -26,7 +26,8 @@
     "tsx": "^4.23.15",
     "pg": "^8.16.3",
     "jose": "^6.1.0",
-    "smile-identity-core": "3.2.1"
+    "smile-identity-core": "3.2.1",
+    "@simplewebauthn/server": "13.3.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
