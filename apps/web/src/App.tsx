@@ -188,7 +188,12 @@ export default function App() {
             <div><span className="fp-eyebrow">FLOWPAY ACCOUNT</span><h1>{path === "/dashboard" ? "Good day" : path === "/payment-return/paystack" ? "Payment status" : active.label}</h1>
               {path !== "/dashboard" && <p>{pageDescription(path)}</p>}
             </div>
-            {path === "/dashboard" && <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>}
+            {path === "/dashboard"
+              ? <button className="fp-outline" onClick={() => go("/profile")}><UserRound size={16}/> My profile</button>
+              : <button className="fp-page-back" type="button" onClick={() => {
+                  if (window.history.length > 1) window.history.back();
+                  else go("/dashboard");
+                }}><ChevronLeft size={17}/> Back</button>}
           </div>
 
           {path === "/dashboard" ? (

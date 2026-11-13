@@ -17,6 +17,7 @@ type Card = {
 type VirtualBankAccount = {
   assigned: boolean;
   status: string;
+  environment: "test" | "live";
   accountNumber: string | null;
   bankName: string | null;
   accountName: string | null;
@@ -62,6 +63,7 @@ function parseVirtualBankAccount(value: unknown): VirtualBankAccount {
   return {
     assigned,
     status: typeof raw.status === "string" ? raw.status : assigned ? "assigned" : "not_requested",
+    environment: raw.environment === "live" ? "live" : "test",
     accountNumber: assigned ? raw.accountNumber as string : null,
     bankName: assigned ? raw.bankName as string : null,
     accountName: assigned ? raw.accountName as string : null
@@ -72,12 +74,17 @@ export default function CustomerCards({ token, registeredName }: { token: string
   const [cards, setCards] = useState<Card[]>([]);
   const [cardholderName, setCardholderName] = useState<string | null>(null);
   const [virtualBankAccount, setVirtualBankAccount] = useState<VirtualBankAccount>({
-    assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+    assigned: false, status: "not_requested", environment: "test", accountNumber: null, bankName: null, accountName: null
   });
   const [accountConsent, setAccountConsent] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [accountMessage, setAccountMessage] = useState("");
+  const [bvn, setBvn] = useState("");
+  const [linkedBankAccount, setLinkedBankAccount] = useState("");
+  const [linkedBankCode, setLinkedBankCode] = useState("");
+  const [banks, setBanks] = useState<{code:string;name:string}[]>([]);
+  const [banksError, setBanksError] = useState("");
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -91,7 +98,7 @@ export default function CustomerCards({ token, registeredName }: { token: string
       setCards([]);
       setCardholderName(null);
       setVirtualBankAccount({
-        assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+        assigned: false, status: "not_requested", environment: "test", accountNumber: null, bankName: null, accountName: null
       });
       setError("Your authenticated cards service is not configured.");
       setLoading(false);
@@ -109,18 +116,44 @@ export default function CustomerCards({ token, registeredName }: { token: string
         throw new Error(typeof body.error === "string" ? body.error : "Unable to load cards.");
       }
       return body;
-    }).then(body => {
+    }).then(async body => {
       if (!active) return;
       setCardholderName(typeof body.cardholderName === "string" && body.cardholderName.trim()
         ? body.cardholderName.trim().slice(0, 100) : null);
       setCards(parseCards(body.cards));
-      setVirtualBankAccount(parseVirtualBankAccount(body.virtualBankAccount));
+      const virtual = parseVirtualBankAccount(body.virtualBankAccount);
+      setVirtualBankAccount(virtual);
+      if (virtual.environment === "live" && !virtual.assigned) {
+        try {
+          const jwt = await getApiJwt();
+          const bankResponse = await fetch(apiBase + "/customer/banks", {
+            method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
+          });
+          const bankBody = asRecord(await bankResponse.json().catch(() => ({})));
+          const items = Array.isArray(bankBody.banks) ? bankBody.banks.flatMap(item => {
+            const bank = asRecord(item);
+            return typeof bank.code === "string" && typeof bank.name === "string"
+              ? [{code:bank.code,name:bank.name}] : [];
+          }) : [];
+          if (active) {
+            setBanks(items);
+            setBanksError(bankResponse.ok ? "" : "Paystack bank directory is unavailable. Refresh to retry.");
+            if (items.length && !linkedBankCode) setLinkedBankCode(items[0].code);
+          }
+        } catch {
+          if (active) setBanksError("Unable to load the BVN-linked bank directory. Refresh to retry.");
+        }
+      } else if (active) {
+        setBanks([]);
+        setBanksError("");
+      }
     }).catch(cause => {
       if (!active) return;
       setCards([]);
       setCardholderName(null);
       setVirtualBankAccount({
-        assigned: false, status: "not_requested", accountNumber: null, bankName: null, accountName: null
+        assigned: false, status: "not_requested", environment: "test",
+        accountNumber: null, bankName: null, accountName: null
       });
       setError(cause instanceof Error ? cause.message : "Unable to load cards.");
     }).finally(() => { if (active) setLoading(false); });
@@ -129,6 +162,11 @@ export default function CustomerCards({ token, registeredName }: { token: string
 
   const requestVirtualBankAccount = async () => {
     if (accountBusy || !accountConsent || !apiBase) return;
+    if (virtualBankAccount.environment === "live" &&
+      (!/^\d{11}$/.test(bvn) || !/^\d{10}$/.test(linkedBankAccount) || !linkedBankCode)) {
+      setAccountError("Enter your 11-digit BVN and the 10-digit bank account linked to it.");
+      return;
+    }
     setAccountBusy(true);
     setAccountError("");
     setAccountMessage("");
@@ -137,14 +175,19 @@ export default function CustomerCards({ token, registeredName }: { token: string
       const response = await fetch(dedicatedAccountApiBase + "/customer/dedicated-bank-account", {
         method: "POST", credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + jwt },
-        body: JSON.stringify({ consent: true })
+        body: JSON.stringify({
+          consent: true,
+          ...(virtualBankAccount.environment === "live"
+            ? { bvn, accountNumber: linkedBankAccount, bankCode: linkedBankCode }
+            : {})
+        })
       });
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok && response.status !== 202) {
         const providerDetail = typeof body.providerMessage === "string" ? body.providerMessage.slice(0, 240) : "";
         const providerStatus = typeof body.providerStatus === "number" ? " (HTTP " + body.providerStatus + ")" : "";
         throw new Error(providerDetail
-          ? "Paystack rejected the test account request" + providerStatus + ": " + providerDetail
+          ? "Paystack rejected the dedicated-account request" + providerStatus + ": " + providerDetail
           : typeof body.message === "string" ? body.message :
             typeof body.error === "string" ? body.error : "Unable to request a virtual bank account.");
       }
@@ -153,6 +196,8 @@ export default function CustomerCards({ token, registeredName }: { token: string
         body.status === "pending" ? "Paystack is processing the test account request." :
           "Paystack returned the account assignment status.");
       setAccountConsent(false);
+      setBvn("");
+      setLinkedBankAccount("");
       setRefresh(value => value + 1);
     } catch (cause) {
       setAccountError(cause instanceof Error ? cause.message : "Unable to request a virtual bank account.");
@@ -210,14 +255,33 @@ export default function CustomerCards({ token, registeredName }: { token: string
         </p>
         <label style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:13,lineHeight:1.45}}>
           <input type="checkbox" checked={accountConsent} onChange={event => setAccountConsent(event.target.checked)} style={{marginTop:3}}/>
-          <span>I consent to FlowPay sending my registered full name, email address and phone number to Paystack to request a dedicated NGN virtual bank account for this profile.</span>
+          <span>I consent to FlowPay sending my registered name, email address and phone number to Paystack to request a dedicated NGN virtual bank account for this profile.</span>
         </label>
-        <button type="button" className="fp-primary" disabled={!accountConsent || accountBusy || loading}
+        {virtualBankAccount.environment === "live" && <>
+          <label htmlFor="flowpay-card-bvn">BVN (11 digits)</label>
+          <input id="flowpay-card-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11}
+            value={bvn} onChange={event=>setBvn(event.target.value.replace(/\D/g,"").slice(0,11))}
+            placeholder="Enter BVN for Paystack validation" disabled={accountBusy}/>
+          <label htmlFor="flowpay-card-bank">BVN-linked bank</label>
+          <select id="flowpay-card-bank" value={linkedBankCode} onChange={event=>setLinkedBankCode(event.target.value)} disabled={accountBusy || !banks.length}>
+            {banks.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}
+          </select>
+          <label htmlFor="flowpay-card-account">BVN-linked account number</label>
+          <input id="flowpay-card-account" inputMode="numeric" autoComplete="off" maxLength={10}
+            value={linkedBankAccount} onChange={event=>setLinkedBankAccount(event.target.value.replace(/\D/g,"").slice(0,10))}
+            placeholder="10-digit bank account number" disabled={accountBusy}/>
+          <small className="fp-muted">Your BVN is sent to Paystack for identity validation and is not saved by FlowPay.</small>
+          {banksError && <div className="fp-preview-warning" role="alert">{banksError}</div>}
+        </>}
+        <button type="button" className="fp-primary"
+          disabled={!accountConsent || accountBusy || loading || virtualBankAccount.status === "pending" || (virtualBankAccount.environment === "live" && (bvn.length !== 11 || linkedBankAccount.length !== 10 || !linkedBankCode))}
           onClick={() => void requestVirtualBankAccount()}>
-          {accountBusy ? "Requesting with Paystack…" : "Request test virtual bank account"}
+          {accountBusy ? "Requesting with Paystack…" : virtualBankAccount.status === "pending" ? "Request already pending" : "Request dedicated bank account"}
         </button>
         <small className="fp-muted">
-          Sandbox only. Paystack must accept and confirm the assignment before a number is shown. Financial-services eligibility or identity validation may be required.
+          {virtualBankAccount.environment === "live"
+            ? "Live requests require Paystack live DVA access and successful customer eligibility checks. The account appears only after provider confirmation."
+            : "Sandbox request. Paystack must accept and confirm the assignment before a number is shown. No placeholder account is created."}
         </small>
       </>}
       {accountMessage && <div className="fp-preview-warning" role="status">{accountMessage}</div>}
