@@ -67,11 +67,13 @@ export async function settleVerifiedFlutterwaveDeposit(
   pool: Pool,
   input: VerifiedFlutterwaveSettlement
 ): Promise<{ status: "posted"; duplicate: boolean; walletCredited: true; transactionId: string }> {
-  if (!input.providerReference || !/^\d{1,30}$/.test(input.providerTransactionId) ||
-      !/^\d{1,15}$/.test(input.amountMinor) || BigInt(input.amountMinor) <= 0n ||
-      input.currency !== "NGN" || !input.eventId || input.eventId.length > 120) {
-    throw new Error("FLUTTERWAVE_SETTLEMENT_INPUT_INVALID");
+  if (!input.providerReference) throw new Error("FLUTTERWAVE_SETTLEMENT_REFERENCE_REQUIRED");
+  if (!/^\d{1,30}$/.test(input.providerTransactionId)) throw new Error("FLUTTERWAVE_SETTLEMENT_PROVIDER_ID_INVALID");
+  if (!/^\d{1,15}$/.test(input.amountMinor) || BigInt(input.amountMinor) <= 0n) {
+    throw new Error("FLUTTERWAVE_SETTLEMENT_AMOUNT_INVALID");
   }
+  if (input.currency !== "NGN") throw new Error("FLUTTERWAVE_SETTLEMENT_CURRENCY_INVALID");
+  if (!input.eventId || input.eventId.length > 120) throw new Error("FLUTTERWAVE_SETTLEMENT_EVENT_ID_INVALID");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
