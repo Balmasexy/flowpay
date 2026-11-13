@@ -217,3 +217,108 @@ export async function settleVerifiedFlutterwaveDeposit(
     client.release();
   }
 }
+
+export async function failVerifiedFlutterwaveDeposit(
+  pool: Pool,
+  input: VerifiedFlutterwaveSettlement
+): Promise<{ status: "failed"; duplicate: boolean; walletCredited: false; transactionId: string }> {
+  if (!input.providerReference || !/^\\d{1,30}$/.test(input.providerTransactionId) ||
+      !/^\\d{1,15}$/.test(input.amountMinor) || BigInt(input.amountMinor) <= 0n ||
+      input.currency !== "NGN" || !input.eventId || input.eventId.length > 120) {
+    throw new Error("FLUTTERWAVE_SETTLEMENT_INPUT_INVALID");
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<Deposit>(
+      `SELECT transaction_id,user_id,account_id,provider_tx_ref,provider_transaction_id,
+              amount_minor::text AS amount_minor,currency,status
+         FROM public.fp_flutterwave_deposits
+        WHERE provider_tx_ref=$1
+        FOR UPDATE`,
+      [input.providerReference]
+    );
+    if (result.rowCount !== 1 || !result.rows[0]) throw new Error("FLOWPAY_FLUTTERWAVE_DEPOSIT_NOT_FOUND");
+    const deposit = result.rows[0];
+    if (deposit.currency.trim() !== "NGN" || deposit.amount_minor !== input.amountMinor ||
+        (deposit.provider_transaction_id && deposit.provider_transaction_id !== input.providerTransactionId) ||
+        deposit.status === "posted") {
+      throw new Error("FLOWPAY_FLUTTERWAVE_DEPOSIT_MISMATCH");
+    }
+
+    const digest = safeDigest(input);
+    const inserted = await client.query(
+      `INSERT INTO public.fp_payment_events
+         (provider,provider_event_id,event_type,transaction_id,payload_sha256,processing_status)
+       VALUES ('flutterwave',$1,$2,$3,$4,'pending')
+       ON CONFLICT (provider,provider_event_id) DO NOTHING
+       RETURNING provider_event_id`,
+      [input.eventId,input.eventType,deposit.transaction_id,digest]
+    );
+    const duplicate = inserted.rowCount === 0;
+    if (duplicate) {
+      const receipt = await client.query<{ transaction_id:string; payload_sha256:string|null }>(
+        `SELECT transaction_id::text,payload_sha256
+           FROM public.fp_payment_events
+          WHERE provider='flutterwave' AND provider_event_id=$1
+          FOR UPDATE`,
+        [input.eventId]
+      );
+      const oldDigest = receipt.rows[0]?.payload_sha256?.trim() ?? "";
+      if (receipt.rowCount !== 1 || receipt.rows[0]?.transaction_id !== deposit.transaction_id ||
+          (oldDigest && oldDigest !== digest)) {
+        throw new Error("FLUTTERWAVE_DUPLICATE_EVENT_MISMATCH");
+      }
+    }
+
+    const transaction = await client.query<{status:string}>(
+      "SELECT status FROM public.fp_ledger_transactions WHERE id=$1 FOR UPDATE",
+      [deposit.transaction_id]
+    );
+    if (transaction.rowCount !== 1) throw new Error("FLOWPAY_LEDGER_TRANSACTION_NOT_FOUND");
+    if (transaction.rows[0].status === "posted" || deposit.status === "posted") {
+      throw new Error("FLOWPAY_FLUTTERWAVE_DEPOSIT_ALREADY_POSTED");
+    }
+
+    const entries = await client.query<{count:number}>(
+      "SELECT COUNT(*)::int AS count FROM public.fp_ledger_entries WHERE transaction_id=$1",
+      [deposit.transaction_id]
+    );
+    if (Number(entries.rows[0]?.count ?? 0) !== 0) {
+      throw new Error("FAILED_FLUTTERWAVE_DEPOSIT_HAS_LEDGER_ENTRIES");
+    }
+
+    if (transaction.rows[0].status === "pending") {
+      const failed = await client.query(
+        `UPDATE public.fp_ledger_transactions SET status='failed'
+          WHERE id=$1 AND status='pending'`,
+        [deposit.transaction_id]
+      );
+      if (failed.rowCount !== 1) throw new Error("FLUTTERWAVE_DEPOSIT_FAILURE_STATE_CONFLICT");
+    } else if (transaction.rows[0].status !== "failed") {
+      throw new Error("FLUTTERWAVE_DEPOSIT_STATE_REQUIRES_RECONCILIATION");
+    }
+    if (deposit.status === "pending") {
+      const updated = await client.query(
+        `UPDATE public.fp_flutterwave_deposits
+            SET status='failed',provider_transaction_id=$2,
+                verified_at=COALESCE(verified_at,NOW()),updated_at=NOW()
+          WHERE transaction_id=$1 AND status='pending'`,
+        [deposit.transaction_id,input.providerTransactionId]
+      );
+      if (updated.rowCount !== 1) throw new Error("FLUTTERWAVE_DEPOSIT_FAILURE_STATE_CONFLICT");
+    }
+    await client.query(
+      `UPDATE public.fp_payment_events SET processing_status='processed'
+        WHERE provider='flutterwave' AND provider_event_id=$1`,
+      [input.eventId]
+    );
+    await client.query("COMMIT");
+    return {status:"failed",duplicate,walletCredited:false,transactionId:deposit.transaction_id};
+  } catch (error) {
+    await client.query("ROLLBACK").catch(()=>undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
