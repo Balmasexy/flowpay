@@ -508,7 +508,8 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         {bankPayoutEnvironment === "live" && bankPayoutsEnabled && <div className="fp-preview-warning" role="note">
           Live mode: confirming submits a real Paystack bank transfer. Verify the beneficiary and amount carefully before authorizing.
         </div>}
-        {banksLoading ? <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Check the selected Paystack environment and backend credentials in Render, then refresh.</div> : <>
+        {banksLoading && <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p>}
+        {banksError && <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). You can still enter the account number and amount; select a bank once the directory is available.</div>}
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
             <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
@@ -517,7 +518,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           </div>
           <small className="fp-muted">{filteredBanks.length} of {banks.length} provider-listed banks shown</small>
           <label htmlFor="fp-transfer-bank">Select beneficiary bank</label>
-          <select id="fp-transfer-bank" value={bankCode} onChange={event => { setBankCode(event.target.value); setBankAccountName(""); setBankPreview(null); setTransferError(""); }}>
+          <select id="fp-transfer-bank" value={bankCode} disabled={banksLoading || banks.length === 0} onChange={event => { setBankCode(event.target.value); setBankAccountName(""); setBankPreview(null); setTransferError(""); }}>
             <option value="">Choose a bank</option>
             {filteredBanks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
           </select>
@@ -587,7 +588,6 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
               Start another bank transfer
             </button>}
           </div>}
-        </>}
       </>}
 
       <div className="fp-preview-warning" style={{marginTop:18}}><ShieldCheck size={17}/> Never share your transaction PIN, login password or one-time code. FlowPay deposits remain separate and this transfer page does not change deposit records.</div>
