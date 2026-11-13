@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
+import { failVerifiedFlutterwaveDeposit, settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
 
 type Options = { pool: Pool | null };
 
@@ -92,8 +92,9 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
     const providerIdText = typeof providerId === "number" && Number.isSafeInteger(providerId)
       ? String(providerId) : typeof providerId === "string" && /^\d{1,30}$/.test(providerId) ? providerId : null;
     const providerReference = typeof data.tx_ref === "string" ? data.tx_ref : "";
-    if (!providerIdText || !providerReference || data.status !== "successful") {
-      send(res, 200, { received: true, processed: false, reason: "NON_SUCCESSFUL_OR_INCOMPLETE_EVENT" });
+    if (!providerIdText || !providerReference ||
+        !["successful", "failed", "pending"].includes(String(data.status).toLowerCase())) {
+      send(res, 200, { received: true, processed: false, reason: "INCOMPLETE_OR_UNKNOWN_PROVIDER_EVENT" });
       return true;
     }
 
@@ -115,7 +116,9 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
       ? verifyPayload as Record<string, unknown> : {};
     const verified = verifyBody.data && typeof verifyBody.data === "object" && !Array.isArray(verifyBody.data)
       ? verifyBody.data as Record<string, unknown> : {};
-    if (!verifyResponse.ok || verifyBody.status !== "success" || verified.status !== "successful") {
+    const verifiedStatus = typeof verified.status === "string" ? verified.status.toLowerCase() : "";
+    if (!verifyResponse.ok || verifyBody.status !== "success" ||
+        !["successful", "failed", "pending"].includes(verifiedStatus)) {
       send(res, 202, { received: true, processed: false, reason: "PROVIDER_TRANSACTION_NOT_VERIFIED" });
       return true;
     }
@@ -135,14 +138,40 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
       eventCurrency !== "NGN" ||
       verifiedAmount === null ||
       eventAmount === null ||
-      verifiedAmount !== eventAmount
+      verifiedAmount !== eventAmount ||
+      (String(data.status).toLowerCase() !== verifiedStatus && verifiedStatus !== "pending")
     ) {
       send(res, 202, { received: true, processed: false, reason: "PROVIDER_EVENT_MISMATCH" });
       return true;
     }
 
     const eventHash = createHash("sha256").update(rawBody).digest("hex");
+    if (verifiedStatus === "pending") {
+      send(res, 202, { received: true, processed: false, providerVerified: false, reason: "PROVIDER_TRANSACTION_PENDING" });
+      return true;
+    }
     try {
+      if (verifiedStatus === "failed") {
+        const failed = await failVerifiedFlutterwaveDeposit(pool, {
+          providerReference,
+          providerTransactionId: providerIdText,
+          amountMinor: verifiedAmount!,
+          currency: "NGN",
+          eventId: providerIdText,
+          eventType: "charge.completed",
+          payloadSha256: eventHash
+        });
+        send(res, 200, {
+          received: true,
+          processed: true,
+          duplicate: failed.duplicate,
+          providerVerified: true,
+          transactionId: failed.transactionId,
+          status: failed.status,
+          walletCredited: false
+        });
+        return true;
+      }
       const settled = await settleVerifiedFlutterwaveDeposit(pool, {
         providerReference,
         providerTransactionId: providerIdText,
@@ -167,7 +196,9 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
         "FLOWPAY_FLUTTERWAVE_DEPOSIT_NOT_FOUND",
         "FLOWPAY_FLUTTERWAVE_DEPOSIT_MISMATCH",
         "FLUTTERWAVE_DUPLICATE_EVENT_MISMATCH",
-        "FLUTTERWAVE_DEPOSIT_NOT_PENDING"
+        "FLOWPAY_FLUTTERWAVE_DEPOSIT_ALREADY_POSTED",
+        "FLUTTERWAVE_DEPOSIT_FAILURE_STATE_CONFLICT",
+        "FLOWPAY_FLUTTERWAVE_DEPOSIT_MISMATCH"
       ].includes(code)) {
         send(res, 202, { received: true, processed: false, reason: code });
         return true;
