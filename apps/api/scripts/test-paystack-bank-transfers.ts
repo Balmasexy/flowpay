@@ -142,7 +142,8 @@ async function setup(options: SetupOptions = {}) {
             return { rowCount: 0, rows: [] };
           }
           if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
-            return { rowCount: 1, rows: [{ id: reversalId }] };
+            const key = String(values?.[0] ?? "");
+            return { rowCount: 1, rows: [{ id: key.startsWith("paystack-bank-reversal:") ? reversalId : transactionId }] };
           }
           if (sql.includes("INSERT INTO public.fp_paystack_bank_transfers")) {
             return { rowCount: 1, rows: [] };
