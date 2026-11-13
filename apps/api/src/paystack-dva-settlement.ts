@@ -74,7 +74,7 @@ export async function settleVerifiedPaystackDvaCharge(
   const customerCode = typeof customer.customer_code === "string" ? customer.customer_code.trim() : "";
 
   if (verified.status !== "success" || domain !== environment || channel !== "dedicated_nuban" ||
-      !/^flowpay-ps-[0-9a-f]{32}$/i.test(reference) ||
+      !/^[A-Za-z0-9_-]{1,100}$/.test(reference) ||
       !providerTransactionId || !amount || currency !== "NGN" ||
       !/^\d{10}$/.test(receiverAccountNumber) ||
       (customerCode && !/^CUS_[A-Za-z0-9]+$/.test(customerCode)) ||
