@@ -276,7 +276,7 @@ export async function failVerifiedFlutterwaveDeposit(
       [deposit.transaction_id]
     );
     if (transaction.rowCount !== 1) throw new Error("FLOWPAY_LEDGER_TRANSACTION_NOT_FOUND");
-    if (transaction.rows[0].status === "posted" || deposit.status === "posted") {
+    if (transaction.rows[0].status === "posted") {
       throw new Error("FLOWPAY_FLUTTERWAVE_DEPOSIT_ALREADY_POSTED");
     }
 
