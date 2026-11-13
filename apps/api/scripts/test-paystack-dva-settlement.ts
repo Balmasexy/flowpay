@@ -32,12 +32,13 @@ function verified(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function setup(options: { assigned?: boolean; savedCustomerCode?: string | null } = {}) {
+function setup(options: { assigned?: boolean; savedCustomerCode?: string | null; alreadyPosted?: boolean } = {}) {
   const statements: { sql: string; values?: unknown[] }[] = [];
   const ledgerValues: unknown[][] = [];
   const eventValues: unknown[][] = [];
-  let depositCreated = false;
-  let ledgerStatus = "pending";
+  let depositCreated = options.alreadyPosted === true;
+  let depositStatus = options.alreadyPosted ? "posted" : "pending";
+  let ledgerStatus = options.alreadyPosted ? "posted" : "pending";
   const client = {
     query: async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
@@ -60,7 +61,7 @@ function setup(options: { assigned?: boolean; savedCustomerCode?: string | null 
           ? { rowCount: 1, rows: [{
               transaction_id: transactionId, user_id: userId, account_id: walletId,
               reference, provider_transaction_id: "987654321",
-              amount_minor: amount, currency: "NGN", status: "pending"
+              amount_minor: amount, currency: "NGN", status: depositStatus
             }] }
           : { rowCount: 0, rows: [] };
       }
@@ -81,12 +82,25 @@ function setup(options: { assigned?: boolean; savedCustomerCode?: string | null 
       if (sql.includes("system_account_role = 'paystack_ngn_clearing'")) {
         return { rowCount: 1, rows: [{ id: clearingId }] };
       }
+      if (sql.includes("SELECT account_id::text AS account_id")) {
+        return options.alreadyPosted
+          ? { rowCount: 2, rows: [
+              { account_id: walletId, amount_minor: amount, entry_count: 1 },
+              { account_id: clearingId, amount_minor: "-750000", entry_count: 1 }
+            ] }
+          : { rowCount: 0, rows: [] };
+      }
       if (sql.includes("SELECT COUNT(*)::int AS entry_count")) {
         return { rowCount: 1, rows: [{ entry_count: 0 }] };
       }
       if (sql.includes("INSERT INTO public.fp_payment_events")) {
         eventValues.push(values ?? []);
-        return { rowCount: 1, rows: [{ provider_event_id: reference }] };
+        return options.alreadyPosted
+          ? { rowCount: 0, rows: [] }
+          : { rowCount: 1, rows: [{ provider_event_id: reference }] };
+      }
+      if (sql.includes("FROM public.fp_payment_events") && sql.includes("FOR UPDATE")) {
+        return { rowCount: 1, rows: [{ transaction_id: transactionId, payload_sha256: "a".repeat(64) }] };
       }
       if (sql.includes("INSERT INTO public.fp_ledger_entries")) {
         ledgerValues.push(values ?? []);
@@ -124,6 +138,18 @@ test("credits a verified Paystack dedicated NUBAN transfer to its assigned custo
   ]);
   assert.equal(context.eventValues.length, 1);
   assert.ok(context.statements.some(item => item.sql.includes("status = 'posted'")));
+});
+
+test("duplicate DVA charge delivery confirms the balanced posting without crediting twice", async () => {
+  const context = setup({ alreadyPosted: true });
+  const result = await settleVerifiedPaystackDvaCharge(
+    context.pool, "live", verified(), "a".repeat(64)
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.body.duplicate, true);
+  assert.equal(result.body.walletCredited, true);
+  assert.equal(context.ledgerValues.length, 0);
+  assert.ok(context.statements.some(item => item.sql.includes("SELECT account_id::text AS account_id")));
 });
 
 test("recognizes dedicated_nuban when Paystack places the channel under authorization", async () => {
