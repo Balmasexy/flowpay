@@ -70,10 +70,10 @@ function setup(options: {
       if (sql.includes("SELECT status FROM public.fp_ledger_transactions")) {
         return { rowCount: 1, rows: [{ status: options.transactionStatus ?? "pending" }] };
       }
-      if (sql.includes("SELECT id FROM public.fp_accounts")) {
+      if (sql.includes("system_account_role='flutterwave_ngn_clearing'")) {
         return { rowCount: 1, rows: [{ id: clearingAccountId }] };
       }
-      if (sql.includes("SELECT id FROM public.fp_accounts") && sql.includes("user_id")) {
+      if (sql.includes("WHERE id=$1 AND user_id=$2") && sql.includes("account_type='customer'")) {
         return { rowCount: options.accountActive === false ? 0 : 1, rows: [{ id: customerAccountId }] };
       }
       if (sql.includes("SELECT COUNT(*)::int AS count")) {
