@@ -105,7 +105,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -119,7 +119,8 @@ const server = createServer(async (req, res) => {
         payments: {
           paystack: {
             bankDirectory: false, beneficiaryVerification: false, bankTransfers: false,
-            deposits: false, dedicatedAccounts: false, webhookVerificationAvailable: false,
+            deposits: false, dedicatedAccounts: false, dedicatedAccountDeposits: false,
+            dedicatedAccountRequery: false, webhookVerificationAvailable: false,
             webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
           },
           flutterwave: { deposits: false }
@@ -131,13 +132,20 @@ const server = createServer(async (req, res) => {
       const [database, schema] = await Promise.all([
         pool.query<{ database_name: string }>("SELECT current_database() AS database_name"),
         pool.query<{
-          bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; clearing_account: boolean;
+          bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; dva_requery_columns: boolean; clearing_account: boolean;
           flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
         }>(
           `SELECT
              to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS bank_payouts,
              to_regclass('public.fp_paystack_deposits') IS NOT NULL AS paystack_deposits,
              to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS dedicated_accounts,
+             (
+               SELECT COUNT(*) = 2
+                 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'fp_paystack_dedicated_accounts_v2'
+                  AND column_name IN ('bank_slug','last_requery_at')
+             ) AS dva_requery_columns,
              to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
              to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
              EXISTS (
@@ -180,6 +188,16 @@ const server = createServer(async (req, res) => {
         jwksUrl && issuer && dedicatedAccountsGate &&
         schema.rows[0]?.dedicated_accounts === true && paystackBankRuntime
       );
+      const dedicatedAccountDepositsReady = Boolean(
+        paystackBankRuntime && schema.rows[0]?.dedicated_accounts === true &&
+        schema.rows[0]?.paystack_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.clearing_account === true
+      );
+      const dedicatedAccountRequeryReady = Boolean(
+        paystackBankRuntime && schema.rows[0]?.dedicated_accounts === true &&
+        schema.rows[0]?.dva_requery_columns === true
+      );
       const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
       const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
       const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
@@ -214,6 +232,8 @@ const server = createServer(async (req, res) => {
             : "provider_not_configured",
           deposits: paystackDepositsReady,
           dedicatedAccounts: dedicatedAccountsReady,
+          dedicatedAccountDeposits: dedicatedAccountDepositsReady,
+          dedicatedAccountRequery: dedicatedAccountRequeryReady,
           webhookVerificationAvailable: Boolean(paystackBankRuntime),
           webhookSigningSecretConfigured: paystackWebhookSecretConfigured,
           webhookSignatureMode: paystackWebhookSecretConfigured
