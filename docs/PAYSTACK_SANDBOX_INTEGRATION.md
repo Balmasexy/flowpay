@@ -10,10 +10,11 @@ Paystack is integrated inside the existing FlowPay API. It is a separate provide
 - Test and live checkout idempotency keys are environment-scoped. Keep test and live API services on separate databases.
 - The customer identity and email are loaded from the verified FlowPay session; the browser cannot substitute an email or customer ID.
 - The only supported currency is NGN. The browser submits an amount in kobo as an integer string.
-- A deposit is credited only after a valid Paystack signature, independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, and a pending FlowPay deposit have all been confirmed.
+- A deposit is credited only after a valid Paystack signature or authenticated status-recovery verification, an independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, active customer NGN wallet, and a pending FlowPay deposit have all been confirmed.
+- New checkout initiation has its own feature gate. Webhook delivery and customer-owned status recovery remain active for already-created payments when new checkout is switched off.
 - Live mode is not activated by this code change. It requires the actual live secret and explicit feature switch to be configured securely in Render after Paystack has approved the business for go-live.
 - Live dedicated virtual accounts remain a separate approval-dependent capability. Bank payout code uses the same selected Paystack secret/environment as bank lookup but has its own environment-specific transfer switch; keep live payouts disabled until Paystack confirms Transfers access and the operational review is complete. See `docs/PAYSTACK_BANK_PAYOUTS_SANDBOX.md` and `docs/PAYSTACK_LIVE_MODE_READINESS.md`.
-- The webhook posts a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
+- The webhook and callback-side recovery post a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
 - Duplicate webhook delivery cannot post a second credit. A previously received event can resume a pending deposit if its ledger posting did not complete.
 - No test clearing account balance represents money held at Paystack or a bank. Sandbox credits are not real funds.
 - Live money movement remains disabled.
@@ -26,6 +27,7 @@ Configure these variables on the FlowPay backend service only. Do not put the se
 |---|---|
 | `PAYSTACK_ENVIRONMENT` | `test` |
 | `PAYSTACK_SECRET_KEY` | Paystack test secret (`sk_test_...`) |
+| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook signing secret (`whsec_...`) when the new `Paystack-Signature` header is enabled |
 | `PAYSTACK_CALLBACK_URL` | `https://flowpay-web-jx7i.onrender.com/payment-return/paystack` |
 | `PAYSTACK_DEPOSIT_MIN_MINOR` | Approved minimum amount in kobo |
 | `PAYSTACK_DEPOSIT_MAX_MINOR` | Approved maximum amount in kobo |
@@ -38,7 +40,9 @@ Register this HTTPS endpoint in the Paystack dashboard for the **test integratio
 
 `https://flowpay-backend-qz79.onrender.com/webhooks/paystack`
 
-Paystack signs the raw request body with HMAC-SHA512 using the test secret. FlowPay compares `x-paystack-signature` in constant time, then independently calls Paystack's transaction verification endpoint. Only `charge.success` events for a verified `test` transaction in NGN are eligible for ledger posting.
+Paystack signs the raw request body with HMAC-SHA512. FlowPay supports the modern `Paystack-Signature` header using `PAYSTACK_WEBHOOK_SECRET=whsec_...`, a five-minute timestamp tolerance, key-rotation signatures and constant-time comparison. If the modern header is absent, the API retains legacy `x-paystack-signature` verification using `PAYSTACK_SECRET_KEY`. A present but invalid modern header is rejected and cannot fall back to the legacy header. After signature validation, FlowPay independently calls Paystack's transaction verification endpoint. Only `charge.success` events for a verified transaction in the configured environment and NGN are eligible for ledger posting.
+
+Subscribe to `charge.success`, `transfer.success`, `transfer.failed` and `transfer.reversed`. Dedicated-account assignment/customer-identification events are handled by the same endpoint when that product is enabled.
 
 Do not configure the live integration to call this test-only webhook. Do not use an `sk_live_` key.
 
@@ -63,7 +67,7 @@ A successful response contains a hosted `checkoutUrl`, the FlowPay transaction I
 
 `GET /customer/paystack/deposits/status?reference=flowpay-ps-...`
 
-Requires the same customer's verified bearer session. A reference belonging to another customer is not returned. The API returns the persisted deposit status and whether the wallet was credited.
+Requires the same customer's verified bearer session. A reference belonging to another customer is not returned. For a pending deposit, the API attempts to verify the reference directly with Paystack and safely posts a balanced ledger entry if the provider confirms a matching successful transaction. A confirmed terminal failure is marked failed without a wallet credit. Timeouts, mismatches and ongoing provider statuses remain pending; the API never infers success or failure from a browser redirect.
 
 ### Deposit history
 
