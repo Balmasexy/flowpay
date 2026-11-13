@@ -20,7 +20,12 @@ const pair = generateKeyPairSync("ed25519");
 const jwk = pair.publicKey.export({ format: "jwk" });
 const jwks = createLocalJWKSet({ keys: [{ ...jwk, kid: "paystack-dva-test", alg: "EdDSA", use: "sig" }] });
 
-async function setup() {
+async function setup(options: {
+  existingAccount?: boolean;
+  bankSlug?: string | null;
+  lastRequeryAt?: Date | null;
+  requeryClaimed?: boolean;
+} = {}) {
   process.env.PAYSTACK_ENVIRONMENT = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
   process.env.FLOWPAY_RUNTIME_ENV = "development";
@@ -42,6 +47,29 @@ async function setup() {
           id: userId, role: "customer", name: "Test Customer",
           email: "test@example.invalid", phone: "08012345678"
         }] };
+      }
+      if (sql.includes("FROM public.fp_paystack_dedicated_accounts_v2") && sql.includes("LIMIT 1")) {
+        return options.existingAccount
+          ? { rowCount: 1, rows: [{
+              user_id: userId, paystack_customer_code: "CUS_test123",
+              dedicated_account_id: "12345", account_number: "9930000737",
+              bank_name: "Test Bank", account_name: "FlowPay / Test Customer",
+              provider_domain: "test", status: "assigned",
+              bank_slug: options.bankSlug === undefined ? "test-bank" : options.bankSlug,
+              last_requery_at: options.lastRequeryAt ?? null
+            }] }
+          : { rowCount: 0, rows: [] };
+      }
+      if (sql.includes("UPDATE public.fp_paystack_dedicated_accounts_v2") && sql.includes("SET bank_slug = $3")) {
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes("UPDATE public.fp_paystack_dedicated_accounts_v2") && sql.includes("SET last_requery_at = NOW()")) {
+        return options.requeryClaimed === false
+          ? { rowCount: 0, rows: [] }
+          : { rowCount: 1, rows: [{ last_requery_at: new Date() }] };
+      }
+      if (sql.includes("SELECT last_requery_at FROM public.fp_paystack_dedicated_accounts_v2")) {
+        return { rowCount: 1, rows: [{ last_requery_at: options.lastRequeryAt ?? new Date(Date.now() - 120_000) }] };
       }
       if (sql.includes("FROM public.fp_paystack_dedicated_accounts")) {
         return { rowCount: 0, rows: [] };
@@ -144,6 +172,57 @@ test("accepts issuer-verified Neon JWTs without an audience claim and stores onl
   const assignedUpdate = context.queries.find(item => item.sql.includes("account_number = $6") && item.sql.includes("status = 'assigned'"));
   assert.ok(assignedUpdate, "account data must be stored only in the provider-confirmed assignment update");
   assert.equal(assignedUpdate.values?.[5], "9930000737");
+});
+
+test("requeries an assigned DVA using a Paystack-confirmed provider slug", async () => {
+  const context = await setup({ existingAccount: true, bankSlug: null });
+  const calls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    calls.push(url);
+    if (url === "https://api.paystack.co/customer/CUS_test123") {
+      return new Response(JSON.stringify({
+        status: true,
+        data: {
+          domain: "test",
+          dedicated_account: {
+            account_number: "9930000737", assigned: true, active: true,
+            bank: { slug: "test-bank" }
+          }
+        }
+      }), { status: 200 });
+    }
+    if (url === "https://api.paystack.co/dedicated_account/requery?account_number=9930000737&provider_slug=test-bank") {
+      return new Response(JSON.stringify({ status: true, message: "Requery initiated" }), { status: 200 });
+    }
+    throw new Error("Unexpected Paystack request: " + url);
+  };
+  const response = context.response();
+  await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), response.res);
+  assert.equal(response.result().status, 202);
+  assert.equal(response.result().body.requeryRequested, true);
+  assert.deepEqual(calls, [
+    "https://api.paystack.co/customer/CUS_test123",
+    "https://api.paystack.co/dedicated_account/requery?account_number=9930000737&provider_slug=test-bank"
+  ]);
+  assert.ok(context.queries.some(item => item.sql.includes("SET bank_slug = $3")));
+  assert.ok(context.queries.some(item => item.sql.includes("SET last_requery_at = NOW()")));
+});
+
+test("enforces the Paystack ten-minute DVA requery limit before contacting Paystack", async () => {
+  const context = await setup({
+    existingAccount: true,
+    bankSlug: "test-bank",
+    lastRequeryAt: new Date(Date.now() - 120_000),
+    requeryClaimed: false
+  });
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 200 }); };
+  const response = context.response();
+  await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), response.res);
+  assert.equal(response.result().status, 429);
+  assert.equal(response.result().body.error, "PAYSTACK_DVA_REQUERY_RATE_LIMITED");
+  assert.equal(calls, 0);
 });
 
 test("persists Paystack single-step assignment success even after new DVA assignment is disabled", async () => {
