@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
+import { settleVerifiedFlutterwaveDeposit } from "./flutterwave-settlement.js";
 
 type Options = { pool: Pool | null };
 type Deposit = {
@@ -145,87 +146,41 @@ export function createFlutterwaveWebhookHandler({ pool }: Options) {
       return true;
     }
 
-    let client: PoolClient;
+    const eventHash = createHash("sha256").update(rawBody).digest("hex");
     try {
-      client = await pool.connect();
-    } catch (error) {
-      console.error("FlowPay Flutterwave webhook database unavailable:", error instanceof Error ? error.message : "database error");
-      send(res, 503, { error: "WEBHOOK_DATABASE_UNAVAILABLE" });
-      return true;
-    }
-    try {
-      await client.query("BEGIN");
-      const result = await client.query<Deposit>(
-        `SELECT transaction_id, provider_tx_ref, provider_transaction_id,
-                amount_minor::text AS amount_minor, currency, status
-           FROM public.fp_flutterwave_deposits
-          WHERE provider_tx_ref = $1
-          FOR UPDATE`,
-        [providerReference]
-      );
-      if (result.rowCount !== 1 || !result.rows[0]) {
-        await client.query("ROLLBACK");
-        send(res, 202, { received: true, processed: false, reason: "FLOWPAY_DEPOSIT_REFERENCE_NOT_FOUND" });
-        return true;
-      }
-      const deposit = result.rows[0];
-      if (
-        deposit.currency.trim() !== "NGN" ||
-        deposit.amount_minor !== verifiedAmount ||
-        (deposit.provider_transaction_id && deposit.provider_transaction_id !== providerIdText) ||
-        deposit.status === "failed"
-      ) {
-        await client.query("ROLLBACK");
-        send(res, 202, { received: true, processed: false, reason: "FLOWPAY_DEPOSIT_MISMATCH" });
-        return true;
-      }
-
-      const eventHash = createHash("sha256").update(rawBody).digest("hex");
-      const inserted = await client.query(
-        `INSERT INTO public.fp_payment_events
-           (provider, provider_event_id, event_type, transaction_id, payload_sha256, processing_status)
-         VALUES ('flutterwave', $1, 'charge.completed', $2, $3, 'pending')
-         ON CONFLICT (provider, provider_event_id) DO NOTHING
-         RETURNING provider_event_id`,
-        [providerIdText, deposit.transaction_id, eventHash]
-      );
-
-      if (inserted.rowCount === 0) {
-        await client.query("COMMIT");
-        send(res, 200, { received: true, processed: true, duplicate: true, walletCredited: false });
-        return true;
-      }
-
-      await client.query(
-        `UPDATE public.fp_flutterwave_deposits
-            SET provider_transaction_id = $2,
-                verified_at = COALESCE(verified_at, NOW())
-          WHERE transaction_id = $1 AND status = 'pending'`,
-        [deposit.transaction_id, providerIdText]
-      );
-      await client.query(
-        `UPDATE public.fp_payment_events
-            SET processing_status = 'processed'
-          WHERE provider = 'flutterwave' AND provider_event_id = $1`,
-        [providerIdText]
-      );
-      await client.query("COMMIT");
+      const settled = await settleVerifiedFlutterwaveDeposit(pool, {
+        providerReference,
+        providerTransactionId: providerIdText,
+        amountMinor: verifiedAmount,
+        currency: "NGN",
+        eventId: providerIdText,
+        eventType: "charge.completed",
+        payloadSha256: eventHash
+      });
       send(res, 200, {
         received: true,
         processed: true,
+        duplicate: settled.duplicate,
         providerVerified: true,
-        transactionId: deposit.transaction_id,
-        status: "pending",
-        walletCredited: false
+        transactionId: settled.transactionId,
+        status: settled.status,
+        walletCredited: settled.walletCredited
       });
-      return true;
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      console.error("FlowPay Flutterwave webhook processing failed:", error instanceof Error ? error.message : "database error");
-      send(res, 503, { error: "WEBHOOK_PROCESSING_UNAVAILABLE" });
-      return true;
-    } finally {
-      client.release();
+      const code = error instanceof Error ? error.message : "WEBHOOK_PROCESSING_UNAVAILABLE";
+      if ([
+        "FLOWPAY_FLUTTERWAVE_DEPOSIT_NOT_FOUND",
+        "FLOWPAY_FLUTTERWAVE_DEPOSIT_MISMATCH",
+        "FLUTTERWAVE_DUPLICATE_EVENT_MISMATCH",
+        "FLUTTERWAVE_DEPOSIT_NOT_PENDING"
+      ].includes(code)) {
+        send(res, 202, { received: true, processed: false, reason: code });
+        return true;
+      }
+      console.error("FlowPay Flutterwave webhook settlement failed:", code);
+      send(res, 503, { error: code === "FLUTTERWAVE_CLEARING_ACCOUNT_NOT_CONFIGURED"
+        ? code : "WEBHOOK_PROCESSING_UNAVAILABLE" });
     }
+    return true;
   };
 }
