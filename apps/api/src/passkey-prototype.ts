@@ -67,7 +67,7 @@ function validUuid(value: unknown): value is string {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function validTransferContext(value: unknown): value is TransferContext {
+export function isValidPasskeyPrototypeTransferContext(value: unknown): value is TransferContext {
   const body = asRecord(value);
   if (!body) return false;
   if (Object.keys(body).some(key => !["accountNumber", "bankCode", "amountMinor", "idempotencyKey"].includes(key))) return false;
@@ -92,7 +92,7 @@ export function passkeyPrototypeContextHash(context: TransferContext): string {
   ].join("\n"), "utf8").digest("hex");
 }
 
-function isNumericPin(value: unknown): value is string {
+export function isValidPasskeyPrototypePin(value: unknown): value is string {
   return typeof value === "string" && /^\d{6}$/.test(value);
 }
 
@@ -138,7 +138,7 @@ async function setupTransactionPin(
     send(res, message === "PAYLOAD_TOO_LARGE" ? 413 : 400, { error: message });
     return;
   }
-  if (Object.keys(body).some(key => key !== "transactionPin") || !isNumericPin(body.transactionPin)) {
+  if (Object.keys(body).some(key => key !== "transactionPin") || !isValidPasskeyPrototypePin(body.transactionPin)) {
     send(res, 400, { error: "SIX_DIGIT_TRANSACTION_PIN_REQUIRED" });
     return;
   }
@@ -175,7 +175,7 @@ async function startTransactionChallenge(
     send(res, message === "PAYLOAD_TOO_LARGE" ? 413 : 400, { error: message });
     return;
   }
-  if (!validTransferContext(body)) {
+  if (!isValidPasskeyPrototypeTransferContext(body)) {
     send(res,400,{error:"INVALID_TRANSFER_REVIEW_DETAILS"});
     return;
   }
@@ -236,8 +236,8 @@ async function verifyTransactionApproval(
     amountMinor: body.amountMinor,
     idempotencyKey: body.idempotencyKey
   };
-  if (!validTransferContext(context) || !validUuid(body.challengeId) ||
-      !isNumericPin(body.transactionPin) || !asRecord(body.response) ||
+  if (!isValidPasskeyPrototypeTransferContext(context) || !validUuid(body.challengeId) ||
+      !isValidPasskeyPrototypePin(body.transactionPin) || !asRecord(body.response) ||
       Object.keys(body).some(key => ![
         "accountNumber","bankCode","amountMinor","idempotencyKey",
         "challengeId","transactionPin","response"
