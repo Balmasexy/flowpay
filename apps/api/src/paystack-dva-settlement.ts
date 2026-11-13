@@ -65,8 +65,9 @@ export async function settleVerifiedPaystackDvaCharge(
   const amount = safeAmount(verified.amount);
   const currency = typeof verified.currency === "string" ? verified.currency : "";
   const domain = typeof verified.domain === "string" ? verified.domain : "";
-  const channel = typeof verified.channel === "string" ? verified.channel : "";
   const authorization = record(verified.authorization);
+  const channel = typeof verified.channel === "string" ? verified.channel
+    : typeof authorization.channel === "string" ? authorization.channel : "";
   const receiverAccountNumber = typeof authorization.receiver_bank_account_number === "string"
     ? authorization.receiver_bank_account_number.trim() : "";
   const customer = record(verified.customer);
