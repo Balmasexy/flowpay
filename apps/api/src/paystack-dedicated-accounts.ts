@@ -137,6 +137,7 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
   if (![
     "dedicatedaccount.assign.success",
     "dedicatedaccount.assign.failed",
+    "assigndedicatedaccount.success",
     "assigndedicatedaccount.failed",
     "customeridentification.success",
     "customeridentification.failed"
@@ -171,7 +172,7 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
     );
     return true;
   }
-  if (eventName === "dedicatedaccount.assign.success") {
+  if (eventName === "dedicatedaccount.assign.success" || eventName === "assigndedicatedaccount.success") {
     const account = record(data.dedicated_account ?? data);
     const bank = record(account.bank);
     const accountNumber = typeof account.account_number === "string" ? account.account_number : "";
