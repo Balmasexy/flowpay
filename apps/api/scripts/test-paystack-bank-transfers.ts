@@ -83,6 +83,7 @@ async function setup(options: SetupOptions = {}) {
 
   const statements: { sql: string; values?: unknown[]; client: number }[] = [];
   const ledgerValues: unknown[][] = [];
+  const notificationValues: unknown[][] = [];
   let connections = 0;
   const pool = {
     query: async (sql: string, values?: unknown[]) => {
@@ -150,6 +151,10 @@ async function setup(options: SetupOptions = {}) {
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.fp_ledger_entries")) {
             return { rowCount: 1, rows: [{ count: 0 }] };
           }
+          if (sql.includes("INSERT INTO public.fp_customer_notifications")) {
+            notificationValues.push(values ?? []);
+            return { rowCount: 1, rows: [] };
+          }
           if (sql.includes("INSERT INTO public.fp_ledger_entries")) {
             ledgerValues.push(values ?? []);
             return { rowCount: 2, rows: [] };
@@ -188,7 +193,7 @@ async function setup(options: SetupOptions = {}) {
     } as unknown as ServerResponse;
     return { res, result: () => ({ status, body: body ? JSON.parse(body) : null }) };
   };
-  return { handler, request, response, statements, ledgerValues, connections: () => connections };
+  return { handler, request, response, statements, ledgerValues, notificationValues, connections: () => connections };
 }
 
 function body(overrides: Record<string, unknown> = {}) {
@@ -276,6 +281,10 @@ test("posts a ₦50,000 sandbox bank withdrawal with one balanced wallet debit a
   assert.ok(payoutInsert.values?.includes("0000"));
   assert.equal(payoutInsert.values?.includes(accountNumber), false);
   assert.equal(calls.filter(item => item.url.endsWith("/transfer")).length, 1);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "success");
+  assert.ok(String(context.notificationValues[0][9]).includes("Zenith Bank"));
 });
 
 test("insufficient available balance prevents transfer initiation and ledger posting", async () => {
@@ -358,6 +367,10 @@ test("a definite Paystack rejection releases the reservation without a wallet de
   assert.equal(transferInitiations, 1);
   assert.equal(context.ledgerValues.length, 0);
   assert.ok(context.statements.some(item => item.sql.includes("SET status = 'failed'")));
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "failed");
+  assert.ok(String(context.notificationValues[0][9]).includes("not accepted by Paystack"));
 });
 
 test("incorrect transaction PIN is rejected before beneficiary creation", async () => {
