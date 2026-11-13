@@ -117,7 +117,11 @@ const server = createServer(async (req, res) => {
         status: "not_ready",
         database: "not_configured",
         payments: {
-          paystack: { bankDirectory: false, bankTransfers: false, deposits: false, dedicatedAccounts: false },
+          paystack: {
+            bankDirectory: false, beneficiaryVerification: false, bankTransfers: false,
+            deposits: false, dedicatedAccounts: false, webhookVerificationAvailable: false,
+            webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
+          },
           flutterwave: { deposits: false }
         }
       });
