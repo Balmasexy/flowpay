@@ -12,7 +12,7 @@ Paystack is integrated inside the existing FlowPay API. It is a separate provide
 - The only supported currency is NGN. The browser submits an amount in kobo as an integer string.
 - A deposit is credited only after a valid Paystack signature, independent Paystack transaction verification, matching provider reference, amount, currency, provider transaction ID, and a pending FlowPay deposit have all been confirmed.
 - Live mode is not activated by this code change. It requires the actual live secret and explicit feature switch to be configured securely in Render after Paystack has approved the business for go-live.
-- Live dedicated virtual accounts and live bank payouts remain separate, disabled capabilities; see `docs/PAYSTACK_LIVE_MODE_READINESS.md`.
+- Live dedicated virtual accounts remain a separate approval-dependent capability. Bank payout code uses the same selected Paystack secret/environment as bank lookup but has its own environment-specific transfer switch; keep live payouts disabled until Paystack confirms Transfers access and the operational review is complete. See `docs/PAYSTACK_BANK_PAYOUTS_SANDBOX.md` and `docs/PAYSTACK_LIVE_MODE_READINESS.md`.
 - The webhook posts a balanced ledger transaction atomically: a positive customer-wallet entry and equal negative entry in the dedicated `paystack_ngn_clearing` system account. A database constraint requires at least two balanced entries before the transaction can be marked posted.
 - Duplicate webhook delivery cannot post a second credit. A previously received event can resume a pending deposit if its ledger posting did not complete.
 - No test clearing account balance represents money held at Paystack or a bank. Sandbox credits are not real funds.
