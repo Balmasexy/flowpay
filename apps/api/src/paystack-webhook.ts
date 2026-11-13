@@ -1,5 +1,5 @@
 import { processPaystackDedicatedAccountWebhook } from "./paystack-dedicated-accounts.js";
-import { getPaystackBankRuntime, getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 import { processPaystackTransferWebhook } from "./paystack-bank-transfers.js";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -134,13 +134,9 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       send(res, 200, { received: true, ignored: true });
       return true;
     }
-    // Bank payouts have their own key/runtime and explicit transfer gate.
-    // Charge events must still obey the separate live-deposit switch.
-    const paymentRuntime = getPaystackRuntime();
-    if (!paymentRuntime || paymentRuntime.environment !== environment) {
-      send(res, 200, { received: true, ignored: true, reason: "PAYSTACK_LIVE_PAYMENTS_DISABLED" });
-      return true;
-    }
+    // A successful charge already accepted by Paystack must be reconciled even
+    // after the merchant disables new deposits. Initiation remains gated in
+    // paystack-checkout.ts; disabling it must never strand an in-flight deposit.
     const data = event.data && typeof event.data === "object" && !Array.isArray(event.data)
       ? event.data as Record<string, unknown> : {};
     const reference = typeof data.reference === "string" ? data.reference.trim() : "";
