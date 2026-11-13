@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { getPaystackRuntime } from "../src/paystack-mode.js";
+import { getPaystackBankRuntime, getPaystackRuntime } from "../src/paystack-mode.js";
 import { isPaystackBankPayoutsEnabled } from "../src/paystack-bank-transfers.js";
 
 const original = {
@@ -70,6 +70,30 @@ test("test bank payouts require the development runtime and explicit sandbox swi
   process.env.PAYSTACK_TRANSFERS_ENABLED = "true";
   process.env.NODE_ENV = "production";
   assert.equal(isPaystackBankPayoutsEnabled("test"), false);
+});
+
+test("live bank lookups can use live credentials while live deposits remain disabled", () => {
+  process.env.NODE_ENV = "production";
+  process.env.PAYSTACK_ENVIRONMENT = "live";
+  process.env.PAYSTACK_SECRET_KEY = "sk_live_unit";
+  process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = "false";
+  process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = "false";
+
+  assert.equal(getPaystackRuntime(), null);
+  assert.deepEqual(getPaystackBankRuntime(), { environment: "live", secretKey: "sk_live_unit" });
+  assert.equal(isPaystackBankPayoutsEnabled("live"), false);
+
+  process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = "true";
+  assert.equal(isPaystackBankPayoutsEnabled("live"), true);
+  assert.equal(getPaystackRuntime(), null);
+});
+
+test("live bank runtime rejects live keys outside production", () => {
+  process.env.NODE_ENV = "test";
+  process.env.PAYSTACK_ENVIRONMENT = "live";
+  process.env.PAYSTACK_SECRET_KEY = "sk_live_unit";
+  process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = "true";
+  assert.equal(getPaystackBankRuntime(), null);
 });
 
 test("live bank payouts require production and the explicit live transfer switch", () => {
