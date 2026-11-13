@@ -395,7 +395,7 @@ export default function MoneyReceived({ token, paymentReturn = false, paymentPro
       <div className="fp-money-main-column">
         <div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">01 / FUND YOUR WALLET</span><h3>Choose your deposit amount</h3></div><span className="fp-money-currency">NGN ₦</span></div>
         <form onSubmit={startPaystackCheckout} className="fp-money-checkout">
-          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">{paystackEnvironment === "live" ? "LIVE MODE" : "TEST MODE"}</span></div>
+          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">{paystackEnvironment === "live" ? "LIVE MODE" : paystackEnvironment === "test" ? "TEST MODE" : "NOT CONFIGURED"}</span></div>
           {!paystackEnabled && <div className="fp-preview-warning" role="status">Paystack checkout remains visible, but the backend has not confirmed its credentials, callback, deposit limits and ledger readiness. Try the route to receive the exact server-side configuration error; no payment will be created until the backend is ready.</div>}
           <label htmlFor="fp-deposit-amount">How much would you like to add?</label>
           <div className="fp-money-amount-input"><span>₦</span><input id="fp-deposit-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={event => setAmount(event.target.value)} disabled={depositing} required/></div>
@@ -405,7 +405,9 @@ export default function MoneyReceived({ token, paymentReturn = false, paymentPro
           <button type="submit" className="fp-primary fp-money-submit" disabled={depositing || !amount.trim()}>{depositing ? "Connecting to Paystack…" : <>Continue securely <ExternalLink size={16}/></>}</button>
           <small className="fp-money-minor-note">{paystackEnvironment === "live"
             ? "Live payment · Real funds move only after you confirm payment on Paystack."
-            : "Sandbox transaction · No live customer funds are collected in this environment."}</small>
+            : paystackEnvironment === "test"
+              ? "Sandbox transaction · No live customer funds are collected in this environment."
+              : "Provider mode is not confirmed. FlowPay will not create a payment until the backend is configured."}</small>
         </form>
         <form onSubmit={startFlutterwaveCheckout} className="fp-money-checkout fp-money-flutterwave-checkout">
           <div className="fp-money-provider-head"><span className="fp-money-provider-logo">F</span><div><b>Flutterwave checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">SANDBOX</span></div>
