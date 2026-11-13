@@ -72,6 +72,9 @@ jobs:
       - name: Test NGN 50,000 Paystack sandbox deposit checkout
         run: npm run test:paystack-checkout-50000 --prefix apps/api
 
+      - name: Test authenticated Paystack deposit callback recovery
+        run: npm run test:paystack-status --prefix apps/api
+
       - name: Test fail-closed Paystack live and test mode selection
         run: npm run test:paystack-mode --prefix apps/api
 
