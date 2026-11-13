@@ -14,6 +14,7 @@ import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
 import { createPaystackBankTransfersHandler, isPaystackBankPayoutsEnabled } from "./paystack-bank-transfers.js";
+import { createCustomerNotificationsHandler } from "./customer-notifications.js";
 import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
@@ -49,6 +50,7 @@ const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer
 const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
 const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
 const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, audience });
+const customerNotificationsHandler = createCustomerNotificationsHandler({ pool, jwks, issuer, audience });
 const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer });
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
@@ -88,13 +90,14 @@ const server = createServer(async (req, res) => {
   if (await flutterwaveCheckoutHandler(req, res)) return;
   if (await supportRequestsHandler(req, res)) return;
   if (await customerAiHandler(req, res)) return;
+  if (await customerNotificationsHandler(req, res)) return;
   if (await flowPayTransfersHandler(req, res)) return;
   if (await paystackBankTransfersHandler(req, res)) return;
   if (await paystackDedicatedAccountsHandler(req, res)) return;
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
