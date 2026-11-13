@@ -496,8 +496,10 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
   const runtime = getPaystackBankRuntime();
-  if (!runtime || !isPaystackBankPayoutsEnabled(runtime.environment)) {
-    return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
+  // The transfer-creation switch only controls new payouts. Existing transfers
+  // still need provider verification and ledger reconciliation after it closes.
+  if (!runtime) {
+    return { status: 200, body: { received: true, ignored: true, reason: "PAYSTACK_PROVIDER_NOT_CONFIGURED" } };
   }
   const eventType = typeof event.event === "string" ? event.event : "";
   if (!["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
