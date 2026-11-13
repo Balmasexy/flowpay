@@ -533,11 +533,12 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         {banksLoading && <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p>}
         {banksError && <div className="fp-preview-warning" role="alert">
             <b>Bank directory unavailable ({banksError})</b>
-            <div>{banksError === "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED"
+            <div>{bankDirectoryMessage || (banksError === "PAYSTACK_BANK_PROVIDER_NOT_CONFIGURED"
               ? "FlowPay's production API does not currently detect a matching Paystack environment and secret key. The To Bank service remains visible, but bank choices and beneficiary verification require that provider connection."
               : banksError === "PAYSTACK_BANK_API_UNAVAILABLE"
                 ? "Paystack did not return its bank directory. Check the API credential, provider access and Paystack service response."
-                : "The provider bank list could not be loaded. Retry after checking the API connection."}</div>
+                : "The provider bank list could not be loaded. Retry after checking the API connection.")}</div>
+            {bankRequiredConfiguration.length > 0 && <ul>{bankRequiredConfiguration.map(item => <li key={item}><code>{item}</code></li>)}</ul>}
             <button type="button" className="fp-outline" onClick={retryBankDirectory} disabled={banksLoading}>
               <RefreshCw size={15}/> {banksLoading ? "Loading banks…" : "Reload bank list"}
             </button>
