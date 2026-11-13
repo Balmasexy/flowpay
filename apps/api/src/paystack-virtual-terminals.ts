@@ -1,11 +1,11 @@
-import { jwtVerify, type JWTVerifyGetKey } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { getPaystackRuntime } from "./paystack-mode.js";
 
 type Options = {
   pool: Pool | null;
-  jwks: JWTVerifyGetKey | null;
+  jwks: ReturnType<typeof createRemoteJWKSet> | null;
   issuer?: string;
   audience?: string;
 };
