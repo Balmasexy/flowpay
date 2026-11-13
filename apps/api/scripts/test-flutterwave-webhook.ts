@@ -10,7 +10,9 @@ const originalFetch = globalThis.fetch;
 const originalEnv = {
   environment: process.env.FLW_ENVIRONMENT,
   secret: process.env.FLW_SECRET_KEY,
-  hash: process.env.FLW_WEBHOOK_SECRET_HASH
+  hash: process.env.FLW_WEBHOOK_SECRET_HASH,
+  runtime: process.env.FLOWPAY_RUNTIME_ENV,
+  nodeEnv: process.env.NODE_ENV
 };
 
 function setup(options: {
@@ -25,6 +27,8 @@ function setup(options: {
   process.env.FLW_ENVIRONMENT = "test";
   process.env.FLW_SECRET_KEY = "FLWSECK_TEST-unit-test";
   process.env.FLW_WEBHOOK_SECRET_HASH = "unit-test-webhook-hash";
+  process.env.FLOWPAY_RUNTIME_ENV = "development";
+  process.env.NODE_ENV = "test";
 
   const transactionId = "00000000-0000-4000-8000-000000000001";
   const userId = "00000000-0000-4000-8000-000000000002";
@@ -189,4 +193,6 @@ after(() => {
   if (originalEnv.environment === undefined) delete process.env.FLW_ENVIRONMENT; else process.env.FLW_ENVIRONMENT = originalEnv.environment;
   if (originalEnv.secret === undefined) delete process.env.FLW_SECRET_KEY; else process.env.FLW_SECRET_KEY = originalEnv.secret;
   if (originalEnv.hash === undefined) delete process.env.FLW_WEBHOOK_SECRET_HASH; else process.env.FLW_WEBHOOK_SECRET_HASH = originalEnv.hash;
+  if (originalEnv.runtime === undefined) delete process.env.FLOWPAY_RUNTIME_ENV; else process.env.FLOWPAY_RUNTIME_ENV = originalEnv.runtime;
+  if (originalEnv.nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalEnv.nodeEnv;
 });
