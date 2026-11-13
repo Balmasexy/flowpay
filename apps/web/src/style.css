@@ -956,3 +956,49 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   background:#fff4eb;color:#a94f0c;font-size:13px;font-weight:750;
 }
 .flowpay-app .fp-page-back:hover { background:#ffe6d2;color:#843d08; }
+
+
+/* Customer transfer notifications */
+.fp-notifications{position:relative;display:flex;align-items:center}
+.fp-notification-trigger{position:relative;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;background:#fff;color:#55564f}
+.fp-notification-trigger:hover{border-color:#ffc08f;color:#bd5b0b}
+.fp-notification-count{position:absolute;right:-5px;top:-5px;min-width:18px;height:18px;padding:0 4px;display:grid;place-items:center;border-radius:99px;background:#d94335;color:#fff;font-size:9px;font-weight:800;border:2px solid #fff}
+.fp-notification-panel{position:absolute;top:46px;right:0;width:360px;max-width:min(360px,calc(100vw - 20px));max-height:min(580px,calc(100vh - 90px));overflow:hidden;display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 16px 48px #1112;z-index:90;color:#292923}
+.fp-notification-panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border-bottom:1px solid #efefec}
+.fp-notification-panel-head>div:first-child{display:grid;gap:3px}
+.fp-notification-panel-head b{font:800 14px Manrope,sans-serif}
+.fp-notification-panel-head small{font-size:10px;color:#858780}
+.fp-notification-head-actions{display:flex;gap:5px}
+.fp-notification-head-actions button{width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:7px;background:#f6f6f4;color:#666}
+.fp-notification-mark-all{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:9px 14px;border:0;border-bottom:1px solid #f0f0ed;background:#fff;color:#bd5d10;font-size:10px;font-weight:700}
+.fp-notification-list{overflow:auto}
+.fp-notification-item{width:100%;display:flex;align-items:flex-start;gap:10px;padding:13px 12px;border:0;border-bottom:1px solid #f0f0ed;background:#fff;text-align:left;color:#333;cursor:pointer}
+.fp-notification-item:hover{background:#fffaf6}
+.fp-notification-item.is-unread{background:#fffaf5}
+.fp-notification-status-icon{width:30px;height:30px;display:grid;place-items:center;flex:0 0 30px;border-radius:9px;background:#effaf3;color:#18804c}
+.fp-notification-item.status-failed .fp-notification-status-icon,.fp-notification-item.status-reversed .fp-notification-status-icon{background:#fff0ef;color:#bd3c34}
+.fp-notification-copy{min-width:0;display:grid;gap:5px;flex:1}
+.fp-notification-title{font-size:11px;font-weight:800;color:#292923}
+.fp-notification-message{font-size:10px;line-height:1.5;color:#696a63}
+.fp-notification-meta{display:flex;align-items:center;gap:4px;font-size:9px;color:#999a93;overflow-wrap:anywhere}
+.fp-notification-unread-dot{width:7px;height:7px;flex:0 0 7px;margin-top:5px;border-radius:50%;background:var(--orange)}
+.fp-notification-empty{display:flex;flex-direction:column;align-items:center;gap:7px;padding:28px 18px;color:#989991;font-size:10px;text-align:center}
+.fp-notification-empty svg{color:var(--orange)}
+.fp-notification-empty b{font-size:11px;color:#444}
+.fp-notification-empty span{max-width:230px;line-height:1.5}
+.fp-notification-error{padding:18px 14px;color:#a33a31;font-size:10px}
+.fp-notification-footer{width:100%;padding:12px;border:0;border-top:1px solid #efefec;background:#fafaf8;color:#bd5d10;font-size:10px;font-weight:800}
+.fp-notification-toast{position:fixed;z-index:110;top:82px;right:18px;width: min(380px,calc(100vw - 24px));display:flex;align-items:flex-start;gap:10px;padding:13px 14px;background:#fff;border:1px solid #e8e8e3;border-left:4px solid #18804c;border-radius:11px;box-shadow:0 14px 38px #0002;color:#292923}
+.fp-notification-toast.status-failed,.fp-notification-toast.status-reversed{border-left-color:#c4433a}
+.fp-notification-toast-icon{color:#18804c;flex:0 0 auto}
+.fp-notification-toast.status-failed .fp-notification-toast-icon,.fp-notification-toast.status-reversed .fp-notification-toast-icon{color:#c4433a}
+.fp-notification-toast>span:nth-child(2){min-width:0;display:grid;gap:4px;flex:1}
+.fp-notification-toast b{font-size:11px}
+.fp-notification-toast small{font-size:10px;line-height:1.45;color:#696a63}
+.fp-notification-toast button{border:0;background:transparent;color:#888;padding:0}
+@media(max-width:760px){
+  .fp-header-actions{gap:9px}
+  .fp-notification-trigger{width:35px;height:35px}
+  .fp-notification-panel{position:fixed;top:64px;right:8px;max-height:calc(100vh - 88px)}
+  .fp-notification-toast{top:68px;right:10px}
+}

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -443,6 +444,35 @@ export function createFlowPayTransfersHandler(options: Options) {
           [transactionId]
         );
         if (posted.rowCount !== 1) throw new Error("FLOWPAY_TRANSFER_POST_FAILED");
+
+        const amountLabel = formatNgnMinor(input.amountMinor);
+        const senderName = (identity.name ?? "You").trim() || "You";
+        const recipientName = (recipient.recipient_name ?? "FlowPay customer").trim() || "FlowPay customer";
+        const eventKey = `flowpay-wallet:${transactionId}:success`;
+        await enqueueTransferNotification(client, {
+          userId: identity.id,
+          eventKey: eventKey + ":sent",
+          transactionId,
+          reference,
+          transferType: "wallet",
+          direction: "sent",
+          status: "success",
+          amountMinor: input.amountMinor,
+          title: "Transfer successful",
+          message: `You sent ${amountLabel} to ${recipientName}.`
+        });
+        await enqueueTransferNotification(client, {
+          userId: recipient.id,
+          eventKey: eventKey + ":received",
+          transactionId,
+          reference,
+          transferType: "wallet",
+          direction: "received",
+          status: "success",
+          amountMinor: input.amountMinor,
+          title: "Money received",
+          message: `You received ${amountLabel} from ${senderName}.`
+        });
 
         await client.query("COMMIT");
         send(res, 201, {

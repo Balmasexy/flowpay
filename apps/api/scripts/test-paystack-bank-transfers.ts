@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createLocalJWKSet, SignJWT, type JWTPayload } from "jose";
 import { test } from "node:test";
-import { createPaystackBankTransfersHandler } from "../src/paystack-bank-transfers.js";
+import { createPaystackBankTransfersHandler, processPaystackTransferWebhook } from "../src/paystack-bank-transfers.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnvironment = {
@@ -13,12 +13,15 @@ const originalEnvironment = {
   secret: process.env.PAYSTACK_SECRET_KEY,
   transfers: process.env.PAYSTACK_TRANSFERS_ENABLED,
   runtime: process.env.FLOWPAY_RUNTIME_ENV,
-  nodeEnv: process.env.NODE_ENV
+  nodeEnv: process.env.NODE_ENV,
+  livePayments: process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED,
+  liveTransfers: process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED
 };
 const senderId = "00000000-0000-4000-8000-000000000001";
 const walletId = "00000000-0000-4000-8000-000000000003";
 const clearingId = "00000000-0000-4000-8000-000000000007";
 const transactionId = "00000000-0000-4000-8000-000000000008";
+const reversalId = "00000000-0000-4000-8000-000000000009";
 const accountNumber = "0000000000";
 const bankCode = "057";
 const amountMinor = "5000000";
@@ -33,15 +36,21 @@ type SetupOptions = {
   wrongPin?: boolean;
   existing?: boolean;
   held?: string;
+  environment?: "test" | "live";
+  ledgerStatus?: string;
 };
-function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001") {
+function payoutRecord(
+  reference = "flowpay-bnk-00000000000000000000000000000001",
+  secret = "sk_test_unit_test_secret"
+) {
+  const live = secret.startsWith("sk_live_");
   return {
     transaction_id: transactionId,
     user_id: senderId,
     account_id: walletId,
     reference,
-    recipient_code: "RCP_test123",
-    transfer_code: "TRF_test123",
+    recipient_code: live ? "RCP_live123" : "RCP_test123",
+    transfer_code: live ? "TRF_live123" : "TRF_test123",
     provider_transfer_id: "987654321",
     amount_minor: amountMinor,
     currency: "NGN",
@@ -49,18 +58,22 @@ function payoutRecord(reference = "flowpay-bnk-00000000000000000000000000000001"
     bank_name: "Zenith Bank",
     account_name: "Test Customer",
     account_number_last4: "0000",
-    account_fingerprint: createHmac("sha256", "sk_test_unit_test_secret").update(accountNumber, "utf8").digest("hex"),
+    account_fingerprint: createHmac("sha256", secret).update(accountNumber, "utf8").digest("hex"),
     status: "success",
     provider_status: "success"
   };
 }
 
 async function setup(options: SetupOptions = {}) {
-  process.env.PAYSTACK_ENVIRONMENT = "test";
-  process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
-  process.env.PAYSTACK_TRANSFERS_ENABLED = "true";
-  process.env.FLOWPAY_RUNTIME_ENV = "development";
-  process.env.NODE_ENV = "test";
+  const environment = options.environment ?? "test";
+  const secret = environment === "live" ? "sk_live_unit_test_secret" : "sk_test_unit_test_secret";
+  process.env.PAYSTACK_ENVIRONMENT = environment;
+  process.env.PAYSTACK_SECRET_KEY = secret;
+  process.env.PAYSTACK_TRANSFERS_ENABLED = environment === "test" ? "true" : "false";
+  process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = environment === "live" ? "true" : "false";
+  process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = environment === "live" ? "true" : "false";
+  process.env.FLOWPAY_RUNTIME_ENV = environment === "live" ? "production" : "development";
+  process.env.NODE_ENV = environment === "live" ? "production" : "test";
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-bank-transfer-test" })
     .setIssuer("https://flowpay.test")
@@ -72,6 +85,7 @@ async function setup(options: SetupOptions = {}) {
 
   const statements: { sql: string; values?: unknown[]; client: number }[] = [];
   const ledgerValues: unknown[][] = [];
+  const notificationValues: unknown[][] = [];
   let connections = 0;
   const pool = {
     query: async (sql: string, values?: unknown[]) => {
@@ -80,7 +94,7 @@ async function setup(options: SetupOptions = {}) {
       }
       if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("WHERE idempotency_key")) {
         return options.existing
-          ? { rowCount: 1, rows: [payoutRecord()] }
+          ? { rowCount: 1, rows: [payoutRecord(undefined, secret)] }
           : { rowCount: 0, rows: [] };
       }
       if (sql.includes("UPDATE public.fp_paystack_bank_transfers")) {
@@ -112,7 +126,7 @@ async function setup(options: SetupOptions = {}) {
           }
           if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("WHERE idempotency_key")) {
             return options.existing
-              ? { rowCount: 1, rows: [payoutRecord()] }
+              ? { rowCount: 1, rows: [payoutRecord(undefined, secret)] }
               : { rowCount: 0, rows: [] };
           }
           if (sql.includes("system_account_role = 'paystack_ngn_clearing'")) {
@@ -124,20 +138,31 @@ async function setup(options: SetupOptions = {}) {
           if (sql.includes("SUM(reservation.amount_minor)") && sql.includes("fp_paystack_bank_transfers") && sql.includes("fp_vtpass_bill_payments")) {
             return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
           }
+          if (sql.includes("SELECT id, status FROM public.fp_ledger_transactions") && sql.includes("idempotency_key")) {
+            return { rowCount: 0, rows: [] };
+          }
           if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
-            return { rowCount: 1, rows: [{ id: transactionId }] };
+            const key = String(values?.[0] ?? "");
+            return { rowCount: 1, rows: [{ id: key.startsWith("paystack-bank-reversal:") ? reversalId : transactionId }] };
           }
           if (sql.includes("INSERT INTO public.fp_paystack_bank_transfers")) {
             return { rowCount: 1, rows: [] };
           }
           if (sql.includes("FROM public.fp_paystack_bank_transfers") && sql.includes("FOR UPDATE")) {
-            return { rowCount: 1, rows: [payoutRecord(values?.[0] as string)] };
+            return { rowCount: 1, rows: [payoutRecord(values?.[0] as string, secret)] };
           }
           if (sql.includes("SELECT status FROM public.fp_ledger_transactions")) {
-            return { rowCount: 1, rows: [{ status: "pending" }] };
+            return { rowCount: 1, rows: [{ status: options.ledgerStatus ?? "pending" }] };
+          }
+          if (sql.includes("SELECT account_id::text AS account_id")) {
+            return { rowCount: 0, rows: [] };
           }
           if (sql.includes("SELECT COUNT(*)::int AS count FROM public.fp_ledger_entries")) {
             return { rowCount: 1, rows: [{ count: 0 }] };
+          }
+          if (sql.includes("INSERT INTO public.fp_customer_notifications")) {
+            notificationValues.push(values ?? []);
+            return { rowCount: 1, rows: [] };
           }
           if (sql.includes("INSERT INTO public.fp_ledger_entries")) {
             ledgerValues.push(values ?? []);
@@ -177,7 +202,7 @@ async function setup(options: SetupOptions = {}) {
     } as unknown as ServerResponse;
     return { res, result: () => ({ status, body: body ? JSON.parse(body) : null }) };
   };
-  return { handler, request, response, statements, ledgerValues, connections: () => connections };
+  return { handler, request, response, statements, ledgerValues, notificationValues, connections: () => connections, pool };
 }
 
 function body(overrides: Record<string, unknown> = {}) {
@@ -265,6 +290,10 @@ test("posts a ₦50,000 sandbox bank withdrawal with one balanced wallet debit a
   assert.ok(payoutInsert.values?.includes("0000"));
   assert.equal(payoutInsert.values?.includes(accountNumber), false);
   assert.equal(calls.filter(item => item.url.endsWith("/transfer")).length, 1);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "success");
+  assert.ok(String(context.notificationValues[0][9]).includes("Zenith Bank"));
 });
 
 test("insufficient available balance prevents transfer initiation and ledger posting", async () => {
@@ -347,6 +376,63 @@ test("a definite Paystack rejection releases the reservation without a wallet de
   assert.equal(transferInitiations, 1);
   assert.equal(context.ledgerValues.length, 0);
   assert.ok(context.statements.some(item => item.sql.includes("SET status = 'failed'")));
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "failed");
+  assert.ok(String(context.notificationValues[0][9]).includes("not accepted by Paystack"));
+});
+
+test("a verified Paystack transfer.failed webhook alerts the customer without a wallet debit", async () => {
+  const context = await setup();
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    assert.ok(url.endsWith("/transfer/verify/" + payoutRecord().reference));
+    return new Response(JSON.stringify({
+      status: true,
+      data: {
+        domain: "test", status: "failed", reference: payoutRecord().reference,
+        amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123",
+        id: 987654321,
+        recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+      }
+    }), { status: 200 });
+  };
+  const result = await processPaystackTransferWebhook(context.pool, "sk_test_unit_test_secret", {
+    event: "transfer.failed", data: { reference: payoutRecord().reference }
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "failed");
+  assert.equal(context.ledgerValues.length, 0);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "failed");
+});
+
+test("a verified Paystack transfer.reversed webhook credits back the wallet and alerts the customer", async () => {
+  const context = await setup({ ledgerStatus: "posted" });
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input);
+    assert.ok(url.endsWith("/transfer/verify/" + payoutRecord().reference));
+    return new Response(JSON.stringify({
+      status: true,
+      data: {
+        domain: "test", status: "reversed", reference: payoutRecord().reference,
+        amount: Number(amountMinor), currency: "NGN", transfer_code: "TRF_test123",
+        id: 987654321,
+        recipient: { recipient_code: "RCP_test123", details: { account_number: accountNumber, bank_code: bankCode } }
+      }
+    }), { status: 200 });
+  };
+  const result = await processPaystackTransferWebhook(context.pool, "sk_test_unit_test_secret", {
+    event: "transfer.reversed", data: { reference: payoutRecord().reference }
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "reversed");
+  assert.deepEqual(context.ledgerValues, [[reversalId, walletId, "5000000", clearingId, "-5000000"]]);
+  assert.equal(context.notificationValues.length, 1);
+  assert.equal(context.notificationValues[0][0], senderId);
+  assert.equal(context.notificationValues[0][6], "reversed");
+  assert.ok(String(context.notificationValues[0][9]).includes("returned to your FlowPay wallet"));
 });
 
 test("incorrect transaction PIN is rejected before beneficiary creation", async () => {
@@ -388,6 +474,10 @@ process.on("exit", () => {
   else process.env.PAYSTACK_TRANSFERS_ENABLED = originalEnvironment.transfers;
   if (originalEnvironment.runtime === undefined) delete process.env.FLOWPAY_RUNTIME_ENV;
   else process.env.FLOWPAY_RUNTIME_ENV = originalEnvironment.runtime;
+  if (originalEnvironment.livePayments === undefined) delete process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED;
+  else process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED = originalEnvironment.livePayments;
+  if (originalEnvironment.liveTransfers === undefined) delete process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED;
+  else process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED = originalEnvironment.liveTransfers;
   if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = originalEnvironment.nodeEnv;
 });

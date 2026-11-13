@@ -2,6 +2,7 @@ import { createHmac, randomUUID, scrypt as scryptCallback, timingSafeEqual } fro
 import { getPaystackRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -48,7 +49,7 @@ function validAmount(value: unknown): value is string {
   const amount = BigInt(value);
   return amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER);
 }
-function payoutsEnabled(environment: "test" | "live"): boolean {
+export function isPaystackBankPayoutsEnabled(environment: "test" | "live"): boolean {
   if (environment === "test") {
     return process.env.FLOWPAY_RUNTIME_ENV === "development" &&
       process.env.NODE_ENV !== "production" &&
@@ -311,6 +312,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:success`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "success",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer successful",
+        message: `You sent ${formatNgnMinor(payout.amount_minor)} to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}). Paystack confirmed the transfer.`
+      });
       await client.query("COMMIT");
       return { status: "success", duplicate: false };
     }
@@ -405,6 +418,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:reversed`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "reversed",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer reversed",
+        message: `Your ${formatNgnMinor(payout.amount_minor)} transfer to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}) was reversed by Paystack and returned to your FlowPay wallet.`
+      });
       await client.query("COMMIT");
       return { status: "reversed", duplicate: duplicateReversal };
     }
@@ -429,6 +454,18 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
           WHERE transaction_id = $1`,
         [payout.transaction_id, providerStatus, providerTransferId, transferCode]
       );
+      await enqueueTransferNotification(client, {
+        userId: payout.user_id,
+        eventKey: `paystack-bank:${payout.transaction_id}:failed`,
+        transactionId: payout.transaction_id,
+        reference: payout.reference,
+        transferType: "bank",
+        direction: "sent",
+        status: "failed",
+        amountMinor: payout.amount_minor,
+        title: "Bank transfer failed",
+        message: `Your ${formatNgnMinor(payout.amount_minor)} transfer to ${payout.bank_name} (account ending ${payout.account_number_last4.trim()}) was not completed by Paystack. No wallet debit was posted.`
+      });
       await client.query("COMMIT");
       return { status: providerStatus, duplicate: tx.rows[0].status === "failed" };
     }
@@ -440,7 +477,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
               provider_transfer_id = COALESCE($4, provider_transfer_id),
               transfer_code = COALESCE($5, transfer_code),
               status_note = CASE WHEN $2 = 'otp'
-                THEN 'Paystack requires the business owner to approve this sandbox transfer.'
+                THEN 'Paystack requires an authorized business owner to approve this transfer.'
                 ELSE 'Paystack has not reported a final transfer status.'
               END,
               updated_at = NOW()
@@ -459,7 +496,7 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
   const runtime = getPaystackRuntime();
-  if (!runtime || !payoutsEnabled(runtime.environment)) {
+  if (!runtime || !isPaystackBankPayoutsEnabled(runtime.environment)) {
     return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
   }
   const eventType = typeof event.event === "string" ? event.event : "";
@@ -497,7 +534,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
     const runtime = getPaystackRuntime();
     const secret = runtime?.secretKey ?? "";
     const environment = runtime?.environment ?? null;
-    if (!runtime || !environment || (isSubmit && !payoutsEnabled(environment))) {
+    if (!runtime || !environment || (isSubmit && !isPaystackBankPayoutsEnabled(environment))) {
       send(res, 503, {
         error: "PAYSTACK_BANK_PAYOUTS_NOT_ENABLED",
         environment,
@@ -800,7 +837,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         amountMinor: input.amountMinor, currency: "NGN", bankName: recipient.bankName,
         accountName: recipient.accountName, accountNumberMasked: "******" + accountNumber.slice(-4),
         environment, livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
-        message: result.status === "success" ? "Paystack confirmed the sandbox bank transfer. FlowPay posted the matching wallet debit." : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
+        message: result.status === "success" ? `Paystack confirmed the ${environment === "live" ? "live" : "sandbox"} bank transfer. FlowPay posted the matching wallet debit.` : "The transfer is not final. Its amount remains reserved while Paystack completes approval or processing."
       });
       return true;
     } catch (error) {
@@ -816,8 +853,13 @@ async function markFailedBeforeProviderAcceptance(pool: Pool, reference: string,
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const payout = await client.query<{ transaction_id: string }>(
-      `SELECT transaction_id FROM public.fp_paystack_bank_transfers
+    const payout = await client.query<{
+      transaction_id: string; user_id: string; reference: string; amount_minor: string;
+      bank_name: string; account_number_last4: string;
+    }>(
+      `SELECT transaction_id, user_id, reference, amount_minor::text AS amount_minor,
+              bank_name, account_number_last4
+         FROM public.fp_paystack_bank_transfers
         WHERE reference = $1 FOR UPDATE`,
       [reference]
     );
@@ -843,6 +885,18 @@ async function markFailedBeforeProviderAcceptance(pool: Pool, reference: string,
         WHERE transaction_id = $1`,
       [payout.rows[0].transaction_id, note]
     );
+    await enqueueTransferNotification(client, {
+      userId: payout.rows[0].user_id,
+      eventKey: `paystack-bank:${payout.rows[0].transaction_id}:failed`,
+      transactionId: payout.rows[0].transaction_id,
+      reference: payout.rows[0].reference,
+      transferType: "bank",
+      direction: "sent",
+      status: "failed",
+      amountMinor: payout.rows[0].amount_minor,
+      title: "Bank transfer failed",
+      message: `Your ${formatNgnMinor(payout.rows[0].amount_minor)} transfer to ${payout.rows[0].bank_name} (account ending ${payout.rows[0].account_number_last4.trim()}) was not accepted by Paystack. No wallet debit was posted.`
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
