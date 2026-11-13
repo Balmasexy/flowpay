@@ -43,6 +43,12 @@ Disabling new checkout does not disable webhook or status reconciliation for an 
 
 Dedicated virtual-account assignment is a separate approval-dependent capability controlled by `PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true`; it is not switched on by the deposit flag. Live transfers are separately controlled by `PAYSTACK_LIVE_TRANSFERS_ENABLED=true`. Both require the relevant Paystack product approval and explicit operational authorization.
 
+Successful transfers into an already assigned Paystack DVA are processed from the signed `charge.success` webhook. FlowPay independently verifies the Paystack transaction, matches the receiving NUBAN and provider customer code to the assigned DVA, and credits only the one active customer NGN wallet through a balanced Paystack-clearing ledger transaction. This settlement path remains active when new DVA assignment is disabled.
+
+Customers can request a delayed-transfer requery through the authenticated `POST /customer/dedicated-bank-account/requery` endpoint. FlowPay uses the account's verified Paystack provider slug and stores a database-backed per-account ten-minute rate limit. The endpoint only requests Paystack to requery; the wallet is credited later, only after Paystack delivers the normal signed and verified `charge.success` webhook. Existing accounts without a saved provider slug are checked against the customer's Paystack record before requery. The additive migration `025_paystack_dva_requery_controls.sql` adds the provider slug and last-requery timestamp columns required by this endpoint.
+
+Paystack's DVA feature is approval-dependent and available only to eligible Nigerian or Ghanaian registered businesses that completed its go-live process. Do not switch on live DVA assignment just because a live API key is configured.
+
 For an isolated sandbox service (not the production API), configure `PAYSTACK_ENVIRONMENT=test`, a matching `sk_test_` secret, `FLOWPAY_RUNTIME_ENV=development`, `NODE_ENV` other than `production`, and `PAYSTACK_TRANSFERS_ENABLED=true`. The test API must use an isolated development database and test customers.
 
 ## Readiness endpoint
@@ -52,6 +58,7 @@ For an isolated sandbox service (not the production API), configure `PAYSTACK_EN
 - Paystack bank payouts, including schema and transfer-switch readiness
 - Paystack deposits, including webhook signing mode and callback-side recovery
 - Paystack dedicated-account assignment readiness
+- Paystack DVA incoming-credit settlement and delayed requery readiness
 - Flutterwave sandbox deposits
 
 The endpoint reports readiness booleans and mode only. It never returns secret values. It does not globally mark all payments disabled just because one provider is not configured.
