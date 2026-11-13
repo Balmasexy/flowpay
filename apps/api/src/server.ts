@@ -13,7 +13,7 @@ import { createPaystackDepositStatusHandler } from "./paystack-status.js";
 import { createSupportRequestsHandler } from "./support-requests.js";
 import { createBankAccountLookupHandler } from "./bank-account-lookup.js";
 import { createFlowPayTransfersHandler } from "./flowpay-transfers.js";
-import { createPaystackBankTransfersHandler } from "./paystack-bank-transfers.js";
+import { createPaystackBankTransfersHandler, isPaystackBankPayoutsEnabled } from "./paystack-bank-transfers.js";
 import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
@@ -223,12 +223,9 @@ const server = createServer(async (req, res) => {
       const payoutSchema = await pool.query<{ available: boolean }>(
         "SELECT to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS available"
       );
+      const paystackRuntime = getPaystackRuntime();
       const bankPayoutsEnabled = payoutSchema.rows[0]?.available === true &&
-        process.env.PAYSTACK_ENVIRONMENT === "test" &&
-        (process.env.PAYSTACK_SECRET_KEY ?? "").startsWith("sk_test_") &&
-        process.env.PAYSTACK_TRANSFERS_ENABLED === "true" &&
-        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
-        process.env.NODE_ENV !== "production";
+        Boolean(paystackRuntime && isPaystackBankPayoutsEnabled(paystackRuntime.environment));
       const bankPayoutRows = payoutSchema.rows[0]?.available === true
         ? await pool.query(
             `SELECT t.id, t.transaction_type,
@@ -250,7 +247,12 @@ const server = createServer(async (req, res) => {
         id: row.id, type: row.transaction_type, status: row.status,
         createdAt: row.created_at,
         destinationAccountMasked: "******" + String(row.destination_account).slice(-4)
-      })), simulationOnly: false, liveTransfersEnabled: false, internalWalletTransfersEnabled: true, bankPayoutsEnabled, bankPayoutEnvironment: "test" });
+      })), simulationOnly: false,
+        liveTransfersEnabled: paystackRuntime?.environment === "live" &&
+          isPaystackBankPayoutsEnabled(paystackRuntime.environment),
+        internalWalletTransfersEnabled: true,
+        bankPayoutsEnabled,
+        bankPayoutEnvironment: paystackRuntime?.environment ?? null });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       console.error("FlowPay money sent request failed:", error instanceof Error ? error.message : "unknown money sent error");
