@@ -242,7 +242,9 @@ export function createPaystackWebhookHandler({ pool }: Options) {
     }
 
     const eventDigest = createHash("sha256").update(raw).digest("hex");
-    if (verified.channel === "dedicated_nuban") {
+    const verifiedAuthorization = verified.authorization && typeof verified.authorization === "object" && !Array.isArray(verified.authorization)
+      ? verified.authorization as Record<string, unknown> : {};
+    if (verified.channel === "dedicated_nuban" || verifiedAuthorization.channel === "dedicated_nuban") {
       const settlement = await settleVerifiedPaystackDvaCharge(pool, environment, verified, eventDigest);
       send(res, settlement.status, settlement.body);
       return true;
