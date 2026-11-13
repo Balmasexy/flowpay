@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
+import { createFlutterwaveDepositStatusHandler } from "./flutterwave-status.js";
 import { createPaystackCheckoutHandler } from "./paystack-checkout.js";
 import { createPaystackWebhookHandler } from "./paystack-webhook.js";
 import { createPaystackVirtualTerminalsHandler } from "./paystack-virtual-terminals.js";
@@ -42,6 +43,7 @@ const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
+const flutterwaveDepositStatusHandler = createFlutterwaveDepositStatusHandler({ pool, jwks, issuer, audience });
 const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, audience });
 const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
 const paystackVirtualTerminalsHandler = createPaystackVirtualTerminalsHandler({ pool, jwks, issuer, audience });
@@ -66,6 +68,11 @@ function send(res: import("node:http").ServerResponse, status: number, body: unk
   res.end(JSON.stringify(body));
 }
 
+function isHttpsUrl(value: string): boolean {
+  try { return new URL(value).protocol === "https:"; }
+  catch { return false; }
+}
+
 const server = createServer(async (req, res) => {
   const origin = req.headers.origin;
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
@@ -83,6 +90,7 @@ const server = createServer(async (req, res) => {
   if (await vtpassBillsHandler(req, res)) return;
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
+  if (await flutterwaveDepositStatusHandler(req, res)) return;
   if (await paystackWebhookHandler(req, res)) return;
   if (await paystackVirtualTerminalsHandler(req, res)) return;
   if (await paystackDepositStatusHandler(req, res)) return;
@@ -97,19 +105,169 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
   }
   if (req.method === "GET" && pathname === "/ready") {
-    if (!pool) { send(res, 503, { service: "flowpay-api", status: "not_ready", database: "not_configured", payments: "disabled" }); return; }
+    if (!pool) {
+      send(res, 503, {
+        service: "flowpay-api",
+        status: "not_ready",
+        database: "not_configured",
+        payments: {
+          paystack: {
+            bankDirectory: false, beneficiaryVerification: false, bankTransfers: false,
+            deposits: false, dedicatedAccounts: false, dedicatedAccountDeposits: false,
+            dedicatedAccountRequery: false, webhookVerificationAvailable: false,
+            webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
+          },
+          flutterwave: { deposits: false }
+        }
+      });
+      return;
+    }
     try {
-      const result = await pool.query<{ database_name: string }>("SELECT current_database() AS database_name");
-      send(res, 200, { service: "flowpay-api", status: "ready", database: "connected", database_name: result.rows[0]?.database_name, payments: "disabled" });
+      const [database, schema] = await Promise.all([
+        pool.query<{ database_name: string }>("SELECT current_database() AS database_name"),
+        pool.query<{
+          bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; dva_requery_columns: boolean; clearing_account: boolean;
+          flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
+        }>(
+          `SELECT
+             to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS bank_payouts,
+             to_regclass('public.fp_paystack_deposits') IS NOT NULL AS paystack_deposits,
+             to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS dedicated_accounts,
+             (
+               SELECT COUNT(*) = 2
+                 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'fp_paystack_dedicated_accounts_v2'
+                  AND column_name IN ('bank_slug','last_requery_at')
+             ) AS dva_requery_columns,
+             to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
+             to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
+             ) AS clearing_account,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'flutterwave_ngn_clearing' AND status = 'active'
+             ) AS flutterwave_clearing_account`
+        )
+      ]);
+      const paystackBankRuntime = getPaystackBankRuntime();
+      const paystackDepositRuntime = getPaystackRuntime();
+      const payoutSchemaReady = schema.rows[0]?.bank_payouts === true &&
+        schema.rows[0]?.clearing_account === true;
+      const paystackWebhookSecretConfigured = (process.env.PAYSTACK_WEBHOOK_SECRET ?? "").trim().startsWith("whsec_");
+      const paystackCallback = (process.env.PAYSTACK_CALLBACK_URL ?? "").trim();
+      const paystackMin = Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
+      const paystackMax = Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR);
+      const paystackDepositsReady = Boolean(
+        paystackDepositRuntime && isHttpsUrl(paystackCallback) &&
+        Number.isSafeInteger(paystackMin) && paystackMin > 0 &&
+        Number.isSafeInteger(paystackMax) && paystackMax >= paystackMin &&
+        schema.rows[0]?.paystack_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.clearing_account === true
+      );
+      const dedicatedAccountsGate = paystackBankRuntime?.environment === "test"
+        ? process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+          process.env.NODE_ENV !== "production" &&
+          process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED === "true"
+        : paystackBankRuntime?.environment === "live"
+          ? process.env.NODE_ENV === "production" &&
+            process.env.PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED === "true"
+          : false;
+      const dedicatedAccountsReady = Boolean(
+        jwksUrl && issuer && dedicatedAccountsGate &&
+        schema.rows[0]?.dedicated_accounts === true && paystackBankRuntime
+      );
+      const dedicatedAccountDepositsReady = Boolean(
+        paystackBankRuntime && schema.rows[0]?.dedicated_accounts === true &&
+        schema.rows[0]?.paystack_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.clearing_account === true
+      );
+      const dedicatedAccountRequeryReady = Boolean(
+        paystackBankRuntime && schema.rows[0]?.dedicated_accounts === true &&
+        schema.rows[0]?.dva_requery_columns === true
+      );
+      const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
+      const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
+      const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
+      const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      const flwDepositsReady = Boolean(
+        process.env.NODE_ENV !== "production" &&
+        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+        schema.rows[0]?.flutterwave_deposits === true &&
+        schema.rows[0]?.payment_events === true &&
+        schema.rows[0]?.flutterwave_clearing_account === true &&
+        jwksUrl && issuer && audience &&
+        process.env.FLW_ENVIRONMENT === "test" &&
+        flwSecret.startsWith("FLWSECK_TEST-") &&
+        isHttpsUrl((process.env.FLW_REDIRECT_URL ?? "").trim()) &&
+        Number.isSafeInteger(flwMin) && flwMin > 0 &&
+        Number.isSafeInteger(flwMax) && flwMax >= flwMin &&
+        flwWebhookHash.length > 0
+      );
+      const bankDirectoryReady = Boolean(jwksUrl && issuer && audience && paystackBankRuntime);
+      const bankTransfersReady = Boolean(
+        bankDirectoryReady && payoutSchemaReady &&
+        isPaystackBankPayoutsEnabled(paystackBankRuntime!.environment)
+      );
+      const payments = {
+        paystack: {
+          environment: paystackBankRuntime?.environment ?? paystackDepositRuntime?.environment ?? null,
+          bankDirectory: bankDirectoryReady,
+          beneficiaryVerification: bankDirectoryReady,
+          bankTransfers: bankTransfersReady,
+          bankTransferGate: paystackBankRuntime
+            ? (bankTransfersReady ? "ready" : "configured_but_not_enabled")
+            : "provider_not_configured",
+          deposits: paystackDepositsReady,
+          dedicatedAccounts: dedicatedAccountsReady,
+          dedicatedAccountDeposits: dedicatedAccountDepositsReady,
+          dedicatedAccountRequery: dedicatedAccountRequeryReady,
+          webhookVerificationAvailable: Boolean(paystackBankRuntime),
+          webhookSigningSecretConfigured: paystackWebhookSecretConfigured,
+          webhookSignatureMode: paystackWebhookSecretConfigured
+            ? "timestamped_signing_secret"
+            : paystackBankRuntime ? "legacy_secret_compatible" : "not_configured"
+        },
+        flutterwave: {
+          environment: process.env.FLW_ENVIRONMENT === "test" ? "test" : null,
+          deposits: flwDepositsReady
+        }
+      };
+      send(res, 200, {
+        service: "flowpay-api",
+        status: "ready",
+        database: "connected",
+        database_name: database.rows[0]?.database_name,
+        payments
+      });
     } catch (error) {
-      console.error("FlowPay readiness database check failed:", error instanceof Error ? error.message : "unknown database error");
-      send(res, 503, { service: "flowpay-api", status: "not_ready", database: "unavailable", payments: "disabled" });
+      console.error("FlowPay readiness check failed:", error instanceof Error ? error.message : "unknown readiness error");
+      send(res, 503, {
+        service: "flowpay-api",
+        status: "not_ready",
+        database: "unavailable",
+        payments: {
+          paystack: {
+            bankDirectory: false, beneficiaryVerification: false, bankTransfers: false,
+            deposits: false, dedicatedAccounts: false, dedicatedAccountDeposits: false,
+            dedicatedAccountRequery: false, webhookVerificationAvailable: false,
+            webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
+          },
+          flutterwave: { deposits: false }
+        }
+      });
     }
     return;
   }
@@ -183,7 +341,6 @@ const server = createServer(async (req, res) => {
             reversedCount: Number(transactionCounts.rows.find(row => row.status === "reversed")?.transaction_count ?? 0)
           },
           balance: { available: true, balances },
-          paymentsEnabled: false,
           generatedAt: new Date().toISOString()
         }
       });
@@ -285,14 +442,25 @@ const server = createServer(async (req, res) => {
              FROM public.fp_flutterwave_deposits AS d
             WHERE d.user_id = $1 AND d.status = 'posted'
             ORDER BY COALESCE(d.verified_at, d.created_at) DESC LIMIT 100`, [userId]),
-        pool.query<{ available: boolean; clearing_account_available: boolean }>(
+        pool.query<{
+          available: boolean; clearing_account_available: boolean;
+          flutterwave_available: boolean; flutterwave_clearing_account_available: boolean;
+          payment_events_available: boolean;
+        }>(
           `SELECT
              to_regclass('public.fp_paystack_deposits') IS NOT NULL AS available,
+             to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_available,
+             to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events_available,
              EXISTS (
                SELECT 1 FROM public.fp_accounts
                 WHERE account_type = 'system' AND currency = 'NGN'
                   AND system_account_role = 'paystack_ngn_clearing' AND status = 'active'
-             ) AS clearing_account_available`)
+             ) AS clearing_account_available,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'flutterwave_ngn_clearing' AND status = 'active'
+             ) AS flutterwave_clearing_account_available`)
       ]);
       const paystackAvailable = paystackTable.rows[0]?.available === true &&
         paystackTable.rows[0]?.clearing_account_available === true;
@@ -323,6 +491,24 @@ const server = createServer(async (req, res) => {
         Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR) > 0 &&
         Number.isSafeInteger(Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR)) &&
         Number(process.env.PAYSTACK_DEPOSIT_MAX_MINOR) >= Number(process.env.PAYSTACK_DEPOSIT_MIN_MINOR);
+      const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
+      const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
+      const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
+      const flwRedirectUrl = process.env.FLW_REDIRECT_URL?.trim() ?? "";
+      const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      let flwRedirectIsHttps = false;
+      try { flwRedirectIsHttps = new URL(flwRedirectUrl).protocol === "https:"; } catch { flwRedirectIsHttps = false; }
+      const flutterwaveConfigured = paystackTable.rows[0]?.flutterwave_available === true &&
+        paystackTable.rows[0]?.flutterwave_clearing_account_available === true &&
+        paystackTable.rows[0]?.payment_events_available === true &&
+        Boolean(jwksUrl && issuer && audience) &&
+        process.env.NODE_ENV !== "production" &&
+        process.env.FLOWPAY_RUNTIME_ENV === "development" &&
+        process.env.FLW_ENVIRONMENT === "test" &&
+        flwSecret.startsWith("FLWSECK_TEST-") && flwRedirectIsHttps &&
+        flwWebhookHash.length > 0 &&
+        Number.isSafeInteger(flwMin) && flwMin > 0 &&
+        Number.isSafeInteger(flwMax) && flwMax >= flwMin;
       send(res, 200, {
         deposits,
         environment: paystackRuntime?.environment ?? null,
@@ -330,7 +516,7 @@ const server = createServer(async (req, res) => {
         depositProviders: {
           paystack: paystackConfigured,
           paystackEnvironment: paystackRuntime?.environment ?? null,
-          flutterwave: false
+          flutterwave: flutterwaveConfigured
         }
       });
     } catch (error) {

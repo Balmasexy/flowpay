@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { getPaystackRuntime } from "./paystack-mode.js";
+import { getPaystackBankRuntime } from "./paystack-mode.js";
 
 type Options = {
   pool: Pool | null;
@@ -110,6 +110,8 @@ type DedicatedAccountRow = {
   account_name: string | null;
   provider_domain: "test" | "live";
   status: string;
+  bank_slug: string | null;
+  last_requery_at: Date | null;
 };
 function view(row: DedicatedAccountRow | null) {
   return row?.status === "assigned" && row.account_number && row.bank_name && row.account_name
@@ -130,13 +132,16 @@ function view(row: DedicatedAccountRow | null) {
 }
 
 export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: PaystackRecord) {
-  const runtime = getPaystackRuntime();
-  if (!runtime || !dedicatedAccountsEnabled(runtime.environment)) return false;
+  const runtime = getPaystackBankRuntime();
+  // Assignment controls only new DVA requests; provider webhooks must still
+  // finish a previously accepted assignment when that switch is turned off.
+  if (!runtime) return false;
   const environment = runtime.environment;
   const eventName = typeof event.event === "string" ? event.event : "";
   if (![
     "dedicatedaccount.assign.success",
     "dedicatedaccount.assign.failed",
+    "assigndedicatedaccount.success",
     "assigndedicatedaccount.failed",
     "customeridentification.success",
     "customeridentification.failed"
@@ -171,12 +176,13 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
     );
     return true;
   }
-  if (eventName === "dedicatedaccount.assign.success") {
+  if (eventName === "dedicatedaccount.assign.success" || eventName === "assigndedicatedaccount.success") {
     const account = record(data.dedicated_account ?? data);
     const bank = record(account.bank);
     const accountNumber = typeof account.account_number === "string" ? account.account_number : "";
     const bankName = typeof bank.name === "string" ? bank.name.trim() : "";
     const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
+    const bankSlug = typeof bank.slug === "string" && /^[a-z0-9-]{2,80}$/.test(bank.slug) ? bank.slug : null;
     if (/^\d{10}$/.test(accountNumber) && bankName && accountName &&
         account.assigned === true && account.active === true &&
         (account.currency === undefined || account.currency === "NGN")) {
@@ -184,11 +190,11 @@ export async function processPaystackDedicatedAccountWebhook(pool: Pool, event: 
         `UPDATE public.fp_paystack_dedicated_accounts_v2
             SET paystack_customer_code = COALESCE(NULLIF($1,''), paystack_customer_code),
                 dedicated_account_id = $4, account_number = $5,
-                bank_name = $6, account_name = $7, status = 'assigned',
-                assigned_at = NOW(), last_provider_event = $8,
+                bank_name = $6, bank_slug = $7, account_name = $8, status = 'assigned',
+                assigned_at = NOW(), last_provider_event = $9,
                 last_error_code = NULL, updated_at = NOW()
           WHERE ${match}`,
-        [customerCode, environment, email, String(account.id ?? ""), accountNumber, bankName, accountName, eventName]
+        [customerCode, environment, email, String(account.id ?? ""), accountNumber, bankName, bankSlug, accountName, eventName]
       );
     }
   }
@@ -201,7 +207,8 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     const get = req.method === "GET" && path === "/customer/dedicated-bank-account";
     const post = req.method === "POST" && path === "/customer/dedicated-bank-account";
-    if (!get && !post) return false;
+    const requery = req.method === "POST" && path === "/customer/dedicated-bank-account/requery";
+    if (!get && !post && !requery) return false;
     if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "DEDICATED_BANK_ACCOUNT_SERVICE_NOT_CONFIGURED" }); return true;
     }
@@ -223,7 +230,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
-    const runtime = getPaystackRuntime();
+    const runtime = getPaystackBankRuntime();
     if (!runtime) {
       send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
       return true;
@@ -232,14 +239,95 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
     try {
       const saved = await pool.query<DedicatedAccountRow>(
         `SELECT user_id, paystack_customer_code, dedicated_account_id,
-                account_number, bank_name, account_name, provider_domain, status
+                account_number, bank_name, account_name, provider_domain, status,
+                bank_slug, last_requery_at
            FROM public.fp_paystack_dedicated_accounts_v2
           WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
         [identity.id, environment]
       );
       const current = saved.rows[0] ?? null;
+      if (requery) {
+        if (!current || current.status !== "assigned" || !current.account_number) {
+          send(res, 409, { error: "PAYSTACK_DEDICATED_ACCOUNT_NOT_ASSIGNED" });
+          return true;
+        }
+        let providerSlug = current.bank_slug ?? null;
+        if (!providerSlug && current.paystack_customer_code) {
+          const customerResponse = await paystack(
+            runtime.secretKey,
+            "/customer/" + encodeURIComponent(current.paystack_customer_code)
+          );
+          const customerData = record(customerResponse.body.data);
+          const dedicated = record(customerData.dedicated_account);
+          const bank = record(dedicated.bank);
+          const discoveredSlug = typeof bank.slug === "string" ? bank.slug.trim() : "";
+          const exactAccount = dedicated.account_number === current.account_number &&
+            dedicated.assigned === true && dedicated.active === true &&
+            (customerData.domain === undefined || customerData.domain === environment);
+          if (customerResponse.ok && exactAccount && /^[a-z0-9-]{2,80}$/.test(discoveredSlug)) {
+            providerSlug = discoveredSlug;
+            await pool.query(
+              `UPDATE public.fp_paystack_dedicated_accounts_v2
+                  SET bank_slug = $3, updated_at = NOW()
+                WHERE user_id = $1 AND provider_domain = $2
+                  AND account_number = $4 AND status = 'assigned'`,
+              [identity.id, environment, providerSlug, current.account_number]
+            );
+          }
+        }
+        if (!providerSlug || !/^[a-z0-9-]{2,80}$/.test(providerSlug)) {
+          send(res, 409, {
+            error: "PAYSTACK_DVA_PROVIDER_SLUG_UNAVAILABLE",
+            message: "Paystack has not supplied a verifiable provider slug for this assigned account."
+          });
+          return true;
+        }
+        const claimed = await pool.query<{ last_requery_at: Date }>(
+          `UPDATE public.fp_paystack_dedicated_accounts_v2
+              SET last_requery_at = NOW(), updated_at = NOW()
+            WHERE user_id = $1 AND provider_domain = $2
+              AND account_number = $3 AND status = 'assigned'
+              AND (last_requery_at IS NULL OR last_requery_at <= NOW() - INTERVAL '10 minutes')
+            RETURNING last_requery_at`,
+          [identity.id, environment, current.account_number]
+        );
+        if (claimed.rowCount !== 1) {
+          const latest = await pool.query<{ last_requery_at: Date | null }>(
+            `SELECT last_requery_at FROM public.fp_paystack_dedicated_accounts_v2
+              WHERE user_id = $1 AND provider_domain = $2 AND account_number = $3`,
+            [identity.id, environment, current.account_number]
+          );
+          const last = latest.rows[0]?.last_requery_at ? new Date(latest.rows[0].last_requery_at).getTime() : Date.now();
+          const retryAfterSeconds = Math.max(1, Math.ceil((last + 10 * 60_000 - Date.now()) / 1000));
+          send(res, 429, {
+            error: "PAYSTACK_DVA_REQUERY_RATE_LIMITED",
+            retryAfterSeconds,
+            message: "Paystack allows a requery for this dedicated account once every ten minutes."
+          });
+          return true;
+        }
+        const query = new URL("https://api.paystack.co/dedicated_account/requery");
+        query.searchParams.set("account_number", current.account_number);
+        query.searchParams.set("provider_slug", providerSlug);
+        const response = await paystack(runtime.secretKey, query.pathname + query.search);
+        if (!response.ok) {
+          console.error("Paystack DVA requery rejected:", { status: response.status });
+          send(res, 502, {
+            error: "PAYSTACK_DVA_REQUERY_FAILED",
+            message: "Paystack did not confirm the requery request. The account remains assigned; refresh can be retried after the rate limit expires."
+          });
+          return true;
+        }
+        send(res, 202, {
+          provider: "Paystack",
+          environment,
+          requeryRequested: true,
+          message: "Paystack is checking for unprocessed transfers. The wallet will be credited only after Paystack sends a verified charge.success webhook."
+        });
+        return true;
+      }
       if (get) {
-        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true" });
         return true;
       }
 
@@ -253,7 +341,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         send(res, 400, { error: "EXPRESS_CONSENT_REQUIRED" }); return true;
       }
       if (current?.status === "assigned") {
-        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: environment === "live" });
+        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), duplicate: true, livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true" });
         return true;
       }
       if (current?.status === "pending") {
@@ -261,7 +349,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           provider: "Paystack", environment,
           virtualBankAccount: view(current),
           message: "A Paystack dedicated-account request is already pending for this profile. FlowPay will not submit a duplicate request.",
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -270,9 +358,9 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           error: "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED",
           message: "Dedicated-account assignment is not enabled for this Paystack environment. No account was created.",
           requiredConfiguration: environment === "live"
-            ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true"]
+            ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_DEDICATED_ACCOUNTS_ENABLED=true"]
             : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_DEDICATED_ACCOUNTS_ENABLED=true"],
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -307,7 +395,8 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       if (requestClaim.rowCount !== 1) {
         const latest = await pool.query<DedicatedAccountRow>(
           `SELECT user_id, paystack_customer_code, dedicated_account_id,
-                  account_number, bank_name, account_name, provider_domain, status
+                  account_number, bank_name, account_name, provider_domain, status,
+                bank_slug, last_requery_at
              FROM public.fp_paystack_dedicated_accounts_v2
             WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
           [identity.id, environment]
@@ -376,6 +465,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       const accountNumber = typeof account.account_number === "string" ? account.account_number : "";
       const bankName = typeof bank.name === "string" ? bank.name.trim() : "";
       const accountName = typeof account.account_name === "string" ? account.account_name.trim() : "";
+      const bankSlug = typeof bank.slug === "string" && /^[a-z0-9-]{2,80}$/.test(bank.slug) ? bank.slug : null;
       const responseDomain = typeof account.domain === "string" ? account.domain : environment;
       const assignedCustomer = record(account.customer);
       const assignedCustomerCode = typeof account.customer_code === "string" ? account.customer_code : typeof assignedCustomer.customer_code === "string" ? assignedCustomer.customer_code : customerCode;
@@ -399,7 +489,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
           message: "Paystack did not confirm a dedicated bank account assignment. No placeholder number was saved.",
           providerStatus: assigned.status,
           providerMessage,
-          livePaymentsEnabled: environment === "live"
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
         });
         return true;
       }
@@ -411,18 +501,19 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
               SET customer_email = COALESCE($4,customer_email),
                   paystack_customer_code = COALESCE($3,paystack_customer_code),
                   dedicated_account_id = $5, account_number = $6, bank_name = $7,
-                  account_name = $8, status = 'assigned', assigned_at = NOW(),
+                  bank_slug = $8, account_name = $9, status = 'assigned', assigned_at = NOW(),
                   last_provider_event = 'dedicatedaccount.assign.success',
                   last_error_code = NULL, updated_at = NOW()
             WHERE user_id = $1 AND provider_domain = $2
             RETURNING user_id, paystack_customer_code, dedicated_account_id,
-                      account_number, bank_name, account_name, provider_domain, status`,
-          [identity.id, environment, assignedCustomerCode, assignedCustomerEmail, String(account.id ?? ""), accountNumber, bankName, accountName]
+                      account_number, bank_name, account_name, provider_domain, status,
+                      bank_slug, last_requery_at`,
+          [identity.id, environment, assignedCustomerCode, assignedCustomerEmail, String(account.id ?? ""), accountNumber, bankName, bankSlug, accountName]
         );
         send(res, 201, {
           provider: "Paystack", environment,
           virtualBankAccount: view(result.rows[0]),
-          livePaymentsEnabled: environment === "live",
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true",
           message: "Paystack confirmed the " + environment + " dedicated bank account assignment. This is separate from the FlowPay wallet number and virtual card."
         });
         return true;
@@ -440,7 +531,7 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         provider: "Paystack", environment,
         virtualBankAccount: { assigned: false, status: "pending", accountNumber: null, bankName: null, accountName: null },
         message: "Paystack accepted the dedicated-account request. The verified account number will appear after assignment confirmation.",
-        livePaymentsEnabled: environment === "live"
+        livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true"
       });
       return true;
     } catch (error) {

@@ -63,11 +63,17 @@ jobs:
       - name: Test Flutterwave webhook verification and replay protection
         run: npm run test:flutterwave-webhook --prefix apps/api
 
+      - name: Test Flutterwave sandbox checkout persistence and isolation
+        run: npm run test:flutterwave-checkout --prefix apps/api
+
       - name: Test Paystack webhook verification and replay protection
         run: npm run test:paystack-webhook --prefix apps/api
 
       - name: Test NGN 50,000 Paystack sandbox deposit checkout
         run: npm run test:paystack-checkout-50000 --prefix apps/api
+
+      - name: Test authenticated Paystack deposit callback recovery
+        run: npm run test:paystack-status --prefix apps/api
 
       - name: Test fail-closed Paystack live and test mode selection
         run: npm run test:paystack-mode --prefix apps/api
@@ -86,6 +92,9 @@ jobs:
 
       - name: Test Paystack dedicated bank account consent and assignment
         run: npm run test:paystack-dedicated-accounts --prefix apps/api
+
+      - name: Test Paystack dedicated NUBAN customer deposit settlement
+        run: npm run test:paystack-dva-settlement --prefix apps/api
 
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api
@@ -139,7 +148,14 @@ jobs:
           node --input-type=module -e '
             import fs from "node:fs";
             const readiness = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-ready.json", "utf8"));
-            if (readiness.database !== "not_configured" || readiness.payments !== "disabled") {
+            const payments = readiness.payments ?? {};
+            const paystack = payments.paystack ?? {};
+            const flutterwave = payments.flutterwave ?? {};
+            if (readiness.database !== "not_configured" ||
+                paystack.bankDirectory !== false ||
+                paystack.bankTransfers !== false ||
+                paystack.deposits !== false ||
+                flutterwave.deposits !== false) {
               throw new Error("Unsafe or unexpected /ready response: " + JSON.stringify(readiness));
             }
           '

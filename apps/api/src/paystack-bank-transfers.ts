@@ -496,8 +496,10 @@ async function applyVerifiedStatus(pool: Pool, secret: string, reference: string
 
 export async function processPaystackTransferWebhook(pool: Pool, secret: string, event: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
   const runtime = getPaystackBankRuntime();
-  if (!runtime || !isPaystackBankPayoutsEnabled(runtime.environment)) {
-    return { status: 200, body: { received: true, ignored: true, reason: "BANK_PAYOUT_RUNTIME_DISABLED" } };
+  // The transfer-creation switch only controls new payouts. Existing transfers
+  // still need provider verification and ledger reconciliation after it closes.
+  if (!runtime) {
+    return { status: 200, body: { received: true, ignored: true, reason: "PAYSTACK_PROVIDER_NOT_CONFIGURED" } };
   }
   const eventType = typeof event.event === "string" ? event.event : "";
   if (!["transfer.success", "transfer.failed", "transfer.reversed"].includes(eventType)) {
@@ -540,7 +542,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
         environment,
         livePayoutsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_TRANSFERS_ENABLED === "true",
         requiredConfiguration: environment === "live"
-          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "PAYSTACK_LIVE_PAYMENTS_ENABLED=true", "PAYSTACK_LIVE_TRANSFERS_ENABLED=true"]
+          ? ["PAYSTACK_ENVIRONMENT=live", "PAYSTACK_SECRET_KEY=sk_live_…", "NODE_ENV=production", "PAYSTACK_LIVE_TRANSFERS_ENABLED=true"]
           : ["PAYSTACK_ENVIRONMENT=test", "PAYSTACK_SECRET_KEY=sk_test_…", "FLOWPAY_RUNTIME_ENV=development", "PAYSTACK_TRANSFERS_ENABLED=true"]
       }); return true;
     }

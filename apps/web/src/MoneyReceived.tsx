@@ -95,7 +95,7 @@ function statusLabel(status: DepositStatus) {
   return status === "posted" ? "Credited" : status === "failed" ? "Not completed" : "Awaiting verification";
 }
 
-export default function MoneyReceived({ token, paymentReturn = false }: { token: string; paymentReturn?: boolean }) {
+export default function MoneyReceived({ token, paymentReturn = false, paymentProvider = "paystack" }: { token: string; paymentReturn?: boolean; paymentProvider?: "paystack" | "flutterwave" }) {
   const [items, setItems] = useState<Deposit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -105,6 +105,10 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [checkoutError, setCheckoutError] = useState("");
   const [paystackEnabled, setPaystackEnabled] = useState(false);
   const [paystackEnvironment, setPaystackEnvironment] = useState<"test" | "live" | null>(null);
+  const [flutterwaveEnabled, setFlutterwaveEnabled] = useState(false);
+  const [flutterwaveAmount, setFlutterwaveAmount] = useState("");
+  const [flutterwaveDepositing, setFlutterwaveDepositing] = useState(false);
+  const [flutterwaveCheckoutError, setFlutterwaveCheckoutError] = useState("");
   const [returnDeposit, setReturnDeposit] = useState<PaystackStatus | null>(null);
   const [returnLoading, setReturnLoading] = useState(false);
   const [returnError, setReturnError] = useState("");
@@ -121,7 +125,8 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
   const [receiptRequestId, setReceiptRequestId] = useState<string | null>(null);
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
   const params = new URLSearchParams(window.location.search);
-  const returnReference = paymentReturn ? (params.get("reference") || params.get("trxref") || "") : "";
+  const returnReference = paymentReturn ? (paymentProvider === "flutterwave" ? (params.get("tx_ref") || params.get("reference") || "") : (params.get("reference") || params.get("trxref") || "")) : "";
+  const returnTransactionId = paymentProvider === "flutterwave" ? (params.get("transaction_id") || "") : "";
 
   useEffect(() => {
     let active = true;
@@ -156,6 +161,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
         setPaystackEnabled(providerConfig.paystack === true);
         setPaystackEnvironment(providerConfig.paystackEnvironment === "test" || providerConfig.paystackEnvironment === "live"
           ? providerConfig.paystackEnvironment : null);
+        setFlutterwaveEnabled(providerConfig.flutterwave === true);
         const deposits = root.deposits;
         setItems(Array.isArray(deposits)
           ? deposits.map(parseDeposit).filter((item): item is Deposit => item !== null)
@@ -166,6 +172,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
           setItems([]);
           setPaystackEnabled(false);
           setPaystackEnvironment(null);
+          setFlutterwaveEnabled(false);
           setError(reason instanceof Error ? reason.message : "Unable to load received payments.");
         }
       })
@@ -184,7 +191,11 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
     setReturnLoading(true);
     setReturnError("");
     const query = new URLSearchParams({ reference: returnReference });
-    fetch(apiBase + "/customer/paystack/deposits/status?" + query.toString(), {
+    const statusPath = paymentProvider === "flutterwave"
+      ? "/customer/flutterwave/deposits/status"
+      : "/customer/paystack/deposits/status";
+    if (paymentProvider === "flutterwave" && returnTransactionId) query.set("transaction_id", returnTransactionId);
+    fetch(apiBase + statusPath + "?" + query.toString(), {
       method: "GET",
       credentials: "omit",
       headers: { Authorization: "Bearer " + token }
@@ -216,7 +227,7 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       }
     }).finally(() => { if (active) setReturnLoading(false); });
     return () => { active = false; };
-  }, [paymentReturn, returnReference, token, apiBase, refresh]);
+  }, [paymentReturn, paymentProvider, returnReference, returnTransactionId, token, apiBase, refresh]);
 
   useEffect(() => {
     let active = true;
@@ -326,6 +337,40 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
     }
   };
 
+  const startFlutterwaveCheckout = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (flutterwaveDepositing) return;
+    const amountMinor = amountToMinor(flutterwaveAmount);
+    if (!amountMinor) { setFlutterwaveCheckoutError("Enter a valid amount greater than ₦0, using no more than two decimal places."); return; }
+    if (!token || !apiBase) { setFlutterwaveCheckoutError("Your secure FlowPay session or API connection is unavailable."); return; }
+    setFlutterwaveDepositing(true); setFlutterwaveCheckoutError("");
+    try {
+      const response = await fetch(apiBase + "/customer/flutterwave/deposits", {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ amountMinor, idempotencyKey: crypto.randomUUID() })
+      });
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data && typeof data === "object" && "error" in data && typeof data.error === "string"
+          ? data.error : "Flutterwave checkout could not be started.";
+        throw new Error(message);
+      }
+      const checkoutUrl = data && typeof data === "object" && "checkoutUrl" in data && typeof data.checkoutUrl === "string" ? data.checkoutUrl : "";
+      let safeCheckoutUrl = false;
+      try {
+        const parsed = new URL(checkoutUrl);
+        safeCheckoutUrl = parsed.protocol === "https:" && parsed.hostname === "checkout.flutterwave.com" &&
+          parsed.pathname.startsWith("/v3/hosted/pay/");
+      } catch { safeCheckoutUrl = false; }
+      if (!safeCheckoutUrl) throw new Error("FlowPay received an invalid Flutterwave checkout address.");
+      window.location.assign(checkoutUrl);
+    } catch (reason) {
+      setFlutterwaveCheckoutError(reason instanceof Error ? reason.message : "Flutterwave checkout could not be started.");
+      setFlutterwaveDepositing(false);
+    }
+  };
+
   return <section className="fp-panel fp-detail-panel fp-money-page">
     <div className="fp-money-hero">
       <div className="fp-money-hero-top">
@@ -342,15 +387,16 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
       <div className="fp-money-result-icon">{returnLoading ? <RefreshCw size={20}/> : returnDeposit?.status === "posted" ? <CheckCircle2 size={21}/> : returnDeposit?.status === "failed" ? <AlertCircle size={21}/> : <Clock3 size={21}/>}</div>
       <div className="fp-money-result-copy">
         <b>{returnLoading ? "Checking your payment" : returnDeposit?.status === "posted" ? "Deposit confirmed" : returnDeposit?.status === "failed" ? "Payment not completed" : "Payment received by checkout"}</b>
-        {returnError ? <span>{returnError}</span> : returnDeposit ? <span>{formatAmount(returnDeposit.amountMinor, returnDeposit.currency)} · {statusLabel(returnDeposit.status)}. {returnDeposit.status === "pending" ? "The signed provider webhook has not confirmed the wallet credit yet. Refresh to check again." : returnDeposit.status === "posted" ? "Provider verification and the balanced FlowPay ledger posting are complete." : "No wallet credit was posted for this attempt."}</span> : <span>{returnLoading ? "FlowPay is checking the authenticated transaction reference." : "Refresh to check the latest verified status."}</span>}
+        {returnError ? <span>{returnError}</span> : returnDeposit ? <span>{formatAmount(returnDeposit.amountMinor, returnDeposit.currency)} · {statusLabel(returnDeposit.status)}. {returnDeposit.status === "pending" ? (paymentProvider === "flutterwave" ? "Flutterwave has not yet been independently verified and settled. No wallet credit has been posted. Refresh to check again." : "The signed Paystack provider webhook has not confirmed the wallet credit yet. Refresh to check again.") : returnDeposit.status === "posted" ? "Provider verification and the balanced FlowPay ledger posting are complete." : "No wallet credit was posted for this attempt."}</span> : <span>{returnLoading ? "FlowPay is checking the authenticated transaction reference." : "Refresh to check the latest verified status."}</span>}
         {returnReference && <small>Reference: {returnReference}</small>}
       </div>
     </div>}
     <div className="fp-money-content-grid">
       <div className="fp-money-main-column">
         <div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">01 / FUND YOUR WALLET</span><h3>Choose your deposit amount</h3></div><span className="fp-money-currency">NGN ₦</span></div>
-        {paystackEnabled ? <form onSubmit={startPaystackCheckout} className="fp-money-checkout">
-          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">{paystackEnvironment === "live" ? "LIVE MODE" : "TEST MODE"}</span></div>
+        <form onSubmit={startPaystackCheckout} className="fp-money-checkout">
+          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">P</span><div><b>Paystack checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">{paystackEnvironment === "live" ? "LIVE MODE" : paystackEnvironment === "test" ? "TEST MODE" : "NOT CONFIGURED"}</span></div>
+          {!paystackEnabled && <div className="fp-preview-warning" role="status">Paystack checkout remains visible, but the backend has not confirmed its credentials, callback, deposit limits and ledger readiness. Try the route to receive the exact server-side configuration error; no payment will be created until the backend is ready.</div>}
           <label htmlFor="fp-deposit-amount">How much would you like to add?</label>
           <div className="fp-money-amount-input"><span>₦</span><input id="fp-deposit-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={amount} onChange={event => setAmount(event.target.value)} disabled={depositing} required/></div>
           <div className="fp-money-quick-amounts" aria-label="Suggested deposit amounts">{["1000","5000","10000","20000"].map(value => <button key={value} type="button" className={amount === value ? "selected" : ""} onClick={() => { setAmount(value); setCheckoutError(""); }} disabled={depositing}>₦{Number(value).toLocaleString("en-NG")}</button>)}</div>
@@ -359,8 +405,21 @@ export default function MoneyReceived({ token, paymentReturn = false }: { token:
           <button type="submit" className="fp-primary fp-money-submit" disabled={depositing || !amount.trim()}>{depositing ? "Connecting to Paystack…" : <>Continue securely <ExternalLink size={16}/></>}</button>
           <small className="fp-money-minor-note">{paystackEnvironment === "live"
             ? "Live payment · Real funds move only after you confirm payment on Paystack."
-            : "Sandbox transaction · No live customer funds are collected in this environment."}</small>
-        </form> : <div className="fp-money-unavailable" role="status"><span><AlertCircle size={20}/></span><div><b>Deposit checkout is not available right now</b><p>Paystack checkout is unavailable until the selected environment, matching secret key, callback URL, deposit limits, database migration and clearing account are correctly configured on the FlowPay backend.</p></div></div>}
+            : paystackEnvironment === "test"
+              ? "Sandbox transaction · No live customer funds are collected in this environment."
+              : "Provider mode is not confirmed. FlowPay will not create a payment until the backend is configured."}</small>
+        </form>
+        <form onSubmit={startFlutterwaveCheckout} className="fp-money-checkout fp-money-flutterwave-checkout">
+          <div className="fp-money-provider-head"><span className="fp-money-provider-logo">F</span><div><b>Flutterwave checkout</b><small>Secure hosted payment · NGN</small></div><span className="fp-money-test-badge">SANDBOX</span></div>
+          {!flutterwaveEnabled && <div className="fp-preview-warning" role="status">Flutterwave's sandbox checkout stays visible, but it can only run on a separate development API with an isolated test database, matching test secret, redirect URL, webhook signature and clearing-ledger setup. The production API does not accept sandbox deposits into customer wallets.</div>}
+          <label htmlFor="fp-flutterwave-deposit-amount">How much would you like to add?</label>
+          <div className="fp-money-amount-input"><span>₦</span><input id="fp-flutterwave-deposit-amount" type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00" value={flutterwaveAmount} onChange={event => setFlutterwaveAmount(event.target.value)} disabled={flutterwaveDepositing} required/></div>
+          <div className="fp-money-quick-amounts" aria-label="Flutterwave suggested deposit amounts">{["1000","5000","10000","20000"].map(value => <button key={value} type="button" className={flutterwaveAmount === value ? "selected" : ""} onClick={() => { setFlutterwaveAmount(value); setFlutterwaveCheckoutError(""); }} disabled={flutterwaveDepositing}>₦{Number(value).toLocaleString("en-NG")}</button>)}</div>
+          <div className="fp-money-checkout-note"><ShieldCheck size={16}/><span>FlowPay verifies the Flutterwave transaction ID, reference, exact amount and NGN currency before atomically crediting the wallet against the Flutterwave clearing account.</span></div>
+          {flutterwaveCheckoutError && <div className="fp-preview-warning" role="alert"><AlertCircle size={16}/> {flutterwaveCheckoutError}</div>}
+          <button type="submit" className="fp-primary fp-money-submit" disabled={flutterwaveDepositing || !flutterwaveAmount.trim()}>{flutterwaveDepositing ? "Connecting to Flutterwave…" : <>Continue with Flutterwave <ExternalLink size={16}/></>}</button>
+          <small className="fp-money-minor-note">Sandbox only · No Flutterwave live credentials or live transfers are used.</small>
+        </form>
       </div>
         <form className="fp-money-receipt-form" onSubmit={submitReceipt}>
           <div className="fp-money-receipt-heading">
