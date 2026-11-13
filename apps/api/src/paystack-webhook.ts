@@ -49,12 +49,64 @@ function providerId(value: unknown): string | null {
   return null;
 }
 
-function validSignature(raw: Buffer, supplied: unknown, secret: string): boolean {
-  if (typeof supplied !== "string" || !supplied) return false;
-  const expected = createHmac("sha512", secret).update(raw).digest("hex");
-  const a = Buffer.from(supplied, "utf8");
-  const b = Buffer.from(expected, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+function validLegacySignature(raw: Buffer, supplied: unknown, secret: string): boolean {
+  if (typeof supplied !== "string" || !/^[0-9a-f]{128}$/.test(supplied)) return false;
+  const expected = createHmac("sha512", secret).update(raw).digest();
+  const received = Buffer.from(supplied, "hex");
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+function validPaystackSignature(
+  raw: Buffer,
+  supplied: unknown,
+  webhookSecret: string,
+  nowSeconds = Math.floor(Date.now() / 1000)
+): boolean {
+  if (typeof supplied !== "string" || !supplied || !webhookSecret.startsWith("whsec_")) return false;
+  let timestamp: number | null = null;
+  const signatures: Array<{ keyId: string; hex: string }> = [];
+  for (const part of supplied.split(",")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (key === "t") {
+      if (timestamp !== null || !/^\d{1,12}$/.test(value)) return false;
+      timestamp = Number(value);
+    } else if (key === "v1") {
+      const colon = value.indexOf(":");
+      if (colon < 1) continue;
+      signatures.push({ keyId: value.slice(0, colon), hex: value.slice(colon + 1) });
+    }
+  }
+  if (timestamp === null || !Number.isSafeInteger(timestamp) ||
+      Math.abs(nowSeconds - timestamp) > 300 || signatures.length === 0) return false;
+  const expected = createHmac("sha512", webhookSecret)
+    .update(String(timestamp) + ".")
+    .update(raw)
+    .digest();
+  for (const signature of signatures) {
+    if (!/^whk_[A-Za-z0-9_-]{1,120}$/.test(signature.keyId) ||
+        !/^[0-9a-f]{128}$/.test(signature.hex)) continue;
+    const received = Buffer.from(signature.hex, "hex");
+    if (received.length === expected.length && timingSafeEqual(received, expected)) return true;
+  }
+  return false;
+}
+
+function validSignature(
+  raw: Buffer,
+  paystackSignature: unknown,
+  legacySignature: unknown,
+  apiSecret: string,
+  webhookSecret: string
+): boolean {
+  // When the new header is present it is authoritative: a malformed, stale or
+  // invalid signature must not be rescued by a valid legacy header.
+  if (typeof paystackSignature === "string" && paystackSignature.trim()) {
+    return validPaystackSignature(raw, paystackSignature, webhookSecret);
+  }
+  return validLegacySignature(raw, legacySignature, apiSecret);
 }
 
 function balancedDepositLedger(
@@ -98,7 +150,14 @@ export function createPaystackWebhookHandler({ pool }: Options) {
       send(res, 413, { error: "PAYLOAD_TOO_LARGE" });
       return true;
     }
-    if (!validSignature(raw, req.headers["x-paystack-signature"], secret)) {
+    const webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET?.trim() ?? "";
+    if (!validSignature(
+      raw,
+      req.headers["paystack-signature"],
+      req.headers["x-paystack-signature"],
+      secret,
+      webhookSecret
+    )) {
       send(res, 401, { error: "INVALID_WEBHOOK_SIGNATURE" });
       return true;
     }
