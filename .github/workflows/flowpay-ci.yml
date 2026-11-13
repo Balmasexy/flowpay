@@ -92,6 +92,8 @@ jobs:
 
       - name: Test private customer transfer notifications and read controls
         run: npm run test:customer-notifications --prefix apps/api
+      - name: Test isolated passkey transaction authorization safeguards
+        run: npm run test:passkey-prototype --prefix apps/api
 
       - name: Test authenticated FlowPay BALMZ AI customer assistant
         run: npm run test:customer-ai --prefix apps/api

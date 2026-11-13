@@ -1030,3 +1030,59 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   letter-spacing:5px;
   font-variant-numeric:tabular-nums;
 }
+
+
+/* Isolated FlowPay passkey prototype */
+.fp-passkey-prototype-page{padding:22px 14px;background:#faf9f7}
+.fp-passkey-prototype-shell{width:100%;max-width:780px;margin:24px auto 0;display:grid;gap:14px}
+.fp-passkey-prototype-header{padding:26px 28px;background:#1c201d;color:#fff;border-radius:16px}
+.fp-passkey-prototype-header .fp-login-icon{margin-bottom:15px}
+.fp-passkey-prototype-header h1{font:800 30px/1.15 Manrope,sans-serif;margin:8px 0}
+.fp-passkey-prototype-header p{max-width:580px;color:#c6cbc4;font-size:12px;line-height:1.7}
+.fp-passkey-warning{display:flex;gap:9px;align-items:flex-start;margin-top:15px;padding:12px;border:1px solid #5b4634;border-radius:9px;color:#ffe0c6;font-size:10px;line-height:1.6}
+.fp-passkey-prototype-card{padding:23px 25px;background:#fff;border:1px solid #ece8e2;border-radius:14px;box-shadow:0 8px 24px #30271c09}
+.fp-passkey-prototype-card h2{font:800 19px Manrope,sans-serif;margin:0 0 8px;color:#272a26}
+.fp-passkey-prototype-card h3{font:800 14px Manrope,sans-serif;margin:0;color:#292d28}
+.fp-passkey-prototype-card form{display:grid;gap:9px}
+.fp-passkey-prototype-card label{font-size:10px;font-weight:700;color:#50534c;margin-top:5px}
+.fp-passkey-prototype-card input{width:100%;min-width:0;padding:12px;border:1px solid #e4e2dc;border-radius:8px;font-size:12px;color:#282b26;background:#fff;outline:none}
+.fp-passkey-prototype-card input:focus{border-color:#ff9b53;box-shadow:0 0 0 3px #ff7a1815}
+.fp-passkey-mode-switch{display:flex;gap:8px;margin:16px 0}
+.fp-passkey-mode-switch button{padding:9px 12px;border:1px solid #e7e3dd;border-radius:8px;background:#fff;color:#666;font-size:10px;font-weight:700}
+.fp-passkey-mode-switch button.active{background:#fff1e6;border-color:#ffb47c;color:#b9540e}
+.fp-passkey-divider{display:flex;align-items:center;gap:12px;margin:17px 0;color:#999;font-size:9px;font-weight:800}
+.fp-passkey-divider:before,.fp-passkey-divider:after{content:"";height:1px;flex:1;background:#eeeae5}
+.fp-passkey-action{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;border:1px solid #ffd0aa;border-radius:9px;background:#fff8f1;color:#ad500d;font-weight:800;font-size:11px}
+.fp-passkey-action:disabled,.fp-login-submit:disabled{opacity:.48;cursor:not-allowed}
+.fp-passkey-small{font-size:9px;line-height:1.6;color:#85877f}
+.fp-passkey-user-row{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.fp-passkey-user-row h2{margin:5px 0 2px}
+.fp-passkey-user-row p{font-size:10px;color:#84867f;margin:0}
+.fp-passkey-card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:13px}
+.fp-passkey-card-head h3{display:flex;align-items:center;gap:8px}
+.fp-passkey-register-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px}
+.fp-passkey-register-row .fp-login-submit{padding:11px 13px}
+.fp-passkey-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;padding:25px 12px;color:#a85a1c}
+.fp-passkey-empty b{font-size:11px;color:#42453e}
+.fp-passkey-empty span{font-size:9px;color:#888a83;max-width:340px;line-height:1.6}
+.fp-passkey-list{display:grid;gap:9px;margin-top:12px}
+.fp-passkey-item{display:flex;align-items:center;gap:11px;padding:11px;border:1px solid #eeeae4;border-radius:9px}
+.fp-passkey-item-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:#fff1e6;color:#e8751c}
+.fp-passkey-item>div{display:grid;gap:3px;flex:1}
+.fp-passkey-item b{font-size:10px;color:#393c36}
+.fp-passkey-item small{font-size:8px;color:#888a83}
+.fp-passkey-remove{border:0;background:transparent;color:#b95328;font-size:9px;font-weight:700}
+.fp-passkey-status{display:flex;align-items:center;gap:9px;padding:12px;border-radius:8px;background:#f1f8f1;color:#357145;font-size:10px;font-weight:700}
+.fp-passkey-approval-result{display:flex;gap:12px;align-items:flex-start;padding:14px;margin-top:15px;border:1px solid #b9ddbe;border-radius:10px;background:#f3faf4;color:#27703a}
+.fp-passkey-approval-result>div{display:grid;gap:5px}
+.fp-passkey-approval-result b{font-size:12px}
+.fp-passkey-approval-result span,.fp-passkey-approval-result strong{font-size:9px;color:#3e6a47}
+.fp-passkey-prototype-footer{display:flex;justify-content:space-between;gap:14px;padding:12px 3px;color:#999b93;font-size:8px}
+@media(max-width:560px){
+ .fp-passkey-prototype-header{padding:22px 19px}
+ .fp-passkey-prototype-header h1{font-size:25px}
+ .fp-passkey-prototype-card{padding:19px 17px}
+ .fp-passkey-user-row{align-items:flex-start;flex-direction:column}
+ .fp-passkey-register-row{grid-template-columns:1fr}
+ .fp-passkey-prototype-footer{flex-direction:column}
+}

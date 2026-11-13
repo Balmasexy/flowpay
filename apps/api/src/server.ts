@@ -20,6 +20,7 @@ import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 import { createVtpassBillsHandler } from "./vtpass-bills.js";
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
+import { createPasskeyPrototypeService } from "./passkey-prototype.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -30,7 +31,7 @@ const pool = databaseUrl
 pool?.on("error", (error) => console.error("FlowPay database pool error:", error.message));
 
 const allowedOrigins = new Set(
-  [process.env.WEB_ORIGIN, "https://flowpay-web-jx7i.onrender.com", "http://localhost:5173", "https://localhost"].filter(
+  [process.env.WEB_ORIGIN, process.env.FLOWPAY_PASSKEY_FRONTEND_ORIGIN, "https://flowpay-web-jx7i.onrender.com", "http://localhost:5173", "https://localhost"].filter(
     (origin): origin is string => Boolean(origin)
   )
 );
@@ -39,6 +40,7 @@ const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
+const passkeyPrototype = createPasskeyPrototypeService();
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
@@ -76,8 +78,11 @@ const server = createServer(async (req, res) => {
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (await passkeyPrototype.handleAuth(req, res)) return;
+  if (await passkeyPrototype.handleSecurity(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
   if (await depositReceiptsHandler(req, res)) return;
   if (await vtpassBillsHandler(req, res)) return;
