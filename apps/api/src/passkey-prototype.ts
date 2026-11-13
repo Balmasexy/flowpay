@@ -100,9 +100,9 @@ async function derivePin(pin: string, salt: Buffer): Promise<Buffer> {
   return await scrypt(pin, salt, 64) as Buffer;
 }
 
-function credentialTransports(value: string | null): AuthenticatorTransportFuture[] {
+function credentialTransports(value: string | null): string[] {
   if (!value) return [];
-  return value.split(",").map(item => item.trim()).filter(Boolean) as AuthenticatorTransportFuture[];
+  return value.split(",").map(item => item.trim()).filter(Boolean);
 }
 
 async function getSession(options: Options, req: IncomingMessage) {
@@ -202,7 +202,7 @@ async function startTransactionChallenge(
     userVerification: "required",
     allowCredentials: credentials.rows.map(credential => ({
       id: credential.credential_id,
-      transports: credentialTransports(credential.transports)
+      transports: credentialTransports(credential.transports) as never
     }))
   });
   const challengeId = randomUUID();
@@ -312,7 +312,7 @@ async function verifyTransactionApproval(
         id:saved.credential_id,
         publicKey:new Uint8Array(Buffer.from(saved.public_key,"base64")),
         counter:Number(saved.counter),
-        transports:credentialTransports(saved.transports)
+        transports:credentialTransports(saved.transports) as never
       }
     });
     if (!verification.verified || !verification.authenticationInfo.userVerified) {
@@ -459,6 +459,10 @@ export function createPasskeyPrototypeService() {
     if(!path.startsWith(SECURITY_PATH)) return false;
     if(!service){
       send(res,503,{error:disabledReason});
+      return true;
+    }
+    if (req.headers.origin !== service.origin) {
+      send(res,403,{error:"PASSKEY_PROTOTYPE_ORIGIN_NOT_ALLOWED"});
       return true;
     }
     const session=await ensureSession(service,req,res);
