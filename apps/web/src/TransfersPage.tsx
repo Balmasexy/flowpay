@@ -84,6 +84,8 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     bankName: string; accountName: string; accountNumberMasked: string; message: string;
   } | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [bankPayoutsEnabled, setBankPayoutsEnabled] = useState(false);
+  const [bankPayoutEnvironment, setBankPayoutEnvironment] = useState<"test" | "live" | null>(null);
 
   useEffect(() => { setMode(initialMode); }, [initialMode]);
 
@@ -118,6 +120,9 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       if (!pinResponse.ok) throw new Error(typeof pinBody.error === "string" ? pinBody.error : "Unable to check transaction security.");
       const accountList = Array.isArray(accountBody.walletAccounts) ? accountBody.walletAccounts.filter(isWalletAccount) : [];
       const transferList = Array.isArray(historyBody.transfers) ? historyBody.transfers.filter(isTransferRecord) : [];
+      setBankPayoutsEnabled(historyBody.bankPayoutsEnabled === true);
+      setBankPayoutEnvironment(historyBody.bankPayoutEnvironment === "test" || historyBody.bankPayoutEnvironment === "live"
+        ? historyBody.bankPayoutEnvironment : null);
       setWallets(accountList);
       setHistory(transferList);
       setFlowpayAccountNumber(typeof accountBody.flowpayAccountNumber === "string" ? accountBody.flowpayAccountNumber : null);
@@ -155,6 +160,9 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         return typeof bank.code === "string" && !!bank.code && typeof bank.name === "string" && !!bank.name;
       });
       if (!items.length) throw new Error("BANK_LIST_EMPTY");
+      if (body.environment === "test" || body.environment === "live") {
+        setBankPayoutEnvironment(body.environment);
+      }
       setBanks(items);
     }).catch(cause => {
       if (!controller.signal.aborted) {
@@ -483,9 +491,23 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       </> : <>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
           <h3 className="fp-account-section-title" style={{margin:0}}><Building2 size={17}/> To a Nigerian bank</h3>
-          <span style={{fontSize:11,fontWeight:800,color:"#c2410c",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:999,padding:"6px 10px"}}>PAYSTACK · TEST MODE</span>
+          <span style={{fontSize:11,fontWeight:800,color:"#c2410c",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:999,padding:"6px 10px"}}>
+            {bankPayoutEnvironment ? `PAYSTACK · ${bankPayoutEnvironment.toUpperCase()} MODE` : "PAYSTACK · NOT CONFIGURED"}
+          </span>
         </div>
         <p className="fp-muted" style={{marginTop:0}}>Verify the recipient's account name before reviewing the bank transfer.</p>
+        {bankPayoutEnvironment === "live" && !bankPayoutsEnabled && <div className="fp-preview-warning" role="status">
+          Paystack live mode is selected, but live bank payouts are disabled on this FlowPay API. Account verification may work; no bank transfer can be submitted.
+        </div>}
+        {bankPayoutEnvironment === "test" && !bankPayoutsEnabled && <div className="fp-preview-warning" role="status">
+          Paystack test mode is selected, but sandbox bank payouts are not enabled on this API.
+        </div>}
+        {bankPayoutEnvironment === "test" && bankPayoutsEnabled && <div className="fp-preview-warning" role="note">
+          Test mode only: Paystack test transfers are simulated and do not move real money.
+        </div>}
+        {bankPayoutEnvironment === "live" && bankPayoutsEnabled && <div className="fp-preview-warning" role="note">
+          Live mode: confirming submits a real Paystack bank transfer. Verify the beneficiary and amount carefully before authorizing.
+        </div>}
         {banksLoading ? <p className="fp-overview-muted" role="status">Loading the Paystack bank directory…</p> : banksError ? <div className="fp-preview-warning" role="alert">Bank list unavailable ({banksError}). Check the selected Paystack environment and backend credentials in Render, then refresh.</div> : <>
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
@@ -540,11 +562,15 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
                 placeholder="Enter your 6-digit PIN" value={transactionPin}
                 onChange={event => setTransactionPin(event.target.value.replace(/\D/g, "").slice(0, 6))}/>
               <button className="fp-primary" type="button" onClick={() => void submitBankTransfer()}
-                disabled={bankTransferBusy || !pinSet || !/^\d{6}$/.test(transactionPin)}>
-                {bankTransferBusy ? "Submitting to Paystack…" : "Confirm bank transfer · Test mode"}
+                disabled={bankTransferBusy || !bankPayoutsEnabled || !pinSet || !/^\d{6}$/.test(transactionPin)}>
+                {bankTransferBusy ? "Submitting to Paystack…" : `Confirm bank transfer · ${bankPayoutEnvironment === "live" ? "Live" : "Test"} mode`}
               </button>
             </>}
-            <small className="fp-muted">Confirming submits a Paystack test transfer. Test mode is simulated and does not move real money.</small>
+            <small className="fp-muted">
+              {bankPayoutEnvironment === "live"
+                ? "Live mode: this submits a real bank payout through Paystack after you confirm."
+                : "Test mode is simulated and does not move real money."}
+            </small>
           </div>}
           {bankTransferResult && <div className="fp-preview-warning" role="status" aria-live="polite">
             <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> Bank transfer · {bankTransferResult.status.toUpperCase()}</b>
@@ -574,7 +600,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         <span>{item.type.replace(/[_-]/g, " ")} · {item.destinationAccountMasked}<small>{dateLabel(item.createdAt)}</small></span>
         <b>{item.status}</b>
       </div>)}
-    </div> : <div className="fp-empty"><Building2 size={22}/><b>No transfers recorded yet</b><span>Completed and pending FlowPay wallet and Paystack test bank transfers appear here.</span></div>}
+    </div> : <div className="fp-empty"><Building2 size={22}/><b>No transfers recorded yet</b><span>Completed and pending FlowPay wallet and Paystack bank transfers appear here.</span></div>}
     <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={16}/> Refresh transfer details</button>
   </section>;
 }
