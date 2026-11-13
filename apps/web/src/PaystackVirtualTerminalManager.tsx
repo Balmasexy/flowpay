@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AlertCircle, CheckCircle2, CreditCard, Plus, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 
 type PaymentMethod = {
@@ -68,7 +68,7 @@ export default function PaystackVirtualTerminalManager({ token, apiBase }: Props
 
   useEffect(() => { void load(); }, [load]);
 
-  const create = async (event: React.FormEvent) => {
+  const create = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
     setBusy(true); setError(""); setMessage("");
