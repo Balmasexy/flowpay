@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { getApiJwt } from "./auth-client";
 import {
   ArrowLeftRight, Building2, CheckCircle2, Clock3, RefreshCw, Search,
   ShieldCheck, Wallet
@@ -93,7 +94,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   useEffect(() => { setMode(initialMode); }, [initialMode]);
 
   const load = useCallback(async () => {
-    if (!token || token.split(".").length !== 3) {
+    if (!token) {
       setPageError("Your secure session is not ready. Sign in again and retry.");
       setLoading(false);
       return;
@@ -107,7 +108,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setLoading(true);
     setPageError("");
     try {
-      const headers = { Authorization: "Bearer " + token };
+      const headers = { Authorization: "Bearer " + await getApiJwt() };
       const [accountResponse, historyResponse, pinResponse] = await Promise.all([
         fetch(apiBase + "/customer/account-details", { method: "GET", credentials: "omit", headers }),
         fetch(apiBase + "/customer/money-sent", { method: "GET", credentials: "omit", headers }),
@@ -151,10 +152,10 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setBanksError("");
     setBankDirectoryMessage("");
     setBankRequiredConfiguration([]);
-    fetch(apiAddress() + "/customer/banks", {
+    getApiJwt().then(jwt => fetch(apiAddress() + "/customer/banks", {
       method: "GET", credentials: "omit", signal: controller.signal,
-      headers: { Authorization: "Bearer " + token }
-    }).then(async response => {
+      headers: { Authorization: "Bearer " + jwt }
+    })).then(async response => {
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok || !Array.isArray(body.banks)) {
         const key = typeof body.error === "string" ? body.error : "BANK_LIST_UNAVAILABLE";
@@ -199,7 +200,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       try {
         const response = await fetch(apiAddress() + "/customer/flowpay/recipients/lookup", {
           method: "POST", credentials: "omit", signal: controller.signal,
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
           body: JSON.stringify({ accountNumber: recipientNumber })
         });
         const body = asRecord(await response.json().catch(() => ({})));
@@ -227,7 +228,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       try {
         const response = await fetch(apiAddress() + "/customer/bank-account-lookup", {
           method: "POST", credentials: "omit", signal: controller.signal,
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
           body: JSON.stringify({ accountNumber: bankAccountNumber, bankCode })
         });
         const body = asRecord(await response.json().catch(() => ({})));
@@ -263,7 +264,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     try {
       const response = await fetch(apiAddress() + "/customer/transaction-pin/setup", {
         method: "POST", credentials: "omit",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
         body: JSON.stringify({ pin: transactionPin, confirmPin: pinConfirm })
       });
       const body = asRecord(await response.json().catch(() => ({})));
@@ -294,7 +295,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     try {
       const response = await fetch(apiAddress() + "/customer/transfers/flowpay", {
         method: "POST", credentials: "omit",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
         body: JSON.stringify({
           recipientAccountNumber: recipientNumber,
           amountMinor,
@@ -347,7 +348,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     try {
       const response = await fetch(apiAddress() + "/customer/transfers/bank", {
         method: "POST", credentials: "omit",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
         body: JSON.stringify({
           accountNumber: bankPreview.accountNumber,
           bankCode,
@@ -396,7 +397,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     setTransferError("");
     try {
       const response = await fetch(apiAddress() + "/customer/transfers/bank/status?reference=" + encodeURIComponent(bankTransferResult.reference), {
-        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + await getApiJwt() }
       });
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok || typeof body.status !== "string") {
@@ -543,6 +544,10 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
               <RefreshCw size={15}/> {banksLoading ? "Loading banks…" : "Reload bank list"}
             </button>
           </div>}
+          <div className="fp-profile-section-title" style={{margin:"14px 0 8px"}}>
+            <h3 style={{margin:0}}>Select beneficiary</h3>
+            <span>Search and choose the recipient's bank</span>
+          </div>
           <label htmlFor="fp-transfer-bank-search">Search bank name</label>
           <div style={{position:"relative"}}>
             <Search size={16} style={{position:"absolute",left:12,top:13,opacity:.65}}/>
@@ -550,7 +555,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
               placeholder="Search all available Nigerian banks" style={{paddingLeft:36}}/>
           </div>
           <small className="fp-muted">{filteredBanks.length} of {banks.length} provider-listed banks shown</small>
-          <label htmlFor="fp-transfer-bank">Select beneficiary bank</label>
+          <label htmlFor="fp-transfer-bank">Select bank from the dropdown list</label>
           <select id="fp-transfer-bank" value={bankCode} disabled={banksLoading || banks.length === 0} onChange={event => { setBankCode(event.target.value); setBankAccountName(""); setBankPreview(null); setTransferError(""); }}>
             <option value="">Choose a bank</option>
             {filteredBanks.map(bank => <option key={bank.code} value={bank.code}>{bank.name}</option>)}
