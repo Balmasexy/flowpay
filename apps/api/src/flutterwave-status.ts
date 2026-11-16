@@ -43,12 +43,12 @@ function amountToMinor(value:unknown):string|null{
 }
 
 export function createFlutterwaveDepositStatusHandler(options:Options){
-  const {pool,jwks,issuer,audience}=options;
+  const {pool,jwks,issuer,...(audience ? { audience } : {})}=options;
   return async function handleFlutterwaveDepositStatus(req:IncomingMessage,res:ServerResponse):Promise<boolean>{
     const url=new URL(req.url??"/","http://localhost");
     const path=url.pathname.replace(/\/+$/,"")||"/";
     if(req.method!=="GET" || path!=="/customer/flutterwave/deposits/status") return false;
-    if(!pool || !jwks || !issuer || !audience){
+    if(!pool || !jwks || !issuer){
       send(res,503,{error:"FLUTTERWAVE_STATUS_SERVICE_NOT_CONFIGURED"}); return true;
     }
     const bearer=req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
@@ -56,7 +56,7 @@ export function createFlutterwaveDepositStatusHandler(options:Options){
 
     let userId:string;
     try{
-      const {payload}=await jwtVerify(bearer[1],jwks,{algorithms:["EdDSA"],issuer,audience});
+      const {payload}=await jwtVerify(bearer[1],jwks,{algorithms:["EdDSA"],issuer,...(audience ? { audience } : {})});
       if(typeof payload.sub!=="string" || !payload.sub){send(res,401,{error:"INVALID_SESSION"});return true;}
       const identity=await pool.query<{id:string}>(
         `SELECT app_user.id
