@@ -178,12 +178,14 @@ export function createFaceVerificationHandler(deps: Dependencies) {
         productionEnabled: config?.environment === "production",
         cameraSdkVersion: CAMERA_SDK_VERSION,
         message: !configured
-          ? "Smile ID sandbox secrets and the HTTPS callback URL are not configured."
+          ? "Smile ID environment, partner ID, API key and HTTPS callback URL are not configured."
           : !schemaReady
             ? "Apply the additive face-verification migration before enabling capture."
             : !authReady
               ? "Customer authentication is not configured on the API."
-              : "Smile ID sandbox face and liveness capture is available for authenticated customers."
+              : config?.environment === "production"
+                ? "Smile ID production face and liveness capture is available for authenticated customers."
+                : "Smile ID sandbox face and liveness capture is available. Sandbox results do not satisfy production payment verification."
       });
       return true;
     }
@@ -320,10 +322,10 @@ export function createFaceVerificationHandler(deps: Dependencies) {
         const row = result.rows[0];
         send(res, 200, {
           provider: "smile_id",
-          environment: "sandbox",
+          environment: config?.environment ?? "unconfigured",
           configured: Boolean(config),
           verificationEnabled: Boolean(config),
-          productionEnabled: false,
+          productionEnabled: config?.environment === "production",
           status: row?.status ?? "not_started",
           resultCode: row?.result_code ?? null,
           resultText: row?.result_text ?? null,
