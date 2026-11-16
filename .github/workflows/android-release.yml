@@ -38,12 +38,17 @@ jobs:
 
       - name: Install Android SDK platform and build tools
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+          accept-android-sdk-licenses: false
+          log-accepted-android-sdk-licenses: false
+          packages: platform-tools
 
       - name: Install Android API 36
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
+          printf 'y\\n%.0s' {1..40} | sdkmanager --licenses >/dev/null
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.9.1
