@@ -125,10 +125,10 @@ async function verifyTransactionPin(client: PoolClient, userId: string, supplied
   );
   return "verified";
 }
-async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string, req: IncomingMessage): Promise<Identity | null> {
+async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience?: string, req: IncomingMessage): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
-  const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+  const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
     `SELECT app_user.id, auth_user.email, auth_user.name
@@ -524,7 +524,7 @@ export async function processPaystackTransferWebhook(pool: Pool, secret: string,
 }
 
 export function createPaystackBankTransfersHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
   return async function handlePaystackBankTransfers(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -550,7 +550,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
 
     let identity: Identity | null;
     try {
-      identity = await authenticate(pool, jwks, issuer, audience, req);
+      identity = await authenticate(pool, jwks, issuer, ...(audience ? { audience } : {}), req);
       if (!identity) {
         send(res, req.headers.authorization ? 403 : 401, {
           error: req.headers.authorization ? "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" : "AUTHENTICATION_REQUIRED"
