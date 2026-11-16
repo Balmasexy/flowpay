@@ -119,6 +119,10 @@ export async function getApiJwt(): Promise<string> {
   if (!session.data?.user) {
     throw new Error("Your Neon Auth sign-in session is no longer active. Please sign in again.");
   }
+  // Neon Auth's React adapter injects set-auth-jwt into session data. Prefer
+  // the typed session token, then fall back to the response header.
+  const sessionJwt = session.data.session?.token;
+  if (isJwt(sessionJwt)) return sessionJwt;
   if (isJwt(headerJwt)) return headerJwt;
 
   throw new Error(
