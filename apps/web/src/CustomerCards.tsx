@@ -285,15 +285,16 @@ export default function CustomerCards({ token, registeredName }: { token: string
       {virtualBankAccount.assigned ? <>
         <div className="fp-detail-list">
           <div><span>Bank</span><b>{virtualBankAccount.bankName}</b></div>
-          <div><span>Account name</span><b>{virtualBankAccount.accountName}</b></div>
+          <div><span>Bank name enquiry</span><b>{virtualBankAccount.accountName}</b></div>
           <div><span>10-digit account number</span><b style={{fontSize:20,letterSpacing:1.2}}>{virtualBankAccount.accountNumber}</b></div>
         </div>
+        <p className="fp-muted" style={{margin:0}}>This dedicated NGN account can receive transfers sent from other Nigerian bank apps. Your FlowPay wallet is credited only after Paystack verifies the incoming payment. The name enquiry shown above is Paystack-confirmed; “FlowPay / your verified name” requires Paystack to enable its custom DVA naming for FlowPay.</p>
         <button type="button" className="fp-outline" onClick={() => void copyVirtualAccount()}>
           {copied ? <Check size={15}/> : <Copy size={15}/>} {copied ? "Copied" : "Copy virtual account number"}
         </button>
       </> : <>
         <p className="fp-muted" style={{margin:0}}>
-          This Paystack-issued account is for receiving NGN bank transfers. It is separate from your 10-digit FlowPay wallet number and from your card number.
+          This Paystack-issued NUBAN is for receiving NGN transfers from other Nigerian bank apps. It is separate from your 10-digit FlowPay wallet-transfer number and from your card number.
         </p>
         <label style={{display:"flex",alignItems:"flex-start",gap:9,fontSize:13,lineHeight:1.45}}>
           <input type="checkbox" checked={accountConsent} onChange={event => setAccountConsent(event.target.checked)} style={{marginTop:3}}/>
