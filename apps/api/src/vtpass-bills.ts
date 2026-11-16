@@ -1,6 +1,7 @@
 import { randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { productionFaceVerificationAllowed } from "./customer-security.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -90,10 +91,10 @@ async function providerRequest(cfg: Config, method: "GET" | "POST", endpoint: st
   const body = record(await response.json().catch(() => null));
   return { ok: response.ok, status: response.status, body };
 }
-async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string, req: IncomingMessage): Promise<string | null> {
+async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string | undefined, req: IncomingMessage): Promise<string | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
-  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, audience });
+  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query(
     'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \'active\' AND app_user.role IN (\'customer\',\'super_admin\') LIMIT 1',
@@ -275,7 +276,7 @@ export function createVtpassBillsHandler(options: Options) {
       (req.method === "GET" && ["/customer/bills/catalog", "/customer/bills/status"].includes(path)) ||
       (req.method === "POST" && ["/customer/bills/validate", "/customer/bills/purchase"].includes(path));
     if (!supported) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "VTPASS_BILLS_SERVICE_NOT_CONFIGURED" }); return true;
     }
     let userId: string | null;
@@ -389,6 +390,10 @@ export function createVtpassBillsHandler(options: Options) {
     }
 
     if (req.method === "POST" && path === "/customer/bills/purchase") {
+      if (!(await productionFaceVerificationAllowed(pool, userId))) {
+        send(res, 403, { error: "FACE_VERIFICATION_REQUIRED", message: "Complete production face and liveness verification before paying bills or buying airtime and data." });
+        return true;
+      }
       let input: Record<string, unknown>;
       try { input = await readJson(req); }
       catch (error) { send(res, error instanceof Error && error.message === "PAYLOAD_TOO_LARGE" ? 413 : 400, { error: error instanceof Error ? error.message : "INVALID_PAYLOAD" }); return true; }

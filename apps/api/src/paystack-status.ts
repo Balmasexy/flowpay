@@ -237,7 +237,7 @@ export function createPaystackDepositStatusHandler(options: Options) {
   return async function handlePaystackDepositStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (req.method !== "GET" || url.pathname.replace(/\/+$/, "") !== "/customer/paystack/deposits/status") return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "PAYSTACK_STATUS_SERVICE_NOT_CONFIGURED" });
       return true;
     }
@@ -253,7 +253,7 @@ export function createPaystackDepositStatusHandler(options: Options) {
     }
 
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" });
         return true;

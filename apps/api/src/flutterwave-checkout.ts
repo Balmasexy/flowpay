@@ -109,7 +109,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/customer/flutterwave/deposits") return false;
 
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "FLUTTERWAVE_CHECKOUT_SERVICE_NOT_CONFIGURED" });
       return true;
     }

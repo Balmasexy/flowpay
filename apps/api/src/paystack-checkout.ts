@@ -49,13 +49,13 @@ export function createPaystackCheckoutHandler(options: Options) {
   return async function handlePaystackCheckout(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || path !== "/customer/paystack/deposits") return false;
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "PAYSTACK_CHECKOUT_SERVICE_NOT_CONFIGURED" }); return true; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "PAYSTACK_CHECKOUT_SERVICE_NOT_CONFIGURED" }); return true; }
     const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!bearer) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return true; }
 
     let identity: Identity;
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return true; }
       const result = await pool.query<Identity>(
         `SELECT u.id, a.email, a.name FROM neon_auth."user" a

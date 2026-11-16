@@ -25,7 +25,7 @@ import InvitationsPage from "./InvitationsPage";
 import BettingPreview from "./BettingPreview";
 import DocumentsPage from "./DocumentsPage";
 import CustomerNotifications from "./CustomerNotifications";
-import { authClient, authConfigured } from "./auth-client";
+import { authClient, authConfigured, getApiJwt } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronLeft, ChevronRight, CircleHelp, Ellipsis, CreditCard, FileText, Gift, Home,
@@ -103,16 +103,28 @@ export default function App() {
   }, [authSession.data?.session?.token, authSession.data?.user?.id]);
 
   useEffect(() => {
-    const token = authSession.data?.session?.token;
+    const userId = authSession.data?.user?.id;
+    const sessionToken = authSession.data?.session?.token;
     const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
     const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
-    if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) return;
+    if (!userId || !sessionToken || !apiBase) return;
     const controller = new AbortController();
-    void fetch(apiBase + "/customer/account-details", {
-      method: "GET",
-      credentials: "omit",
-      signal: controller.signal,
-      headers: { Authorization: "Bearer " + token }
+    void getApiJwt().then(async jwt => {
+      const bootstrap = await fetch(apiBase + "/customer/bootstrap", {
+        method: "POST",
+        credentials: "omit",
+        signal: controller.signal,
+        headers: { Authorization: "Bearer " + jwt }
+      });
+      if (!bootstrap.ok) throw new Error("FlowPay customer onboarding is not ready.");
+      return fetch(apiBase + "/customer/account-details", {
+        method: "GET",
+        credentials: "omit",
+        signal: controller.signal,
+        headers: { Authorization: "Bearer " + jwt }
+      });
+    }).then(response => {
+      if (response && !response.ok) throw new Error("FlowPay account details are unavailable.");
     }).catch(() => undefined);
     return () => controller.abort();
   }, [authSession.data?.session?.token, authSession.data?.user?.id]);

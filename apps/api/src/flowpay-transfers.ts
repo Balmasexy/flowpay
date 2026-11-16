@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } fr
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
+import { productionFaceVerificationAllowed } from "./customer-security.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -58,13 +59,13 @@ async function authenticate(
   pool: Pool,
   jwks: ReturnType<typeof createRemoteJWKSet>,
   issuer: string,
-  audience: string,
+  audience: string | undefined,
   req: IncomingMessage
 ): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
   const { payload } = await jwtVerify(bearer[1], jwks, {
-    algorithms: ["EdDSA"], issuer, audience
+    algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
   });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
@@ -133,7 +134,7 @@ export function createFlowPayTransfersHandler(options: Options) {
         "/customer/transfers/flowpay"
       ].includes(path));
     if (!supported) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "FLOWPAY_TRANSFER_SERVICE_NOT_CONFIGURED" });
       return true;
     }
@@ -255,6 +256,10 @@ export function createFlowPayTransfersHandler(options: Options) {
     }
 
     if (path === "/customer/transfers/flowpay") {
+      if (!(await productionFaceVerificationAllowed(pool, identity.id))) {
+        send(res, 403, { error: "FACE_VERIFICATION_REQUIRED", message: "Complete production face and liveness verification before sending money." });
+        return true;
+      }
       if (Object.keys(input).some(key => ![
         "recipientAccountNumber", "amountMinor", "currency", "idempotencyKey", "transactionPin"
       ].includes(key))) {
