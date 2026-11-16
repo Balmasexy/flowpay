@@ -50,7 +50,7 @@ async function postNeonAuth(path: string, body: Record<string, string>): Promise
 }
 
 export function requestPasswordRecoveryCode(email: string): Promise<NeonAuthResult> {
-  return postNeonAuth("/email-otp/request-password-reset", { email });
+  return postNeonAuth("/email-otp/send-verification-otp", { email, type: "forget-password" });
 }
 
 export function resetPasswordWithRecoveryCode(email: string, otp: string, password: string): Promise<NeonAuthResult> {
