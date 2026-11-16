@@ -268,7 +268,7 @@ async function reconcile(pool: Pool, bill: BillRow, state: BillStatus, body: Pro
 }
 
 export function createVtpassBillsHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handleVtpassBills(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -281,7 +281,7 @@ export function createVtpassBillsHandler(options: Options) {
     }
     let userId: string | null;
     try {
-      userId = await authenticate(pool, jwks, issuer, ...(audience ? { audience } : {}), req);
+      userId = await authenticate(pool, jwks, issuer, audience, req);
       if (!userId) {
         send(res, req.headers.authorization ? 403 : 401, { error: req.headers.authorization ? "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" : "AUTHENTICATION_REQUIRED" });
         return true;
