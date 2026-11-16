@@ -21,6 +21,7 @@ import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 import { createVtpassBillsHandler } from "./vtpass-bills.js";
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
+import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -40,6 +41,7 @@ const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
+const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, audience });
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
@@ -85,6 +87,7 @@ const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (await customerBootstrapHandler(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
   if (await depositReceiptsHandler(req, res)) return;
   if (await vtpassBillsHandler(req, res)) return;
@@ -105,7 +108,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -208,7 +211,7 @@ const server = createServer(async (req, res) => {
         schema.rows[0]?.flutterwave_deposits === true &&
         schema.rows[0]?.payment_events === true &&
         schema.rows[0]?.flutterwave_clearing_account === true &&
-        jwksUrl && issuer && audience &&
+        jwksUrl && issuer &&
         process.env.FLW_ENVIRONMENT === "test" &&
         flwSecret.startsWith("FLWSECK_TEST-") &&
         isHttpsUrl((process.env.FLW_REDIRECT_URL ?? "").trim()) &&
@@ -273,7 +276,7 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/overview") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "OVERVIEW_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "OVERVIEW_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
