@@ -124,7 +124,7 @@ export default function FaceVerification({ token }: Props) {
       setSubmitting(false);
       stopCamera();
     }
-  }, [refreshStatus, stopCamera, token]);
+  }, [refreshStatus, stopCamera, status.environment, token]);
 
   const startCamera = async () => {
     setError("");
