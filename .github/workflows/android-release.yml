@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'y\\n%.0s' {1..40} | sdkmanager --licenses >/dev/null
+          printf 'y\n%.0s' {1..40} | sdkmanager --licenses >/dev/null
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle 9.9.1
