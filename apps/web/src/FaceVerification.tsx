@@ -7,6 +7,8 @@ type Props = { token: string };
 type StatusResponse = {
   configured?: boolean;
   verificationEnabled?: boolean;
+  environment?: "sandbox" | "production" | "unconfigured";
+  productionEnabled?: boolean;
   status?: VerificationStatus;
   resultText?: string | null;
   resultCode?: string | null;
@@ -98,7 +100,7 @@ export default function FaceVerification({ token }: Props) {
     }
     setSubmitting(true);
     setError("");
-    setNotice("Securely submitting your capture to Smile ID sandbox. FlowPay does not save the raw images.");
+    setNotice("Securely submitting your capture to Smile ID " + (status.environment === "production" ? "production" : "sandbox") + ". FlowPay does not save the raw images.");
     try {
       const response = await fetch(API_BASE + "/customer/face-verification", {
         method: "POST",
@@ -221,13 +223,13 @@ export default function FaceVerification({ token }: Props) {
     {notice && <div className="fp-preview-warning" role="status" style={{ marginTop: 14 }}><Camera size={17}/>{notice}</div>}
 
     {!status.configured && <div className="fp-preview-warning" style={{ marginTop: 14 }}>
-      <ShieldAlert size={17}/> Smile ID sandbox credentials and the HTTPS callback endpoint must be configured on the FlowPay API, and migration 011 must be applied before capture. Production verification remains disabled.
+      <ShieldAlert size={17}/> The approved Smile ID environment, partner credentials and HTTPS callback endpoint must be configured on the FlowPay API, and the face-verification migration must be applied before capture. Sandbox results never satisfy production payment checks.
     </div>}
 
     {status.status !== "verified" && !cameraOpen && <div style={{ marginTop: 18 }}>
       <label style={{ display: "flex", alignItems: "flex-start", gap: 10, lineHeight: 1.5, fontSize: 13 }}>
         <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={!status.verificationEnabled || submitting}/>
-        <span>I consent to FlowPay capturing my selfie and liveness frames and sending them securely to Smile ID for sandbox verification. This is separate from my profile photo. FlowPay will store verification result metadata and consent time, not the raw selfie/video frames.</span>
+        <span>I consent to FlowPay capturing my selfie and liveness frames and sending them securely to Smile ID in the active environment shown above. This is separate from my profile photo. FlowPay stores verification result metadata and consent time, not the raw selfie/video frames.</span>
       </label>
       <button type="button" className="fp-primary" onClick={() => void startCamera()} disabled={!status.verificationEnabled || !consent || cameraLoading || submitting} style={{ marginTop: 16 }}>
         <Camera size={17}/> {cameraLoading ? "Opening secure camera…" : status.status === "rejected" || status.status === "failed" ? "Try verification again" : "Start face verification"}
