@@ -1030,3 +1030,251 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   letter-spacing:5px;
   font-variant-numeric:tabular-nums;
 }
+
+/* FlowPay mobile-first, OPay-inspired account login. Keep FlowPay branding. */
+.fp-login-opay-page {
+  min-height: 100vh;
+  padding: 22px clamp(18px, 5vw, 64px) 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f7f8f7;
+  color: #20231f;
+  font-family: inherit;
+}
+.fp-login-opay-topbar {
+  width: 100%;
+  max-width: 1120px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fp-login-opay-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #20231f;
+  text-decoration: none;
+  font-size: 21px;
+  font-weight: 850;
+  letter-spacing: -.8px;
+}
+.fp-login-opay-brand > span:last-child > span { color: #ff7a18; }
+.fp-login-opay-brand-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #ff7a18;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 900;
+}
+.fp-login-opay-help {
+  color: #73796f;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 650;
+}
+.fp-login-opay-card {
+  width: min(100%, 440px);
+  margin: auto;
+  padding: 38px 36px 28px;
+  border: 1px solid #ecefeb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 42px rgba(20, 34, 24, .055);
+}
+.fp-login-opay-intro { text-align: center; margin-bottom: 28px; }
+.fp-login-opay-icon {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #fff1e7;
+  color: #ed741b;
+}
+.fp-login-opay-eyebrow {
+  color: #ce681b;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 1.6px;
+}
+.fp-login-opay-intro h1 {
+  margin: 9px 0 6px;
+  color: #20231f;
+  font-size: 27px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -.8px;
+}
+.fp-login-opay-intro p {
+  margin: 0;
+  color: #858a83;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.fp-login-opay-form { display: grid; gap: 10px; }
+.fp-login-opay-form > label,
+.fp-login-opay-label-row label {
+  margin-top: 6px;
+  color: #424840;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fp-login-opay-form input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 14px;
+  border: 1px solid #e5e9e4;
+  border-radius: 9px;
+  outline: none;
+  background: #fff;
+  color: #20231f;
+  font: inherit;
+  font-size: 12px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.fp-login-opay-form input::placeholder { color: #a2a79f; }
+.fp-login-opay-form input:focus {
+  border-color: #ff9a50;
+  box-shadow: 0 0 0 3px rgba(255, 122, 24, .10);
+}
+.fp-login-opay-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+}
+.fp-login-opay-label-row label { margin-top: 0; }
+.fp-login-opay-text-button,
+.fp-login-opay-signup button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #df6b16;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.fp-login-opay-password { position: relative; }
+.fp-login-opay-password input { padding-right: 48px; }
+.fp-login-opay-password button {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #848a82;
+  cursor: pointer;
+}
+.fp-login-opay-password button:hover { background: #f6f7f5; }
+.fp-login-opay-submit {
+  width: 100%;
+  min-height: 49px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 9px;
+  background: #ff7a18;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 7px 16px rgba(255, 122, 24, .18);
+}
+.fp-login-opay-submit:hover:not(:disabled) { background: #f17010; }
+.fp-login-opay-submit:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.fp-login-opay-alert,
+.fp-login-opay-success {
+  padding: 11px 12px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.fp-login-opay-alert { color: #9c3f2d; background: #fff3ef; border: 1px solid #f8d9d0; }
+.fp-login-opay-success { color: #386d47; background: #f0f8f1; border: 1px solid #dceede; }
+.fp-login-opay-signup {
+  margin: 22px 0 0;
+  text-align: center;
+  color: #777e75;
+  font-size: 11px;
+}
+.fp-login-opay-signup a {
+  color: #df6b16;
+  text-decoration: none;
+  font-weight: 800;
+}
+.fp-login-opay-security {
+  margin-top: 25px;
+  padding-top: 17px;
+  border-top: 1px solid #eff1ee;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  color: #838a81;
+  font-size: 9px;
+  line-height: 1.6;
+  text-align: left;
+}
+.fp-login-opay-security svg { flex-shrink: 0; color: #6f9779; }
+.fp-login-opay-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: #757c73;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fp-login-opay-back:disabled { opacity: .55; cursor: not-allowed; }
+.fp-login-opay-footer {
+  width: 100%;
+  max-width: 1120px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #9aa097;
+  font-size: 10px;
+}
+.fp-login-opay-footer span:last-child { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 520px) {
+  .fp-login-opay-page { padding: 14px 16px 16px; background: #fff; }
+  .fp-login-opay-topbar { min-height: 42px; }
+  .fp-login-opay-brand { font-size: 19px; }
+  .fp-login-opay-brand-mark { width: 31px; height: 31px; }
+  .fp-login-opay-card {
+    width: 100%;
+    margin: auto 0;
+    padding: 34px 10px 24px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .fp-login-opay-intro { margin-bottom: 30px; }
+  .fp-login-opay-intro h1 { font-size: 25px; }
+  .fp-login-opay-form { gap: 11px; }
+  .fp-login-opay-form input { height: 50px; }
+  .fp-login-opay-footer { padding: 0 2px; }
+}
