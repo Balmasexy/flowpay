@@ -100,7 +100,7 @@ async function markProviderFailure(pool: Pool, transactionId: string) {
 }
 
 export function createFlutterwaveCheckoutHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
 
   return async function handleFlutterwaveCheckout(
     req: IncomingMessage,
