@@ -94,10 +94,7 @@ email.trim(), code.trim());
     }
     setBusy(true);
     try {
-      const result = await authClient.sendVerificationEmail({
-        email: email.trim(),
-        callbackURL: window.location.origin + "/login"
-      });
+      const result = await sendSignupEmailCode(email.trim());
       if (result.error) {
         setError(result.error.message || "Unable to send a new verification code.");
         return;
