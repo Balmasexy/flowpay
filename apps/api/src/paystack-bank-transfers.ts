@@ -524,7 +524,7 @@ export async function processPaystackTransferWebhook(pool: Pool, secret: string,
 }
 
 export function createPaystackBankTransfersHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handlePaystackBankTransfers(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -550,7 +550,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
 
     let identity: Identity | null;
     try {
-      identity = await authenticate(pool, jwks, issuer, ...(audience ? { audience } : {}), req);
+      identity = await authenticate(pool, jwks, issuer, audience, req);
       if (!identity) {
         send(res, req.headers.authorization ? 403 : 401, {
           error: req.headers.authorization ? "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" : "AUTHENTICATION_REQUIRED"
