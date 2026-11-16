@@ -100,7 +100,7 @@ async function markProviderFailure(pool: Pool, transactionId: string) {
 }
 
 export function createFlutterwaveCheckoutHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
 
   return async function handleFlutterwaveCheckout(
     req: IncomingMessage,
@@ -109,7 +109,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/customer/flutterwave/deposits") return false;
 
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "FLUTTERWAVE_CHECKOUT_SERVICE_NOT_CONFIGURED" });
       return true;
     }
