@@ -91,10 +91,10 @@ async function providerRequest(cfg: Config, method: "GET" | "POST", endpoint: st
   const body = record(await response.json().catch(() => null));
   return { ok: response.ok, status: response.status, body };
 }
-async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string, req: IncomingMessage): Promise<string | null> {
+async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience?: string, req: IncomingMessage): Promise<string | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
-  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, audience });
+  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query(
     'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \'active\' AND app_user.role IN (\'customer\',\'super_admin\') LIMIT 1',
@@ -268,7 +268,7 @@ async function reconcile(pool: Pool, bill: BillRow, state: BillStatus, body: Pro
 }
 
 export function createVtpassBillsHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
   return async function handleVtpassBills(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
@@ -281,7 +281,7 @@ export function createVtpassBillsHandler(options: Options) {
     }
     let userId: string | null;
     try {
-      userId = await authenticate(pool, jwks, issuer, audience, req);
+      userId = await authenticate(pool, jwks, issuer, ...(audience ? { audience } : {}), req);
       if (!userId) {
         send(res, req.headers.authorization ? 403 : 401, { error: req.headers.authorization ? "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" : "AUTHENTICATION_REQUIRED" });
         return true;
