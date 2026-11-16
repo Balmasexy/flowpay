@@ -105,7 +105,7 @@ export default function LoginPage() {
     event.preventDefault();
     clearFeedback();
 
-    if (!/^\\d{6}$/.test(code)) {
+    if (code.length !== 6 || [...code].some(char => char < "0" || char > "9")) {
       setError("Enter the six-digit recovery code sent to your email.");
       return;
     }
@@ -272,7 +272,7 @@ export default function LoginPage() {
               maxLength={6}
               placeholder="Enter code"
               value={code}
-              onChange={event => setCode(event.target.value.replace(/\\D/g, "").slice(0, 6))}
+              onChange={event => setCode(Array.from(event.target.value).filter(char => char >= "0" && char <= "9").join("").slice(0, 6))}
               required
             />
 
