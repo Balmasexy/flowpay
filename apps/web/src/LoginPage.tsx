@@ -65,8 +65,7 @@ export default function LoginPage() {
     }
   }
 
-  async function requestPasswordReset(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function sendRecoveryCode() {
     clearFeedback();
 
     if (!authConfigured) {
@@ -95,6 +94,11 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function requestPasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendRecoveryCode();
   }
 
   async function resetPassword(event: FormEvent<HTMLFormElement>) {
@@ -310,7 +314,7 @@ export default function LoginPage() {
             <button
               className="fp-login-opay-back"
               type="button"
-              onClick={() => void requestPasswordReset(new Event("submit") as unknown as FormEvent<HTMLFormElement>)}
+              onClick={() => void sendRecoveryCode()}
               disabled={busy}
             >
               Resend recovery code
