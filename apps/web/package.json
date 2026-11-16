@@ -24,6 +24,11 @@
   },
   "overrides": {
     "zod": "4.6.7",
-    "@react-email/render": "2.2.0"
+    "@react-email/render": "2.2.0",
+    "better-auth": "1.7.25",
+    "@better-auth/core": "1.7.25",
+    "@better-auth/oauth-provider": "1.7.25",
+    "@better-auth/passkey": "1.7.25",
+    "@better-auth/drizzle-adapter": "1.7.25"
   }
 }
