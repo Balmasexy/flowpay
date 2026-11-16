@@ -54,6 +54,39 @@ jobs:
       - name: Install API dependencies
         run: npm ci --prefix apps/api
 
+      - name: Audit API dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/flowpay-api-npm-audit.json"
+          npm audit --prefix apps/api --json > "$report" || true
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const report = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-api-npm-audit.json", "utf8"));
+            const vulnerabilities = Object.entries(report.vulnerabilities ?? {}).map(([name, item]) => ({
+              name,
+              severity: item.severity,
+              direct: item.isDirect,
+              range: item.range,
+              fixAvailable: item.fixAvailable
+            }));
+            const totals = report.metadata?.vulnerabilities ?? {};
+            console.log(JSON.stringify({ metadata: totals, vulnerabilities }, null, 2));
+            if ((totals.total ?? vulnerabilities.length) !== 0) {
+              console.error("FlowPay API dependency audit must be clean before release.");
+              process.exitCode = 1;
+            }
+          '
+
+      - name: Upload API dependency audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpay-api-npm-audit
+          path: ${{ runner.temp }}/flowpay-api-npm-audit.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Type-check API
         run: npm run typecheck --prefix apps/api
 
