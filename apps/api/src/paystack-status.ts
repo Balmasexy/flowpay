@@ -233,7 +233,7 @@ async function loadDeposit(pool: Pool, userId: string, reference: string): Promi
 }
 
 export function createPaystackDepositStatusHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handlePaystackDepositStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (req.method !== "GET" || url.pathname.replace(/\/+$/, "") !== "/customer/paystack/deposits/status") return false;
