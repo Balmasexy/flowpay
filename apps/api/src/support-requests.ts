@@ -46,8 +46,8 @@ export function createSupportRequestsHandler(deps: Dependencies) {
   return async function handleSupportRequests(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (pathname !== "/customer/support-requests" || (req.method !== "GET" && req.method !== "POST")) return false;
-    const { pool, jwks, issuer, audience } = deps;
-    if (!pool || !jwks || !issuer || !audience) {
+    const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = deps;
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "SUPPORT_SERVICE_NOT_CONFIGURED" });
       return true;
     }
@@ -56,7 +56,7 @@ export function createSupportRequestsHandler(deps: Dependencies) {
 
     let userId: string;
     try {
-      const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }
