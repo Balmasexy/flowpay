@@ -178,7 +178,7 @@ async function authenticate(
   pool: Pool,
   jwks: JWTVerifyGetKey,
   issuer: string,
-  audience?: string,
+  audience: string | undefined,
   admin = false
 ): Promise<Identity | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -212,7 +212,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
     const customerMatch = pathname.match(/^\/customer\/deposit-receipts\/([0-9a-f-]{36})\/file$/i);
     const adminMatch = pathname.match(/^\/admin\/deposit-receipts(?:\/([0-9a-f-]{36})\/(review|file))?$/i);
     if (!(pathname === customerRoot || pathname.startsWith(customerRoot + "/") || pathname === adminRoot || pathname.startsWith(adminRoot + "/"))) return false;
-    const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = deps;
+    const { pool, jwks, issuer, audience } = deps;
     if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "DEPOSIT_RECEIPT_SERVICE_NOT_CONFIGURED" });
       return true;
@@ -225,7 +225,7 @@ export function createDepositReceiptsHandler(deps: Dependencies) {
     const isAdmin = pathname === adminRoot || pathname.startsWith(adminRoot + "/");
     let identity: Identity;
     try {
-      const result = await authenticate(req, pool, jwks, issuer, ...(audience ? { audience } : {}), isAdmin);
+      const result = await authenticate(req, pool, jwks, issuer, audience, isAdmin);
       if (!result) {
         send(res, req.headers.authorization ? 403 : 401, { error: isAdmin ? "ACTIVE_SUPER_ADMIN_REQUIRED" : "ACTIVE_CUSTOMER_REQUIRED" });
         return true;
