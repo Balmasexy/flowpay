@@ -81,12 +81,12 @@ const SYSTEM_INSTRUCTIONS = [
 ].join(" ");
 
 export function createCustomerAiHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
   return async function handleCustomerAi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/customer-ai/chat") return false;
 
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "FLOWPAY_AI_AUTH_NOT_CONFIGURED" });
       return true;
     }
@@ -99,7 +99,7 @@ export function createCustomerAiHandler(options: Options) {
     let customer: CustomerIdentity;
     try {
       const { payload } = await jwtVerify(bearer[1], jwks, {
-        algorithms: ["EdDSA"], issuer, audience
+        algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
       });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" });
