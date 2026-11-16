@@ -90,19 +90,19 @@ async function fetchBanks(secret: string): Promise<Bank[]> {
 }
 
 export function createBankAccountLookupHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
   return async function handleBankAccountLookup(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (!["GET", "POST"].includes(req.method ?? "") ||
         !["/customer/banks", "/customer/bank-account-lookup"].includes(pathname)) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "BANK_LOOKUP_AUTH_NOT_CONFIGURED" }); return true;
     }
     const auth = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!auth) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return true; }
     let userId: string;
     try {
-      const { payload } = await jwtVerify(auth[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(auth[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }
