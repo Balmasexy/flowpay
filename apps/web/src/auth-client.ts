@@ -1,18 +1,20 @@
 import { createAuthClient } from "@neondatabase/auth";
+import { emailOTPClient } from "better-auth/client/plugins";
 import { BetterAuthReactAdapter } from "@neondatabase/auth/react/adapters";
 
 const authUrl = (import.meta.env.VITE_NEON_AUTH_URL as string | undefined)?.trim().replace(/\/$/, "");
 export const authConfigured = Boolean(authUrl);
 
 // FlowPay and Neon Auth use different origins. Configure cross-origin cookie
-// credentials on the adapter itself; this preserves the React adapter's
-// concrete client type (useSession, signIn, signUp, and token).
+// credentials on the adapter itself; add the official Email OTP client plugin
+// for the recovery and signup verification endpoints used by FlowPay.
 export const authClient = createAuthClient(
   authUrl || "https://invalid-neon-auth-url.invalid",
   {
     adapter: BetterAuthReactAdapter({
       fetchOptions: { credentials: "include" },
     }),
+    plugins: [emailOTPClient()],
   }
 );
 
@@ -49,16 +51,6 @@ export async function getApiJwt(): Promise<string> {
     }
   } catch {
     endpointError = "FlowPay could not reach the Neon Auth token endpoint.";
-  }
-
-  // Compatibility fallback for SDK versions that expose the token helper.
-  try {
-    const result = await authClient.token();
-    if (!result.error && isJwt(result.data?.token)) {
-      return result.data.token;
-    }
-  } catch {
-    // Continue to the documented response-header fallback below.
   }
 
   // Some Better Auth deployments return the session JWT in this header.
