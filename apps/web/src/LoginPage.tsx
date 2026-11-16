@@ -9,7 +9,7 @@ import {
   MailCheck,
   ShieldCheck
 } from "lucide-react";
-import { authClient, authConfigured } from "./auth-client";
+import { authClient, authConfigured, requestPasswordRecoveryCode, resetPasswordWithRecoveryCode } from "./auth-client";
 
 type LoginScreen = "login" | "forgot-email" | "forgot-code";
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const result = await authClient.forgetPassword.emailOtp({ email: normalizedEmail });
+      const result = await requestPasswordRecoveryCode(normalizedEmail);
       if (result.error) {
         setError(result.error.message || "We could not send a recovery code. Please try again.");
         return;
@@ -105,7 +105,7 @@ export default function LoginPage() {
     event.preventDefault();
     clearFeedback();
 
-    if (!/^\\d{6}$/.test(code)) {
+    if (code.length !== 6 || [...code].some(char => char < "0" || char > "9")) {
       setError("Enter the six-digit recovery code sent to your email.");
       return;
     }
@@ -120,11 +120,8 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const result = await authClient.emailOtp.resetPassword({
-        email: normalizedEmail,
-        otp: code,
-        password: newPassword
-      });
+      const result = await resetPasswordWithRecoveryCode(
+normalizedEmail, code, newPassword);
       if (result.error) {
         setError(result.error.message || "The recovery code is invalid or expired. Request a new code.");
         return;
@@ -272,7 +269,7 @@ export default function LoginPage() {
               maxLength={6}
               placeholder="Enter code"
               value={code}
-              onChange={event => setCode(event.target.value.replace(/\\D/g, "").slice(0, 6))}
+              onChange={event => setCode(Array.from(event.target.value).filter(char => char >= "0" && char <= "9").join("").slice(0, 6))}
               required
             />
 

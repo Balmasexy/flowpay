@@ -1,37 +1,29 @@
-# Implementation plan
+# FlowPay implementation and release plan
 
-## Phase 0 — isolation and repository setup
+## Completed in the current repository
 
-- Confirm repository access and keep this repo separate from all existing projects.
-- Add the scaffold, CI checks, and secret scanning.
-- Set up local development configuration without committing secrets.
-- Verify the isolated FlowPay Development database before creating any schema.
+- Isolated FlowPay repository, separate API/web projects, Render services, and Neon development database.
+- Neon Managed Auth email/password sign-up and sign-in with email OTP verification during registration. Normal sign-in does not require an OTP. Neon now revokes active sessions after a successful password reset.
+- OPay-inspired FlowPay login UI using FlowPay branding, email/password sign-in, password visibility, and a separate forgot-password OTP flow.
+- Authenticated customer profile, dashboard overview, transaction history, internal wallet transfer, To Bank transfer, account number, transaction PIN, notifications, support, receipt upload/review, and customer AI routes.
+- Paystack deposit checkout/status/webhook/ledger-settlement paths, Paystack bank lookup and payout safeguards, Paystack dedicated-account assignment and incoming-credit settlement controls.
+- Flutterwave test deposit integration, Smile ID sandbox callback/result handling, signed Storyblok preview, and VTpass airtime/data/electricity adapter.
+- Idempotency, provider verification, customer ownership checks, ledger safeguards, and regression tests for the implemented financial paths.
+- GitHub Actions API type-check and regression suite, dependency audit, API health/readiness smoke test, and web production build.
+- Better Auth dependency tree patched to 1.7.25 in the web lockfile, with a clean web audit recorded on the security-release branch.
 
-## Phase 1 — API foundation
+## Remaining product/provider work
 
-- Add request validation, consistent errors, structured logging with redaction, and health/readiness checks.
-- Add authentication, session handling, authorization, and audit events.
-- Add database migrations and integration tests.
+1. **Production infrastructure:** The configured Neon database project is named FlowPay Development. Provision a separate production database/auth environment, review access controls and backup retention, run a migration rehearsal, and verify restore before production customer data is moved. Do not point live processing at a development database.
+2. **Live Paystack:** Obtain business approval separately for live deposits, Transfers, and dedicated virtual accounts. Configure the matching Render secrets, webhook, callback, limits, and feature flags only after approval.
+3. **VTpass:** Complete sandbox account setup and sandbox transactions with the business account, then obtain live approval and configure the API credentials and live switch.
+4. **Flutterwave cards:** Obtain written issuer access, approved card lifecycle APIs, PCI scope guidance, and secure hosted/reveal component. Until then, keep the card design explicitly marked as a preview.
+5. **KYC:** Complete Smile ID sandbox testing with provider credentials and callback. Obtain live approval, consent, legal review, retention rules, and monitored staff decision flow before production KYC.
+6. **Remaining customer services:** Implement secure document storage/review; savings product/partner, statements and withdrawals; cable TV subscriptions; betting funding; referrals; and customer Security actions (password changes, passkeys/MFA, session revocation). Do not show these as active until end-to-end flows exist.
+7. **Operations/compliance:** Complete support staffing and complaints SLA, fraud/chargeback handling, reconciliation, alerts, incident response, staff MFA and maker-checker controls, and periodic backup restore drills.
 
-## Phase 2 — ledger first
+## Release gate
 
-- Design chart of accounts and double-entry journal schema.
-- Implement balanced posting, idempotency, concurrency safety, reversals, and reconciliation.
-- Test insufficient funds, duplicate requests, concurrency, failed transactions, and auditability.
-- Do not integrate a payment provider until ledger invariants are tested.
+The web application can be built and deployed independently of live payment activation. Before production money movement, require approved provider contracts, distinct production credentials/database, migration rehearsal and backup, security and legal review, monitored low-value authorized live tests, duplicate webhook and reversal tests, and ledger reconciliation.
 
-## Phase 3 — client applications
-
-- Build the customer web app and Android app against documented API contracts.
-- Build a separately protected admin console with MFA and role-based access.
-- Show pending/failed/succeeded states clearly; never fabricate balances or transaction history.
-
-## Phase 4 — sandbox integration
-
-- Add provider adapter behind feature flags with sandbox credentials only.
-- Verify webhook signatures, event deduplication, reconciliation, and failure paths.
-- Test provider callbacks and ledger postings end-to-end.
-
-## Phase 5 — independent live-launch gate
-
-Requires explicit approval, legal/compliance review, security review, operational monitoring, incident response, verified provider onboarding, and separate production secrets. This phase is not authorized by the current scaffold task.
+Never fabricate balances, account numbers, transactions, identity verification, card credentials, provider approvals, or payment success. Preserve existing data. Apply production migrations or activate live payment switches only after explicit authorization and a documented rollback/restore plan.
