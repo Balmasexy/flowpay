@@ -241,8 +241,8 @@ export function createFaceVerificationHandler(deps: Dependencies) {
       try {
         await client.query("BEGIN");
         const existing = await client.query(
-          "SELECT status, result_code, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check FROM public.fp_face_verification_jobs WHERE job_id = $1 AND smile_user_id = $2 FOR UPDATE",
-          [jobId, smileUserId]
+          "SELECT status, result_code, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check FROM public.fp_face_verification_jobs WHERE job_id = $1 AND smile_user_id = $2 AND environment = $3 FOR UPDATE",
+          [jobId, smileUserId, config.environment]
         );
         if (existing.rowCount !== 1) {
           await client.query("COMMIT");
@@ -312,12 +312,12 @@ export function createFaceVerificationHandler(deps: Dependencies) {
 
     try {
       if (req.method === "GET") {
+        const config = getSmileConfig();
         const result = await pool.query(
-          "SELECT status, result_code, result_text, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check, created_at, updated_at, verified_at FROM public.fp_face_verification_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
-          [identity.userId]
+          "SELECT status, result_code, result_text, liveness_check, selfie_check, selfie_provided, register_selfie, human_review_liveness_check, human_review_selfie_check, created_at, updated_at, verified_at FROM public.fp_face_verification_jobs WHERE user_id = $1 AND environment = $2 ORDER BY created_at DESC LIMIT 1",
+          [identity.userId, config?.environment ?? "sandbox"]
         );
         const row = result.rows[0];
-        const config = getSmileConfig();
         send(res, 200, {
           provider: "smile_id",
           environment: "sandbox",
@@ -344,7 +344,7 @@ export function createFaceVerificationHandler(deps: Dependencies) {
 
       const config = getSmileConfig();
       if (!config) {
-        send(res, 503, { error: "SMILE_ID_SANDBOX_NOT_CONFIGURED", message: "Face verification is unavailable until the Smile ID sandbox secrets and HTTPS callback URL are configured on the API service." });
+        send(res, 503, { error: "SMILE_ID_NOT_CONFIGURED", message: "Face verification is unavailable until the approved Smile ID environment, secrets and HTTPS callback URL are configured on the API service." });
         return true;
       }
       let body: unknown;
@@ -375,8 +375,8 @@ export function createFaceVerificationHandler(deps: Dependencies) {
       }
 
       const latest = await pool.query(
-        "SELECT status FROM public.fp_face_verification_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1",
-        [identity.userId]
+        "SELECT status FROM public.fp_face_verification_jobs WHERE user_id = $1 AND environment = $2 ORDER BY created_at DESC LIMIT 1",
+        [identity.userId, config.environment]
       );
       if (latest.rows[0]?.status === "verified") {
         send(res, 409, { error: "FACE_ALREADY_VERIFIED", status: "verified" });
@@ -396,11 +396,11 @@ export function createFaceVerificationHandler(deps: Dependencies) {
         : CAMERA_SDK_VERSION;
 
       await pool.query(
-        "INSERT INTO public.fp_face_verification_jobs (user_id, smile_user_id, job_id, status, consented_at) VALUES ($1, $2, $3, 'pending', NOW())",
-        [identity.userId, smileUserId, jobId]
+        "INSERT INTO public.fp_face_verification_jobs (user_id, smile_user_id, job_id, status, consented_at, environment) VALUES ($1, $2, $3, 'pending', NOW(), $4)",
+        [identity.userId, smileUserId, jobId, config.environment]
       );
       try {
-        const connection = new WebApi(config.partnerId, config.callbackUrl, config.apiKey, 0);
+        const connection = new WebApi(config.partnerId, config.callbackUrl, config.apiKey, config.sidServer);
         const result = await connection.submit_job(
           { user_id: smileUserId, job_id: jobId, job_type: 4, libraryVersion },
           images,
@@ -412,7 +412,7 @@ export function createFaceVerificationHandler(deps: Dependencies) {
           "UPDATE public.fp_face_verification_jobs SET smile_job_id = NULLIF($2, ''), updated_at = NOW() WHERE job_id = $1",
           [jobId, smileJobId]
         );
-        send(res, 202, { accepted: true, status: "pending", message: "Your capture was submitted to Smile ID sandbox. Final status appears after provider checks and callback verification." });
+        send(res, 202, { accepted: true, status: "pending", message: "Your capture was submitted to Smile ID " + config.environment + ". Final status appears after provider checks and callback verification." });
       } catch (error) {
         await pool.query(
           "UPDATE public.fp_face_verification_jobs SET status = 'failed', result_text = 'Provider submission failed', updated_at = NOW() WHERE job_id = $1 AND status NOT IN ('verified', 'rejected')",
