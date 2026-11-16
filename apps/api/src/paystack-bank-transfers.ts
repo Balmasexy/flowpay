@@ -3,6 +3,7 @@ import { getPaystackBankRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
+import { productionFaceVerificationAllowed } from "./customer-security.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -530,7 +531,7 @@ export function createPaystackBankTransfersHandler(options: Options) {
     const isSubmit = req.method === "POST" && path === "/customer/transfers/bank";
     const isStatus = req.method === "GET" && path === "/customer/transfers/bank/status";
     if (!isSubmit && !isStatus) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "BANK_TRANSFER_SERVICE_NOT_CONFIGURED" }); return true;
     }
     const runtime = getPaystackBankRuntime();
@@ -589,6 +590,11 @@ export function createPaystackBankTransfersHandler(options: Options) {
         console.error("FlowPay bank payout status check failed:", error instanceof Error ? error.message : "database error");
         send(res, 503, { error: "BANK_TRANSFER_STATUS_UNAVAILABLE" });
       }
+      return true;
+    }
+
+    if (!(await productionFaceVerificationAllowed(pool, identity.id))) {
+      send(res, 403, { error: "FACE_VERIFICATION_REQUIRED", message: "Complete production face and liveness verification before withdrawing to a bank." });
       return true;
     }
 
