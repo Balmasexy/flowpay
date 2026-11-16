@@ -81,7 +81,7 @@ const SYSTEM_INSTRUCTIONS = [
 ].join(" ");
 
 export function createCustomerAiHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handleCustomerAi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || pathname !== "/customer-ai/chat") return false;
