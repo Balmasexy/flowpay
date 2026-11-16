@@ -44,7 +44,16 @@ After a customer has verified their email and starts their first authenticated s
 3. Allocate one unique random 10-digit FlowPay-to-FlowPay transfer number.
 4. Create a pending virtual-card display record with no PAN, CVV, expiry or issuer reference.
 
-The bootstrap endpoint is idempotent. The dashboard displays the FlowPay transfer number and virtual-card status immediately. The FlowPay transfer number is not a Nigerian bank NUBAN and cannot receive an external-bank transfer. A dedicated Paystack NUBAN appears only after Paystack confirms the account assignment.
+The bootstrap endpoint is idempotent. The dashboard displays the FlowPay transfer number and virtual-card status immediately. The FlowPay transfer number is not a Nigerian bank NUBAN and cannot receive an external-bank transfer. A separate Paystack Dedicated Virtual Account (DVA) NUBAN is required for bank-to-bank receipts and appears only after Paystack confirms assignment.
+
+## Receiving from other Nigerian banks and account-name display
+
+- Once a Paystack DVA is assigned and active, senders can transfer NGN to it from other supported Nigerian bank apps. The DVA's host bank is selected from Paystack's supported providers; this does not mean FlowPay opens a separate account at every Nigerian bank.
+- Incoming DVA funds are not credited from a browser redirect or a sender screenshot. FlowPay accepts a signed Paystack `charge.success` event, verifies the transaction with Paystack, matches the receiver's 10-digit DVA and customer, and posts a single balanced NGN ledger credit. Duplicate or mismatched events do not create a second credit.
+- The bank's account-name enquiry is controlled by Paystack and its receiving-bank partners. FlowPay stores and displays the exact `account_name` returned by Paystack; it must not overwrite this with a local label.
+- FlowPay's requested bank-visible format is `FlowPay / <customer's verified name>`. Paystack's standard DVA naming combines a product/business name with the customer name. Paystack documents a separate custom naming arrangement for businesses providing virtual accounts to their customers; FlowPay must obtain Paystack's approval/activation and confirm its business/trading name is FlowPay before claiming the format is live.
+- Until Paystack confirms the custom naming configuration, the app must show the exact provider-returned account name and explain that branding is pending. Do not change a DVA account name in FlowPay's database to simulate a bank-side name change.
+- Paystack requires express customer consent for creating a DVA. For Nigerian financial-services businesses, BVN and linked-bank validation may also be required. Assignment remains blocked until the customer's consent, required validation, and the business's Paystack DVA approval are present.
 
 ## Password recovery
 
