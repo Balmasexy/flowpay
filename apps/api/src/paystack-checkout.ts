@@ -45,7 +45,7 @@ async function failDeposit(pool: Pool, transactionId: string) {
 }
 
 export function createPaystackCheckoutHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handlePaystackCheckout(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || path !== "/customer/paystack/deposits") return false;
