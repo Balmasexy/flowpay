@@ -79,7 +79,7 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const result = await authClient.forgetPassword.emailOtp({ email: normalizedEmail });
+      const result = await authClient.emailOtp.sendVerificationOtp({ email: normalizedEmail, type: "forget-password" });
       if (result.error) {
         setError(result.error.message || "We could not send a recovery code. Please try again.");
         return;
