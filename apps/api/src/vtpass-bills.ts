@@ -91,7 +91,7 @@ async function providerRequest(cfg: Config, method: "GET" | "POST", endpoint: st
   const body = record(await response.json().catch(() => null));
   return { ok: response.ok, status: response.status, body };
 }
-async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience?: string, req: IncomingMessage): Promise<string | null> {
+async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string | undefined, req: IncomingMessage): Promise<string | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
   const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
