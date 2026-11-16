@@ -16,8 +16,7 @@
     "react-dom": "^19.0.0",
     "lucide-react": "^0.468.0",
     "@neondatabase/auth": "^0.7.0-beta",
-    "@smileid/web-components": "11.6.2",
-    "better-auth": "1.7.25"
+    "@smileid/web-components": "11.6.2"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
