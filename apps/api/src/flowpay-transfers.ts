@@ -65,7 +65,7 @@ async function authenticate(
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
   const { payload } = await jwtVerify(bearer[1], jwks, {
-    algorithms: ["EdDSA"], issuer, audience
+    algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
   });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
@@ -123,7 +123,7 @@ async function verifyTransactionPin(
 }
 
 export function createFlowPayTransfersHandler(options: Options) {
-  const { pool, jwks, issuer, audience } = options;
+  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
   return async function handleFlowPayTransfers(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     const supported =
@@ -141,7 +141,7 @@ export function createFlowPayTransfersHandler(options: Options) {
 
     let identity: Identity | null;
     try {
-      identity = await authenticate(pool, jwks, issuer, audience, req);
+      identity = await authenticate(pool, jwks, issuer, ...(audience ? { audience } : {}), req);
       if (!identity) {
         send(res, req.headers.authorization ? 403 : 401, {
           error: req.headers.authorization ? "ACTIVE_VERIFIED_CUSTOMER_REQUIRED" : "AUTHENTICATION_REQUIRED"
