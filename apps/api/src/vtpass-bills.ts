@@ -1,6 +1,7 @@
 import { randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
+import { productionFaceVerificationAllowed } from "./customer-security.js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
 type Options = {
@@ -275,7 +276,7 @@ export function createVtpassBillsHandler(options: Options) {
       (req.method === "GET" && ["/customer/bills/catalog", "/customer/bills/status"].includes(path)) ||
       (req.method === "POST" && ["/customer/bills/validate", "/customer/bills/purchase"].includes(path));
     if (!supported) return false;
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "VTPASS_BILLS_SERVICE_NOT_CONFIGURED" }); return true;
     }
     let userId: string | null;
@@ -389,6 +390,10 @@ export function createVtpassBillsHandler(options: Options) {
     }
 
     if (req.method === "POST" && path === "/customer/bills/purchase") {
+      if (!(await productionFaceVerificationAllowed(pool, userId))) {
+        send(res, 403, { error: "FACE_VERIFICATION_REQUIRED", message: "Complete production face and liveness verification before paying bills or buying airtime and data." });
+        return true;
+      }
       let input: Record<string, unknown>;
       try { input = await readJson(req); }
       catch (error) { send(res, error instanceof Error && error.message === "PAYLOAD_TOO_LARGE" ? 413 : 400, { error: error instanceof Error ? error.message : "INVALID_PAYLOAD" }); return true; }
