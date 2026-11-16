@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getApiJwt } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable, ChevronRight,
   Clock3, CreditCard, FileText, Phone, RefreshCw, ShieldCheck, Wallet, Wifi, Zap
@@ -9,6 +10,7 @@ type ActivityItem = {
   id: string; type: string; description: string; status: "posted" | "reversed";
   createdAt: string; postedAt: string | null;
 };
+type OnboardingSummary = { flowpayAccountNumber: string; cardStatus: string };
 type Overview = {
   accounts: AccountSummary[];
   recentActivity: ActivityItem[];
@@ -111,6 +113,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
 
   const loadOverview = useCallback(async () => {
     if (!token || token.split(".").length !== 3) {
@@ -120,8 +123,22 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
     const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
     try {
+      const jwt = await getApiJwt();
+      const bootstrapResponse = await fetch(apiBase + "/customer/bootstrap", {
+        method: "POST", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
+      });
+      const bootstrapData = await bootstrapResponse.json().catch(() => ({}));
+      if (!bootstrapResponse.ok || bootstrapData?.provisioned !== true ||
+          typeof bootstrapData?.flowpayAccountNumber !== "string" ||
+          !/^[1-9][0-9]{9}$/.test(bootstrapData.flowpayAccountNumber)) {
+        throw new Error(bootstrapData?.message || bootstrapData?.error || "Your FlowPay account is still being set up.");
+      }
+      setOnboarding({
+        flowpayAccountNumber: bootstrapData.flowpayAccountNumber,
+        cardStatus: typeof bootstrapData?.virtualCard?.status === "string" ? bootstrapData.virtualCard.status : "pending"
+      });
       const response = await fetch(apiBase + "/customer/overview", {
-        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + token }
+        method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : data.error || "Unable to load your account overview.");
@@ -150,6 +167,21 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
         <button onClick={() => go("/transfers?mode=bank")}><ArrowUpRight size={17}/> To Bank</button>
       </div>
       {!loading && !error && overview?.generatedAt && <small className="fp-overview-updated">Last updated {dateLabel(overview.generatedAt)}</small>}
+    </section>
+
+    <section className="fp-overview-grid" aria-label="Your FlowPay account">
+      <article className="fp-overview-card">
+        <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Wallet size={19}/></span><span>Your FlowPay account number</span></div>
+        <strong className="fp-overview-service-status" style={{fontVariantNumeric:"tabular-nums",letterSpacing:".08em"}}>{onboarding?.flowpayAccountNumber ?? (loading ? "Assigning…" : "Not available")}</strong>
+        <p className="fp-overview-muted">Your unique 10-digit number for receiving transfers from other FlowPay customers.</p>
+        <button className="fp-overview-link" onClick={() => go("/account-number")}>Account details <ChevronRight size={15}/></button>
+      </article>
+      <article className="fp-overview-card">
+        <div className="fp-overview-card-heading"><span className="fp-overview-icon"><CreditCard size={19}/></span><span>Your virtual card</span></div>
+        <strong className="fp-overview-service-status">{onboarding?.cardStatus === "pending" ? "Awaiting issuer" : onboarding?.cardStatus ? titleCase(onboarding.cardStatus) : loading ? "Preparing…" : "Not linked"}</strong>
+        <p className="fp-overview-muted">A card preview appears now. A working card number, CVV and expiry are shown only after an approved issuer creates the card.</p>
+        <button className="fp-overview-link" onClick={() => go("/cards")}>Open virtual card <ChevronRight size={15}/></button>
+      </article>
     </section>
 
     <section className="fp-overview-grid" aria-label="Account overview">
