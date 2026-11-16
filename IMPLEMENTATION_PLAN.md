@@ -3,7 +3,7 @@
 ## Completed in the current repository
 
 - Isolated FlowPay repository, separate API/web projects, Render services, and Neon development database.
-- Neon Managed Auth email/password sign-up and sign-in with email OTP verification during registration. Normal sign-in does not require an OTP.
+- Neon Managed Auth email/password sign-up and sign-in with email OTP verification during registration. Normal sign-in does not require an OTP. Neon now revokes active sessions after a successful password reset.
 - OPay-inspired FlowPay login UI using FlowPay branding, email/password sign-in, password visibility, and a separate forgot-password OTP flow.
 - Authenticated customer profile, dashboard overview, transaction history, internal wallet transfer, To Bank transfer, account number, transaction PIN, notifications, support, receipt upload/review, and customer AI routes.
 - Paystack deposit checkout/status/webhook/ledger-settlement paths, Paystack bank lookup and payout safeguards, Paystack dedicated-account assignment and incoming-credit settlement controls.
