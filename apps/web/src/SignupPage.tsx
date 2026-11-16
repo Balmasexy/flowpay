@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck, UserRound, MailCheck } from "lucide-react";
-import { authClient, authConfigured } from "./auth-client";
+import { authClient, authConfigured, sendSignupEmailCode, verifySignupEmailCode } from "./auth-client";
 
 type Step = "signup" | "verify";
 
@@ -69,10 +69,8 @@ export default function SignupPage() {
     }
     setBusy(true);
     try {
-      const result = await authClient.emailOtp.verifyEmail({
-        email: email.trim(),
-        otp: code.trim()
-      });
+      const result = await verifySignupEmailCode(
+email.trim(), code.trim());
       if (result.error) {
         setError(result.error.message || "That verification code could not be confirmed.");
         return;
