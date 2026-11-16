@@ -52,23 +52,24 @@ function getSmileConfig() {
   const partnerId = process.env.SMILE_ID_PARTNER_ID?.trim() ?? "";
   const apiKey = process.env.SMILE_ID_API_KEY?.trim() ?? "";
   const callbackUrl = process.env.SMILE_ID_CALLBACK_URL?.trim() ?? "";
-  if (process.env.SMILE_ID_ENVIRONMENT !== "sandbox" || !partnerId || !apiKey || !callbackUrl) return null;
+  const environment = process.env.SMILE_ID_ENVIRONMENT?.trim();
+  if ((environment !== "sandbox" && environment !== "production") || !partnerId || !apiKey || !callbackUrl) return null;
   try {
     const callback = new URL(callbackUrl);
     if (callback.protocol !== "https:" || callback.pathname.replace(/\/+$/, "") !== "/face-verification/callback") return null;
   } catch {
     return null;
   }
-  return { partnerId, apiKey, callbackUrl };
+  return { partnerId, apiKey, callbackUrl, environment, sidServer: environment === "production" ? 1 : 0 };
 }
 
 async function authenticateCustomer(req: IncomingMessage, deps: Dependencies): Promise<{ userId: string } | { status: number; error: string }> {
   const { pool, jwks, issuer, audience } = deps;
-  if (!pool || !jwks || !issuer || !audience) return { status: 503, error: "FACE_VERIFICATION_AUTH_NOT_CONFIGURED" };
+  if (!pool || !jwks || !issuer) return { status: 503, error: "FACE_VERIFICATION_AUTH_NOT_CONFIGURED" };
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return { status: 401, error: "AUTHENTICATION_REQUIRED" };
   try {
-    const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, audience });
+    const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
     if (typeof payload.sub !== "string" || !payload.sub) return { status: 401, error: "INVALID_SESSION" };
     const identity = await pool.query(
       'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \'active\' LIMIT 1',
@@ -165,15 +166,16 @@ export function createFaceVerificationHandler(deps: Dependencies) {
           schemaReady = false;
         }
       }
-      const configured = Boolean(getSmileConfig());
-      const authReady = Boolean(pool && deps.jwks && deps.issuer && deps.audience);
+      const config = getSmileConfig();
+      const configured = Boolean(config);
+      const authReady = Boolean(pool && deps.jwks && deps.issuer);
       send(res, 200, {
         provider: "smile_id",
-        environment: "sandbox",
+        environment: config?.environment ?? "unconfigured",
         configured,
         schemaReady,
         verificationEnabled: configured && schemaReady && authReady,
-        productionEnabled: false,
+        productionEnabled: config?.environment === "production",
         cameraSdkVersion: CAMERA_SDK_VERSION,
         message: !configured
           ? "Smile ID sandbox secrets and the HTTPS callback URL are not configured."
