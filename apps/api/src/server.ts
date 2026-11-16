@@ -41,24 +41,24 @@ const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
 const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
-const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, audience });
-const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
-const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, audience });
+const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
-const flutterwaveDepositStatusHandler = createFlutterwaveDepositStatusHandler({ pool, jwks, issuer, audience });
-const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, audience });
+const flutterwaveDepositStatusHandler = createFlutterwaveDepositStatusHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const paystackCheckoutHandler = createPaystackCheckoutHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const paystackWebhookHandler = createPaystackWebhookHandler({ pool });
-const paystackVirtualTerminalsHandler = createPaystackVirtualTerminalsHandler({ pool, jwks, issuer, audience });
-const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, jwks, issuer, audience });
-const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, audience });
-const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, audience });
-const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, audience });
-const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, audience });
-const customerNotificationsHandler = createCustomerNotificationsHandler({ pool, jwks, issuer, audience });
+const paystackVirtualTerminalsHandler = createPaystackVirtualTerminalsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const paystackDepositStatusHandler = createPaystackDepositStatusHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const supportRequestsHandler = createSupportRequestsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const bankAccountLookupHandler = createBankAccountLookupHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const flowPayTransfersHandler = createFlowPayTransfersHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const paystackBankTransfersHandler = createPaystackBankTransfersHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const customerNotificationsHandler = createCustomerNotificationsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler({ pool, jwks, issuer });
-const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, audience });
-const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, audience });
-const vtpassBillsHandler = createVtpassBillsHandler({ pool, jwks, issuer, audience });
+const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const vtpassBillsHandler = createVtpassBillsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const storyblokPreviewHandler = createStoryblokPreviewHandler({
   spaceId: process.env.STORYBLOK_SPACE_ID,
   previewToken: process.env.STORYBLOK_PREVIEW_API_TOKEN,
@@ -219,7 +219,7 @@ const server = createServer(async (req, res) => {
         Number.isSafeInteger(flwMax) && flwMax >= flwMin &&
         flwWebhookHash.length > 0
       );
-      const bankDirectoryReady = Boolean(jwksUrl && issuer && audience && paystackBankRuntime);
+      const bankDirectoryReady = Boolean(jwksUrl && issuer && paystackBankRuntime);
       const bankTransfersReady = Boolean(
         bankDirectoryReady && payoutSchemaReady &&
         isPaystackBankPayoutsEnabled(paystackBankRuntime!.environment)
@@ -280,7 +280,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -356,11 +356,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/money-sent") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "MONEY_SENT_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "MONEY_SENT_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -425,11 +425,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/money-received") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "MONEY_RECEIVED_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "MONEY_RECEIVED_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -504,7 +504,7 @@ const server = createServer(async (req, res) => {
       const flutterwaveConfigured = paystackTable.rows[0]?.flutterwave_available === true &&
         paystackTable.rows[0]?.flutterwave_clearing_account_available === true &&
         paystackTable.rows[0]?.payment_events_available === true &&
-        Boolean(jwksUrl && issuer && audience) &&
+        Boolean(jwksUrl && issuer) &&
         process.env.NODE_ENV !== "production" &&
         process.env.FLOWPAY_RUNTIME_ENV === "development" &&
         process.env.FLW_ENVIRONMENT === "test" &&
@@ -531,11 +531,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/cards") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "CARDS_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "CARDS_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name AS cardholder_name
@@ -608,11 +608,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/activity") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "ACTIVITY_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "ACTIVITY_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -693,11 +693,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/account-details") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "ACCOUNT_DETAILS_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "ACCOUNT_DETAILS_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, app_user.role
@@ -795,11 +795,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/customer/security") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "SECURITY_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "SECURITY_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -846,11 +846,11 @@ const server = createServer(async (req, res) => {
   }
 
   if ((req.method === "GET" || req.method === "PATCH") && pathname === "/customer/profile") {
-    if (!pool || !jwks || !issuer || !audience) { send(res, 503, { error: "PROFILE_SERVICE_NOT_CONFIGURED" }); return; }
+    if (!pool || !jwks || !issuer) { send(res, 503, { error: "PROFILE_SERVICE_NOT_CONFIGURED" }); return; }
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name, auth_user.email
@@ -913,7 +913,7 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && pathname === "/admin/session") {
-    if (!pool || !jwks || !issuer || !audience) {
+    if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "ADMIN_AUTH_NOT_CONFIGURED" }); return;
     }
     const authorization = req.headers.authorization;
