@@ -160,8 +160,20 @@ jobs:
             }
           '
 
-      - name: Install web dependencies
-        run: npm ci --prefix apps/web
+      - name: Install web dependencies with patched Better Auth versions
+        run: npm install --prefix apps/web --no-audit --no-fund
+
+      - name: Upload regenerated web package lock
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpay-web-package-lock
+          path: apps/web/package-lock.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Verify installed Better Auth package family
+        run: npm ls --prefix apps/web better-auth @better-auth/core @better-auth/oauth-provider @better-auth/passkey @better-auth/drizzle-adapter --all
 
       - name: Capture web dependency audit report
         id: web-audit
@@ -180,7 +192,12 @@ jobs:
               range: item.range,
               fixAvailable: item.fixAvailable
             }));
-            console.log(JSON.stringify({ metadata: report.metadata?.vulnerabilities ?? null, vulnerabilities }, null, 2));
+            const totals = report.metadata?.vulnerabilities ?? {};
+            console.log(JSON.stringify({ metadata: totals, vulnerabilities }, null, 2));
+            if ((totals.total ?? vulnerabilities.length) !== 0) {
+              console.error("FlowPay web dependency audit must be clean before release.");
+              process.exitCode = 1;
+            }
           '
 
       - name: Upload web dependency audit report
