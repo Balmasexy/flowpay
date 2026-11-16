@@ -59,7 +59,7 @@ async function authenticate(
   pool: Pool,
   jwks: ReturnType<typeof createRemoteJWKSet>,
   issuer: string,
-  audience?: string,
+  audience: string | undefined,
   req: IncomingMessage
 ): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
