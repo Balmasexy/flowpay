@@ -90,7 +90,7 @@ async function fetchBanks(secret: string): Promise<Bank[]> {
 }
 
 export function createBankAccountLookupHandler(options: Options) {
-  const { pool, jwks, issuer, ...(audience ? { audience } : {}) } = options;
+  const { pool, jwks, issuer, audience } = options;
   return async function handleBankAccountLookup(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const pathname = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (!["GET", "POST"].includes(req.method ?? "") ||
