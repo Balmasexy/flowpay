@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: flowpay-web-ci-${{ github.ref }}
@@ -246,6 +246,26 @@ jobs:
         run: npm run build --prefix apps/web
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
+
+      - name: Commit regenerated patched web lockfile
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          cp apps/web/package-lock.json "$RUNNER_TEMP/flowpay-web-package-lock.json"
+          git fetch origin "refs/heads/$HEAD_BRANCH"
+          git checkout -B "$HEAD_BRANCH" FETCH_HEAD
+          cp "$RUNNER_TEMP/flowpay-web-package-lock.json" apps/web/package-lock.json
+          if ! git diff --quiet -- apps/web/package-lock.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add apps/web/package-lock.json
+            git commit -m "chore: lock patched FlowPay web dependencies"
+            git push origin "HEAD:refs/heads/$HEAD_BRANCH"
+          fi
+
 
   build-android:
     name: Build FlowPay Android APK and AAB
