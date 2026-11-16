@@ -9,7 +9,7 @@ import {
   MailCheck,
   ShieldCheck
 } from "lucide-react";
-import { authClient, authConfigured } from "./auth-client";
+import { authClient, authConfigured, requestPasswordRecoveryCode, resetPasswordWithRecoveryCode } from "./auth-client";
 
 type LoginScreen = "login" | "forgot-email" | "forgot-code";
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const result = await authClient.emailOtp.sendVerificationOtp({ email: normalizedEmail, type: "forget-password" });
+      const result = await requestPasswordRecoveryCode(normalizedEmail);
       if (result.error) {
         setError(result.error.message || "We could not send a recovery code. Please try again.");
         return;
@@ -120,11 +120,8 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const result = await authClient.emailOtp.resetPassword({
-        email: normalizedEmail,
-        otp: code,
-        password: newPassword
-      });
+      const result = await resetPasswordWithRecoveryCode(
+normalizedEmail, code, newPassword);
       if (result.error) {
         setError(result.error.message || "The recovery code is invalid or expired. Request a new code.");
         return;
