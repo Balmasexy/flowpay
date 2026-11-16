@@ -152,14 +152,14 @@ export function createCustomerBootstrapHandler(options: Options) {
   const { pool, jwks, issuer, audience } = options;
   return async function handleCustomerBootstrap(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     const url = new URL(req.url ?? "/", "http://localhost");
-    const path = url.pathname.replace(/\\/+$/, "") || "/";
+    const path = url.pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || path !== "/customer/bootstrap") return false;
 
     if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "CUSTOMER_BOOTSTRAP_NOT_CONFIGURED" });
       return true;
     }
-    const token = req.headers.authorization?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!token) {
       send(res, 401, { error: "AUTHENTICATION_REQUIRED" });
       return true;
