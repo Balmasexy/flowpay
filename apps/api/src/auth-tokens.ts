@@ -40,8 +40,10 @@ export async function verifyFlowPayToken(
       throw invalidToken("Neon Auth verification is not configured for this project.");
     }
     try {
+      // Let jose enforce the algorithm compatible with the signing key returned
+      // by Neon's configured JWKS. Do not pin a guessed algorithm here: Neon
+      // access-token signing configuration may change independently.
       return await jwtVerify(token, jwks, {
-        algorithms: ["EdDSA"],
         issuer: options.issuer,
         ...(options.audience ? { audience: options.audience } : {})
       });
