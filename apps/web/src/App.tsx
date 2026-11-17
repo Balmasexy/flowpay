@@ -25,7 +25,7 @@ import InvitationsPage from "./InvitationsPage";
 import BettingPreview from "./BettingPreview";
 import DocumentsPage from "./DocumentsPage";
 import CustomerNotifications from "./CustomerNotifications";
-import { authClient, authConfigured, getApiJwt, readNeonApiJwt } from "./auth-client";
+import { authClient, authConfigured, clearFlowPayPasskeySession, getApiJwt, readFlowPayPasskeySession, readNeonApiJwt } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronLeft, ChevronRight, CircleHelp, Ellipsis, CreditCard, FileText, Gift, Home,
@@ -76,7 +76,9 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const authSession = authClient.useSession();
-  const apiJwt = readNeonApiJwt(authSession.data) ?? "";
+  const [passkeySession, setPasskeySession] = useState(() => readFlowPayPasskeySession());
+  const activeUser = authSession.data?.user ?? passkeySession?.user ?? null;
+  const apiJwt = readNeonApiJwt(authSession.data) ?? passkeySession?.token ?? "";
   const [network, setNetwork] = useState("Airtel");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
@@ -101,10 +103,10 @@ export default function App() {
       if (active) setProfilePhoto(null);
     });
     return () => { active = false; };
-  }, [apiJwt, authSession.data?.user?.id]);
+  }, [apiJwt, activeUser?.id]);
 
   useEffect(() => {
-    const userId = authSession.data?.user?.id;
+    const userId = activeUser?.id;
     const sessionToken = apiJwt;
     const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
     const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
@@ -128,7 +130,7 @@ export default function App() {
       if (response && !response.ok) throw new Error("FlowPay account details are unavailable.");
     }).catch(() => undefined);
     return () => controller.abort();
-  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+  }, [apiJwt, activeUser?.id]);
 
   useEffect(() => {
     const onPop = () => { setPath(window.location.pathname); setQuery(window.location.search); };
@@ -161,13 +163,13 @@ export default function App() {
   if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
   if (path === "/admin" || path.startsWith("/admin/")) {
     if (!authConfigured) return <LoginPage />;
-    if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
+    if (authSession.isPending && !authSession.data?.user) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
     if (!authSession.data?.user) { window.location.replace("/login"); return null; }
     return <AdminPage token={apiJwt} />;
   }
-  if (!authConfigured) return <LoginPage />;
-  if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
-  if (!authSession.data?.user) { window.location.replace("/login"); return null; }
+  if (!authConfigured && !passkeySession) return <LoginPage />;
+  if (authSession.isPending && !passkeySession) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
+  if (!authSession.data?.user && !passkeySession) { window.location.replace("/login"); return null; }
 
   return (
     <div className="flowpay-app">
@@ -178,8 +180,8 @@ export default function App() {
         <div className="fp-header-actions">
           <CustomerNotifications token={apiJwt} go={go}/>
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
-          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || authSession.data.user.image ? <img src={profilePhoto || authSession.data.user.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
-          <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
+          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || activeUser?.image ? <img src={profilePhoto || activeUser?.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
+          <button className="fp-header-link" onClick={async () => { clearFlowPayPasskeySession(); setPasskeySession(null); await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
         </div>
       </header>
 
@@ -221,7 +223,7 @@ export default function App() {
           ) : servicePage ? (
             <ServicePreview path={path} token={apiJwt}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={activeUser} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
