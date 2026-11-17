@@ -97,7 +97,7 @@ async function findAuthenticatedIdentity(
 ): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
-  const { payload } = await verifyFlowPayToken(bearer[1], jwks, issuer, audience);
+  const { payload } = await verifyFlowPayToken(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
     `SELECT app_user.id::text AS user_id,
