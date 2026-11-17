@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { getPaystackRuntime } from "./paystack-mode.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = { pool: Pool | null; jwks: ReturnType<typeof createRemoteJWKSet> | null; issuer?: string; audience?: string };
 type Identity = { id: string; email: string; name: string | null };
@@ -55,7 +56,7 @@ export function createPaystackCheckoutHandler(options: Options) {
 
     let identity: Identity;
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return true; }
       const result = await pool.query<Identity>(
         `SELECT u.id, a.email, a.name FROM neon_auth."user" a
