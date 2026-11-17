@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -124,7 +125,7 @@ export function createFlutterwaveCheckoutHandler(options: Options) {
     let email: string;
     let fullName: string;
     try {
-      const { payload } = await jwtVerify(authorization[1], jwks, {
+      const { payload } = await verifyFlowPayToken(authorization[1], jwks, {
         algorithms: ["EdDSA"],
         issuer,
         audience

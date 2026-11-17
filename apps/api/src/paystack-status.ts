@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import { getPaystackBankRuntime } from "./paystack-mode.js";
 
 type Options = {
@@ -253,7 +254,7 @@ export function createPaystackDepositStatusHandler(options: Options) {
     }
 
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(bearer[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" });
         return true;

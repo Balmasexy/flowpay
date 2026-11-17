@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
+import { createRemoteJWKSet, type JWTVerifyGetKey } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -167,7 +168,7 @@ export function createCustomerBootstrapHandler(options: Options) {
 
     let authUser: { id: string; email: string; emailVerified: boolean };
     try {
-      const { payload } = await jwtVerify(token, jwks, {
+      const { payload } = await verifyFlowPayToken(token, jwks, {
         algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
       });
       if (typeof payload.sub !== "string" || !payload.sub) {

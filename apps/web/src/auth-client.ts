@@ -69,12 +69,113 @@ function isJwt(value: unknown): value is string {
   return typeof value === "string" && value.trim().split(".").length === 3;
 }
 
+function asAuthRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/**
+ * Neon Auth's browser session cookie is opaque, while FlowPay's API expects
+ * the short-lived JWT exposed separately by Managed Auth as access_token.
+ * Accept only JWT-shaped values; never send the opaque session cookie as a
+ * Bearer token.
+ */
+
+const PASSKEY_SESSION_KEY = "flowpay.passkey-session.v1";
+
+export type FlowPayPasskeySession = {
+  token: string;
+  expiresAt: number;
+  user: { id: string; email: string; name: string; image?: string | null };
+};
+
+export function readFlowPayPasskeySession(): FlowPayPasskeySession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PASSKEY_SESSION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as unknown;
+    const row = asAuthRecord(value);
+    const user = asAuthRecord(row?.user);
+    if (!row || !user || !isJwt(row.token) ||
+        typeof row.expiresAt !== "number" || row.expiresAt <= Date.now() + 5000 ||
+        typeof user.id !== "string" || typeof user.email !== "string" ||
+        typeof user.name !== "string") {
+      window.sessionStorage.removeItem(PASSKEY_SESSION_KEY);
+      return null;
+    }
+    return {
+      token: row.token,
+      expiresAt: row.expiresAt,
+      user: { id: user.id, email: user.email, name: user.name, image: typeof user.image === "string" ? user.image : null }
+    };
+  } catch {
+    try { window.sessionStorage.removeItem(PASSKEY_SESSION_KEY); } catch { /* storage unavailable */ }
+    return null;
+  }
+}
+
+export function saveFlowPayPasskeySession(value: unknown): FlowPayPasskeySession {
+  const row = asAuthRecord(value);
+  const user = asAuthRecord(row?.user);
+  if (!row || !user || !isJwt(row.accessToken) ||
+      typeof row.expiresAt !== "number" ||
+      typeof user.id !== "string" || typeof user.email !== "string" ||
+      typeof user.name !== "string") {
+    throw new Error("The passkey service returned an invalid session.");
+  }
+  const session: FlowPayPasskeySession = {
+    token: row.accessToken,
+    expiresAt: row.expiresAt,
+    user: { id: user.id, email: user.email, name: user.name, image: typeof user.image === "string" ? user.image : null }
+  };
+  if (typeof window === "undefined") throw new Error("Passkey sign-in requires a browser session.");
+  window.sessionStorage.setItem(PASSKEY_SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+export function clearFlowPayPasskeySession(): void {
+  try { window.sessionStorage.removeItem(PASSKEY_SESSION_KEY); } catch { /* storage unavailable */ }
+}
+
+export function readNeonApiJwt(value: unknown): string | null {
+  const root = asAuthRecord(value);
+  if (!root) return null;
+
+  const nestedData = asAuthRecord(root.data);
+  const session = asAuthRecord(root.session);
+  const nestedSession = asAuthRecord(nestedData?.session);
+  const sessionData = asAuthRecord(session?.data);
+  const candidates = [
+    root.access_token,
+    root.accessToken,
+    root.token,
+    session?.access_token,
+    session?.accessToken,
+    session?.token,
+    nestedSession?.access_token,
+    nestedSession?.accessToken,
+    nestedSession?.token,
+    nestedData?.access_token,
+    nestedData?.accessToken,
+    nestedData?.token,
+    sessionData?.access_token,
+    sessionData?.accessToken,
+    sessionData?.token,
+  ];
+  return candidates.find(isJwt) ?? null;
+}
+
 /**
  * Return a short-lived Neon Auth JWT for FlowPay API requests.
  * Call the documented Managed Auth /token endpoint directly first. This
  * avoids relying on SDK session-cache behavior for the token response.
  */
 export async function getApiJwt(): Promise<string> {
+  const passkeySession = readFlowPayPasskeySession();
+  if (passkeySession) return passkeySession.token;
+
   if (!authUrl) {
     throw new Error("Neon Auth is not configured on this deployment.");
   }
@@ -89,10 +190,9 @@ export async function getApiJwt(): Promise<string> {
     });
     if (response.ok) {
       const payload: unknown = await response.json().catch(() => null);
-      if (payload && typeof payload === "object" && "token" in payload && isJwt(payload.token)) {
-        return payload.token;
-      }
-      endpointError = "Neon Auth token endpoint returned no valid JWT.";
+      const endpointJwt = readNeonApiJwt(payload);
+      if (endpointJwt) return endpointJwt;
+      endpointError = "Neon Auth token endpoint returned no valid access JWT.";
     } else {
       endpointError = "Neon Auth token endpoint returned HTTP " + response.status + ".";
     }
@@ -121,8 +221,8 @@ export async function getApiJwt(): Promise<string> {
   }
   // Neon Auth's React adapter injects set-auth-jwt into session data. Prefer
   // the typed session token, then fall back to the response header.
-  const sessionJwt = session.data.session?.token;
-  if (isJwt(sessionJwt)) return sessionJwt;
+  const sessionJwt = readNeonApiJwt(session.data);
+  if (sessionJwt) return sessionJwt;
   if (isJwt(headerJwt)) return headerJwt;
 
   throw new Error(

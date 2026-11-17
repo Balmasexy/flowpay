@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -98,7 +99,7 @@ export function createCustomerAiHandler(options: Options) {
 
     let customer: CustomerIdentity;
     try {
-      const { payload } = await jwtVerify(bearer[1], jwks, {
+      const { payload } = await verifyFlowPayToken(bearer[1], jwks, {
         algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
       });
       if (typeof payload.sub !== "string" || !payload.sub) {

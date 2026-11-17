@@ -52,7 +52,7 @@ jobs:
             apps/web/package-lock.json
 
       - name: Install API dependencies
-        run: npm ci --prefix apps/api
+        run: npm install --include=dev --prefix apps/api
 
       - name: Audit API dependencies
         shell: bash
@@ -89,6 +89,9 @@ jobs:
 
       - name: Type-check API
         run: npm run typecheck --prefix apps/api
+
+      - name: Test Neon and FlowPay passkey JWT verification
+        run: npm run test:passkey-tokens --prefix apps/api
 
       - name: Test Smile ID face and liveness result decisions
         run: npm run test:face-verification --prefix apps/api
@@ -194,7 +197,7 @@ jobs:
           '
 
       - name: Install web dependencies with patched Better Auth versions
-        run: npm ci --prefix apps/web
+        run: npm install --prefix apps/web
 
       - name: Upload regenerated web package lock
         if: always()

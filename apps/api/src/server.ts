@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { randomInt } from "node:crypto";
 import { Pool } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
@@ -22,6 +23,7 @@ import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 import { createVtpassBillsHandler } from "./vtpass-bills.js";
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
+import { createPasskeysHandler } from "./passkeys.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -42,6 +44,7 @@ const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const passkeysHandler = createPasskeysHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
@@ -87,6 +90,7 @@ const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (await passkeysHandler(req, res)) return;
   if (await customerBootstrapHandler(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
   if (await depositReceiptsHandler(req, res)) return;
@@ -108,7 +112,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -280,7 +284,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -360,7 +364,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -429,7 +433,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -535,7 +539,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name AS cardholder_name
@@ -612,7 +616,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -697,7 +701,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, app_user.role
@@ -799,7 +803,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -829,13 +833,15 @@ const server = createServer(async (req, res) => {
           type: row.event_type, outcome: row.outcome, createdAt: row.created_at
         })),
         capabilities: {
-          passkeyRegistrationEnabled: false,
+          passkeyRegistrationEnabled: Buffer.byteLength(process.env.FLOWPAY_PASSKEY_JWT_SECRET?.trim() ?? "", "utf8") >= 32,
           passwordChangeEnabled: false,
           twoStepVerificationEnabled: false,
           sessionRevocationEnabled: false,
           transactionPinEnabled: false
         },
-        message: "This page shows recorded security data only. Enrollment and account-security changes remain disabled until their verified flows are implemented."
+        message: Buffer.byteLength(process.env.FLOWPAY_PASSKEY_JWT_SECRET?.trim() ?? "", "utf8") >= 32
+          ? "FlowPay passkeys use a verified device authenticator. Your browser or phone may request a fingerprint, face scan, or device PIN."
+          : "Passkey enrollment is not configured on this deployment yet."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
@@ -850,7 +856,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name, auth_user.email
@@ -920,7 +926,7 @@ const server = createServer(async (req, res) => {
     const match = authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, {
+      const { payload } = await verifyFlowPayToken(match[1], jwks, {
         algorithms: ["EdDSA"],
         issuer,
         audience

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clock3, KeyRound, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { Clock3, Fingerprint, KeyRound, RefreshCw, ShieldCheck, Smartphone } from "lucide-react";
+import { startRegistration } from "@simplewebauthn/browser";
 
 type Passkey = {
   name: string;
@@ -86,6 +87,8 @@ export default function SecurityCenter({ token }: { token: string }) {
   const [data, setData] = useState<SecurityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
     if (!token || token.split(".").length !== 3) {
@@ -109,15 +112,59 @@ export default function SecurityCenter({ token }: { token: string }) {
     } finally { setLoading(false); }
   }, [token]);
 
+  async function registerPasskey() {
+    if (!token || !API_BASE) {
+      setError("Your authenticated FlowPay session is not ready. Please sign in again.");
+      return;
+    }
+    setPasskeyBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const optionsResponse = await fetch(API_BASE + "/customer/passkeys/registration/options", {
+        method: "POST",
+        credentials: "omit",
+        headers: { Authorization: "Bearer " + token, Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const optionsBody: unknown = await optionsResponse.json().catch(() => null);
+      const options = record(optionsBody);
+      if (!optionsResponse.ok || !options || typeof options.challengeId !== "string" || !options.options) {
+        throw new Error(apiError(optionsBody));
+      }
+
+      const registration = await startRegistration({ optionsJSON: options.options as never });
+      const verifyResponse = await fetch(API_BASE + "/customer/passkeys/registration/verify", {
+        method: "POST",
+        credentials: "omit",
+        headers: { Authorization: "Bearer " + token, Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challengeId: options.challengeId,
+          response: registration,
+          name: "This device"
+        })
+      });
+      const verifyBody: unknown = await verifyResponse.json().catch(() => null);
+      if (!verifyResponse.ok) throw new Error(apiError(verifyBody));
+      setNotice("This device has been registered. You can now use its fingerprint, face, or screen-lock verification to sign in.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to register this device passkey.");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
+
   useEffect(() => { void load(); }, [load]);
 
   const disabled = data?.capabilities;
   return <section className="fp-panel fp-detail-panel">
     <div className="fp-profile-heading">
       <div><span className="fp-profile-kicker">ACCOUNT PROTECTION</span><h2>Security centre</h2><p className="fp-muted">Review security records linked to your authenticated FlowPay account.</p></div>
-      <button className="fp-outline" type="button" onClick={() => void load()} disabled={loading}><RefreshCw size={15}/> Refresh</button>
+      <div className="fp-profile-heading-actions"><button className="fp-outline" type="button" onClick={() => void registerPasskey()} disabled={loading || passkeyBusy || !data?.capabilities.passkeyRegistrationEnabled}><Fingerprint size={15}/> {passkeyBusy ? "Registering…" : "Register device passkey"}</button><button className="fp-outline" type="button" onClick={() => void load()} disabled={loading || passkeyBusy}><RefreshCw size={15}/> Refresh</button></div>
     </div>
     {loading && <p className="fp-muted" role="status">Loading your security records…</p>}
+    {notice && <div className="fp-success" role="status">{notice}</div>}
     {error && <div className="fp-preview-warning" role="alert">{error} <button className="fp-overview-link" onClick={() => void load()}>Try again</button></div>}
     {data && <>
       <div className="fp-feature-list">
@@ -133,7 +180,7 @@ export default function SecurityCenter({ token }: { token: string }) {
       {data.recentEvents.length ? <div className="fp-doc-list">{data.recentEvents.map((event,index)=><div key={event.type+event.createdAt+index}>
         <Clock3 size={18}/><span>{label(event.type)}<small>{dateLabel(event.createdAt)}</small></span><b>{label(event.outcome)}</b>
       </div>)}</div> : <div className="fp-empty"><Clock3 size={23}/><b>No security events recorded</b><span>New security events will appear here when supported account-security actions are implemented.</span></div>}
-      <div className="fp-preview-warning"><ShieldCheck size={17}/> {data.message} Password changes, passkey enrollment, 2-step verification, session revocation and transaction PIN changes are currently unavailable.</div>
+      <div className="fp-preview-warning"><ShieldCheck size={17}/> {data.message} Password changes, 2-step verification, session revocation and transaction PIN changes are not yet available here.</div>
     </>}
   </section>;
 }

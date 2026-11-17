@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { jwtVerify, type JWTVerifyGetKey } from "jose";
+import { type JWTVerifyGetKey } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import { Signature, WebApi } from "smile-identity-core";
 
 type Dependencies = {
@@ -69,7 +70,7 @@ async function authenticateCustomer(req: IncomingMessage, deps: Dependencies): P
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return { status: 401, error: "AUTHENTICATION_REQUIRED" };
   try {
-    const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+    const { payload } = await verifyFlowPayToken(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
     if (typeof payload.sub !== "string" || !payload.sub) return { status: 401, error: "INVALID_SESSION" };
     const identity = await pool.query(
       'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \'active\' LIMIT 1',

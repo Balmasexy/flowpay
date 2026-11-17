@@ -3,7 +3,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifications.js";
 import { productionFaceVerificationAllowed } from "./customer-security.js";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -64,7 +65,7 @@ async function authenticate(
 ): Promise<Identity | null> {
   const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) return null;
-  const { payload } = await jwtVerify(bearer[1], jwks, {
+  const { payload } = await verifyFlowPayToken(bearer[1], jwks, {
     algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
   });
   if (typeof payload.sub !== "string" || !payload.sub) return null;

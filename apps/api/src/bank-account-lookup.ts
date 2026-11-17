@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { getPaystackBankRuntime } from "./paystack-mode.js";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -102,7 +103,7 @@ export function createBankAccountLookupHandler(options: Options) {
     if (!auth) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return true; }
     let userId: string;
     try {
-      const { payload } = await jwtVerify(auth[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(auth[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }

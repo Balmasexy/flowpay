@@ -25,7 +25,7 @@ import InvitationsPage from "./InvitationsPage";
 import BettingPreview from "./BettingPreview";
 import DocumentsPage from "./DocumentsPage";
 import CustomerNotifications from "./CustomerNotifications";
-import { authClient, authConfigured, getApiJwt } from "./auth-client";
+import { authClient, authConfigured, clearFlowPayPasskeySession, getApiJwt, readFlowPayPasskeySession, readNeonApiJwt } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronLeft, ChevronRight, CircleHelp, Ellipsis, CreditCard, FileText, Gift, Home,
@@ -76,12 +76,15 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const authSession = authClient.useSession();
+  const [passkeySession, setPasskeySession] = useState(() => readFlowPayPasskeySession());
+  const activeUser = authSession.data?.user ?? passkeySession?.user ?? null;
+  const apiJwt = readNeonApiJwt(authSession.data) ?? passkeySession?.token ?? "";
   const [network, setNetwork] = useState("Airtel");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    const token = authSession.data?.session?.token;
+    const token = apiJwt;
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
     if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) {
       setProfilePhoto(null);
@@ -100,11 +103,11 @@ export default function App() {
       if (active) setProfilePhoto(null);
     });
     return () => { active = false; };
-  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+  }, [apiJwt, activeUser?.id]);
 
   useEffect(() => {
-    const userId = authSession.data?.user?.id;
-    const sessionToken = authSession.data?.session?.token;
+    const userId = activeUser?.id;
+    const sessionToken = apiJwt;
     const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
     const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
     if (!userId || !sessionToken || !apiBase) return;
@@ -127,7 +130,7 @@ export default function App() {
       if (response && !response.ok) throw new Error("FlowPay account details are unavailable.");
     }).catch(() => undefined);
     return () => controller.abort();
-  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+  }, [apiJwt, activeUser?.id]);
 
   useEffect(() => {
     const onPop = () => { setPath(window.location.pathname); setQuery(window.location.search); };
@@ -160,13 +163,15 @@ export default function App() {
   if (path === "/signup" || path === "/register" || path === "/registration") return <SignupPage />;
   if (path === "/admin" || path.startsWith("/admin/")) {
     if (!authConfigured) return <LoginPage />;
-    if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
+    if (authSession.isPending && !authSession.data?.user) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
     if (!authSession.data?.user) { window.location.replace("/login"); return null; }
-    return <AdminPage token={authSession.data.session?.token ?? ""} />;
+    return <AdminPage token={apiJwt} />;
   }
-  if (!authConfigured) return <LoginPage />;
-  if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
-  if (!authSession.data?.user) { window.location.replace("/login"); return null; }
+  if (!authConfigured && !passkeySession) return <LoginPage />;
+  if (authSession.isPending && !passkeySession) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
+  if (!authSession.data?.user && !passkeySession) { window.location.replace("/login"); return null; }
+  const signedInUser = activeUser;
+  if (!signedInUser) { window.location.replace("/login"); return null; }
 
   return (
     <div className="flowpay-app">
@@ -175,10 +180,10 @@ export default function App() {
           <span className="fp-logo">F</span><span>flow<span>pay</span></span>
         </button>
         <div className="fp-header-actions">
-          <CustomerNotifications token={authSession.data.session?.token ?? ""} go={go}/>
+          <CustomerNotifications token={apiJwt} go={go}/>
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
-          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || authSession.data.user.image ? <img src={profilePhoto || authSession.data.user.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
-          <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
+          <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || activeUser?.image ? <img src={profilePhoto || activeUser?.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
+          <button className="fp-header-link" onClick={async () => { clearFlowPayPasskeySession(); setPasskeySession(null); await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
         </div>
       </header>
 
@@ -212,15 +217,15 @@ export default function App() {
 
           {path === "/dashboard" ? (
             <OverviewDashboard
-              token={authSession.data.session?.token ?? ""}
+              token={apiJwt}
               go={go}
               network={network}
               onNetworkChange={setNetwork}
             />
           ) : servicePage ? (
-            <ServicePreview path={path} token={authSession.data.session?.token ?? ""}/>
+            <ServicePreview path={path} token={apiJwt}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments" token={authSession.data.session?.token ?? ""}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={authSession.data.session?.token ?? ""}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={signedInUser} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
@@ -245,7 +250,7 @@ export default function App() {
         </section>
       </div>}
 
-      <BalmzAiAssistant token={authSession.data.session?.token ?? ""}/>
+      <BalmzAiAssistant token={apiJwt}/>
 
     </div>
   );
