@@ -1,4 +1,5 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { getPaystackRuntime } from "./paystack-mode.js";
@@ -59,7 +60,7 @@ async function authorize(req: IncomingMessage, options: Options): Promise<"ok" |
   const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
   if (!match) return "unauthorized";
   try {
-    const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
+    const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, audience });
     if (typeof payload.sub !== "string" || !payload.sub) return "unauthorized";
     const result = await pool.query(
       `SELECT 1
