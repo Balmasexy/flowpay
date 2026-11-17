@@ -55,6 +55,39 @@ test("rejects a FlowPay passkey token signed with the wrong secret", async () =>
   }
 });
 
+test("rejects a Neon token signed by a different project's JWKS without passkey fallback", async () => {
+  const expectedPair = await generateKeyPair("EdDSA");
+  const otherPair = await generateKeyPair("EdDSA");
+  const jwk = await exportJWK(otherPair.publicKey);
+  jwk.alg = "EdDSA";
+  jwk.use = "sig";
+  const wrongProjectJwks = createLocalJWKSet({ keys: [jwk] });
+  const token = await new SignJWT({ email: "customer@example.invalid" })
+    .setProtectedHeader({ alg: "EdDSA" })
+    .setIssuer("https://neon-auth.example.invalid")
+    .setAudience("https://neon-auth.example.invalid")
+    .setSubject("verified-neon-user")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(expectedPair.privateKey);
+
+  const previous = process.env.FLOWPAY_PASSKEY_JWT_SECRET;
+  process.env.FLOWPAY_PASSKEY_JWT_SECRET = secret;
+  try {
+    await assert.rejects(
+      verifyFlowPayToken(token, wrongProjectJwks, {
+        algorithms: ["EdDSA"],
+        issuer: "https://neon-auth.example.invalid",
+        audience: "https://neon-auth.example.invalid"
+      }),
+      error => error instanceof Error && error.name === "JWSSignatureVerificationFailed"
+    );
+  } finally {
+    if (previous === undefined) delete process.env.FLOWPAY_PASSKEY_JWT_SECRET;
+    else process.env.FLOWPAY_PASSKEY_JWT_SECRET = previous;
+  }
+});
+
 test("continues to accept the existing Neon EdDSA access JWT", async () => {
   const { privateKey, publicKey } = await generateKeyPair("EdDSA");
   const jwk = await exportJWK(publicKey);
