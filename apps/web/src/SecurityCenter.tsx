@@ -172,7 +172,7 @@ export default function SecurityCenter({ token }: { token: string }) {
         <div><ShieldCheck size={18}/> Two-step verification <b>{disabled?.twoStepVerificationEnabled ? "Enabled" : "Not enabled"}</b></div>
         <div><Smartphone size={18}/> Trusted-device management <b>{disabled?.sessionRevocationEnabled ? "Available" : "Unavailable"}</b></div>
       </div>
-      <div className="fp-profile-section-title"><h3>Your registered passkeys</h3><span>Read-only security records</span></div>
+      <div className="fp-profile-section-title"><h3>Your registered passkeys</h3><span>Secure device sign-in</span></div>
       {data.passkeys.length ? <div className="fp-doc-list">{data.passkeys.map((item, index) => <div key={item.name + item.createdAt + index}>
         <KeyRound size={18}/><span>{item.name}<small>{item.deviceType ? label(item.deviceType) : "Device type not recorded"} · {item.backedUp ? "Backed up" : "Not backed up"} · Added {dateLabel(item.createdAt)}</small></span><b>{item.lastUsedAt ? "Used " + dateLabel(item.lastUsedAt) : "Not yet used"}</b>
       </div>)}</div> : <div className="fp-empty"><KeyRound size={23}/><b>No passkeys registered</b><span>Passkey enrollment is not yet available in FlowPay. No phone biometric or passkey enrollment is being assumed.</span></div>}
