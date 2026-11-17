@@ -25,7 +25,7 @@ import InvitationsPage from "./InvitationsPage";
 import BettingPreview from "./BettingPreview";
 import DocumentsPage from "./DocumentsPage";
 import CustomerNotifications from "./CustomerNotifications";
-import { authClient, authConfigured, getApiJwt } from "./auth-client";
+import { authClient, authConfigured, getApiJwt, readNeonApiJwt } from "./auth-client";
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable,
   ChevronLeft, ChevronRight, CircleHelp, Ellipsis, CreditCard, FileText, Gift, Home,
@@ -76,6 +76,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarScrollRef = useRef<HTMLDivElement>(null);
   const authSession = authClient.useSession();
+  const apiJwt = readNeonApiJwt(authSession.data) ?? "";
   const [network, setNetwork] = useState("Airtel");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
@@ -162,7 +163,7 @@ export default function App() {
     if (!authConfigured) return <LoginPage />;
     if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking administrator session…</h2></div></section></main>;
     if (!authSession.data?.user) { window.location.replace("/login"); return null; }
-    return <AdminPage token={authSession.data.session?.token ?? ""} />;
+    return <AdminPage token={apiJwt} />;
   }
   if (!authConfigured) return <LoginPage />;
   if (authSession.isPending) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
@@ -175,7 +176,7 @@ export default function App() {
           <span className="fp-logo">F</span><span>flow<span>pay</span></span>
         </button>
         <div className="fp-header-actions">
-          <CustomerNotifications token={authSession.data.session?.token ?? ""} go={go}/>
+          <CustomerNotifications token={apiJwt} go={go}/>
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
           <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || authSession.data.user.image ? <img src={profilePhoto || authSession.data.user.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
           <button className="fp-header-link" onClick={async () => { await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
@@ -212,15 +213,15 @@ export default function App() {
 
           {path === "/dashboard" ? (
             <OverviewDashboard
-              token={authSession.data.session?.token ?? ""}
+              token={apiJwt}
               go={go}
               network={network}
               onNetworkChange={setNetwork}
             />
           ) : servicePage ? (
-            <ServicePreview path={path} token={authSession.data.session?.token ?? ""}/>
+            <ServicePreview path={path} token={apiJwt}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments" token={authSession.data.session?.token ?? ""}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={authSession.data.session?.token ?? ""}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={authSession.data.session?.token ?? ""} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={authSession.data.user} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
@@ -245,7 +246,7 @@ export default function App() {
         </section>
       </div>}
 
-      <BalmzAiAssistant token={authSession.data.session?.token ?? ""}/>
+      <BalmzAiAssistant token={apiJwt}/>
 
     </div>
   );
