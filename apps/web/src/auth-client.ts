@@ -87,7 +87,7 @@ const PASSKEY_SESSION_KEY = "flowpay.passkey-session.v1";
 export type FlowPayPasskeySession = {
   token: string;
   expiresAt: number;
-  user: { id: string; email: string; name: string };
+  user: { id: string; email: string; name: string; image?: string | null };
 };
 
 export function readFlowPayPasskeySession(): FlowPayPasskeySession | null {
@@ -108,7 +108,7 @@ export function readFlowPayPasskeySession(): FlowPayPasskeySession | null {
     return {
       token: row.token,
       expiresAt: row.expiresAt,
-      user: { id: user.id, email: user.email, name: user.name }
+      user: { id: user.id, email: user.email, name: user.name, image: typeof user.image === "string" ? user.image : null }
     };
   } catch {
     try { window.sessionStorage.removeItem(PASSKEY_SESSION_KEY); } catch { /* storage unavailable */ }
@@ -128,7 +128,7 @@ export function saveFlowPayPasskeySession(value: unknown): FlowPayPasskeySession
   const session: FlowPayPasskeySession = {
     token: row.accessToken,
     expiresAt: row.expiresAt,
-    user: { id: user.id, email: user.email, name: user.name }
+    user: { id: user.id, email: user.email, name: user.name, image: typeof user.image === "string" ? user.image : null }
   };
   if (typeof window === "undefined") throw new Error("Passkey sign-in requires a browser session.");
   window.sessionStorage.setItem(PASSKEY_SESSION_KEY, JSON.stringify(session));
