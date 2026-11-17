@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { jwtVerify, type JWTVerifyGetKey } from "jose";
+import { type JWTVerifyGetKey } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Dependencies = {
   pool: Pool | null;
@@ -56,7 +57,7 @@ export function createSupportRequestsHandler(deps: Dependencies) {
 
     let userId: string;
     try {
-      const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) {
         send(res, 401, { error: "INVALID_SESSION" }); return true;
       }
