@@ -80,7 +80,7 @@ test("rejects a Neon token signed by a different project's JWKS without passkey 
         issuer: "https://neon-auth.example.invalid",
         audience: "https://neon-auth.example.invalid"
       }),
-      error => error instanceof Error && error.name === "JWTInvalid"
+      error => error instanceof Error && error.name === "JWSSignatureVerificationFailed"
     );
   } finally {
     if (previous === undefined) delete process.env.FLOWPAY_PASSKEY_JWT_SECRET;
