@@ -82,7 +82,7 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    const token = authSession.data?.session?.token;
+    const token = apiJwt;
     const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
     if (!token || typeof token !== "string" || token.split(".").length !== 3 || !apiBase) {
       setProfilePhoto(null);
@@ -101,11 +101,11 @@ export default function App() {
       if (active) setProfilePhoto(null);
     });
     return () => { active = false; };
-  }, [authSession.data?.session?.token, authSession.data?.user?.id]);
+  }, [apiJwt, authSession.data?.user?.id]);
 
   useEffect(() => {
     const userId = authSession.data?.user?.id;
-    const sessionToken = authSession.data?.session?.token;
+    const sessionToken = apiJwt;
     const apiBaseRaw = String(import.meta.env.VITE_API_BASE_URL || "");
     const apiBase = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
     if (!userId || !sessionToken || !apiBase) return;
