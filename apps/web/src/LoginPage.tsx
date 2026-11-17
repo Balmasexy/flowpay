@@ -67,7 +67,9 @@ export default function LoginPage() {
       }
       window.location.assign("/dashboard");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to sign in. Please try again.");
+      setError(cause instanceof Error && cause.message !== "Failed to fetch"
+        ? cause.message
+        : "FlowPay could not reach the sign-in service. Check your connection and try again. Your credentials have not been verified.");
     } finally {
       setBusy(false);
     }
@@ -93,9 +95,9 @@ export default function LoginPage() {
         setError(result.error.message || "Google sign-in was declined. Please try again.");
       }
     } catch (cause) {
-      setError(cause instanceof Error
+      setError(cause instanceof Error && cause.message !== "Failed to fetch"
         ? cause.message
-        : "FlowPay could not reach Google sign-in. Please try again or use your password.");
+        : "FlowPay could not reach Google sign-in. Check your connection and try again, or use your password.");
     } finally {
       setBusy(false);
     }
