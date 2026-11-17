@@ -170,6 +170,8 @@ export default function App() {
   if (!authConfigured && !passkeySession) return <LoginPage />;
   if (authSession.isPending && !passkeySession) return <main className="fp-login-page"><section className="fp-login-shell"><div className="fp-login-form-wrap"><h2>Checking your FlowPay session…</h2></div></section></main>;
   if (!authSession.data?.user && !passkeySession) { window.location.replace("/login"); return null; }
+  const signedInUser = activeUser;
+  if (!signedInUser) { window.location.replace("/login"); return null; }
 
   return (
     <div className="flowpay-app">
@@ -223,7 +225,7 @@ export default function App() {
           ) : servicePage ? (
             <ServicePreview path={path} token={apiJwt}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={activeUser} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={signedInUser} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
