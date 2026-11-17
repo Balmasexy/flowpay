@@ -78,7 +78,25 @@ export default function App() {
   const authSession = authClient.useSession();
   const [passkeySession, setPasskeySession] = useState(() => readFlowPayPasskeySession());
   const activeUser = authSession.data?.user ?? passkeySession?.user ?? null;
-  const apiJwt = readNeonApiJwt(authSession.data) ?? passkeySession?.token ?? "";
+  const [apiJwt, setApiJwt] = useState(() => readNeonApiJwt(authSession.data) ?? passkeySession?.token ?? "");
+
+  useEffect(() => {
+    let active = true;
+    if (passkeySession) {
+      setApiJwt(passkeySession.token);
+      return () => { active = false; };
+    }
+    if (!authSession.data?.user) {
+      setApiJwt("");
+      return () => { active = false; };
+    }
+    void getApiJwt().then(token => {
+      if (active) setApiJwt(token);
+    }).catch(() => {
+      if (active) setApiJwt("");
+    });
+    return () => { active = false; };
+  }, [authSession.data?.user?.id, authSession.data?.session?.token, passkeySession?.token]);
   const [network, setNetwork] = useState("Airtel");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
