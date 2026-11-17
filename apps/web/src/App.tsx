@@ -225,7 +225,7 @@ export default function App() {
           ) : servicePage ? (
             <ServicePreview path={path} token={apiJwt}/>
           ) : (
-            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={signedInUser} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
+            path === "/bulk-payments" ? <BulkOperations mode="payments" token={apiJwt}/> : path === "/bulk-verification" ? <BulkOperations mode="verification" token={apiJwt}/> : <RouteContent path={path} go={go} user={signedInUser ?? {}} token={apiJwt} onPhotoChange={setProfilePhoto} transferMode={new URLSearchParams(query).get("mode") === "bank" ? "bank" : "flowpay"}/>
           )}
           <footer className="fp-footer"><span>© {new Date().getFullYear()} FlowPay</span><span>Secure banking experience</span></footer>
         </main>
