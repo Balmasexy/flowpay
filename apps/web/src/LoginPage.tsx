@@ -14,7 +14,7 @@ import {
 import { authClient, authConfigured, clearFlowPayPasskeySession, requestPasswordRecoveryCode, resetPasswordWithRecoveryCode, saveFlowPayPasskeySession } from "./auth-client";
 
 type LoginScreen = "login" | "forgot-email" | "forgot-code";
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
 
 export default function LoginPage() {
   const [screen, setScreen] = useState<LoginScreen>("login");
