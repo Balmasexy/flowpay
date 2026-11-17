@@ -1,7 +1,8 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
-import { jwtVerify, type JWTVerifyGetKey } from "jose";
+import { type JWTVerifyGetKey } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Dependencies = {
   pool: Pool | null;
@@ -183,7 +184,7 @@ async function authenticate(
 ): Promise<Identity | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
-  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+  const { payload } = await verifyFlowPayToken(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
     `SELECT app_user.id, app_user.role
