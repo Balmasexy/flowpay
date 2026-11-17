@@ -250,3 +250,58 @@ jobs:
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
           VITE_NEON_AUTH_URL: https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth
+
+      - name: Smoke-test deployed FlowPay API, database and bank-name service
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://flowpay-backend-qz79.onrender.com"
+          web="https://flowpay-web-jx7i.onrender.com"
+          ready_file="$RUNNER_TEMP/flowpay-live-ready.json"
+          ready_status="000"
+          for attempt in $(seq 1 24); do
+            ready_status="$(curl --silent --show-error --max-time 12 --output "$ready_file" --write-out "%{http_code}" "$api/ready" || true)"
+            if [ "$ready_status" = "200" ]; then
+              break
+            fi
+            echo "Waiting for the live API deployment (attempt $attempt/24; HTTP $ready_status)..."
+            sleep 10
+          done
+          if [ "$ready_status" != "200" ]; then
+            cat "$ready_file" 2>/dev/null || true
+            echo "The deployed FlowPay API did not become ready." >&2
+            exit 1
+          fi
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const ready = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-live-ready.json", "utf8"));
+            const paystack = ready.payments?.paystack ?? {};
+            const report = {
+              api: ready.service,
+              status: ready.status,
+              database: ready.database,
+              database_name: ready.database_name,
+              paystack_environment: paystack.environment ?? null,
+              bank_directory: paystack.bankDirectory === true,
+              beneficiary_verification: paystack.beneficiaryVerification === true,
+              bank_transfers: paystack.bankTransfers === true,
+              bank_transfer_gate: paystack.bankTransferGate ?? "unknown"
+            };
+            console.log(JSON.stringify(report, null, 2));
+            if (ready.service !== "flowpay-api" || ready.status !== "ready" ||
+                ready.database !== "connected" ||
+                paystack.bankDirectory !== true ||
+                paystack.beneficiaryVerification !== true) {
+              throw new Error("Live API, database, Paystack bank directory or beneficiary-name verification is not ready.");
+            }
+            if (paystack.bankTransfers !== true) {
+              console.warn("Bank-name verification is ready, but bank payout submission remains behind its independent approval/feature gate.");
+            }
+          '
+          web_status="$(curl --silent --show-error --max-time 12 --output "$RUNNER_TEMP/flowpay-live-login.html" --write-out "%{http_code}" "$web/login" || true)"
+          if [ "$web_status" != "200" ]; then
+            echo "The deployed FlowPay login page returned HTTP $web_status." >&2
+            exit 1
+          fi
+          echo "Live FlowPay API readiness and frontend login-page smoke tests passed."
