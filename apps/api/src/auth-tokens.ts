@@ -8,19 +8,24 @@ export const FLOWPAY_PASSKEY_JWT_AUDIENCE = "flowpay-api";
  * short-lived HS256 JWTs issued only after a WebAuthn assertion has passed.
  * Both token types identify the same verified Neon user via sub.
  */
+export type FlowPayTokenVerifyOptions = {
+  algorithms?: string[];
+  issuer?: string;
+  audience?: string;
+};
+
 export async function verifyFlowPayToken(
   token: string,
   jwks: JWTVerifyGetKey | null,
-  issuer?: string,
-  audience?: string
+  options: FlowPayTokenVerifyOptions
 ) {
   let neonError: unknown = new Error("Neon Auth verification is unavailable.");
-  if (jwks && issuer) {
+  if (jwks && options.issuer) {
     try {
       return await jwtVerify(token, jwks, {
         algorithms: ["EdDSA"],
-        issuer,
-        ...(audience ? { audience } : {})
+        issuer: options.issuer,
+        ...(options.audience ? { audience: options.audience } : {})
       });
     } catch (error) {
       neonError = error;
