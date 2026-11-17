@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { browserSupportsWebAuthn, startAuthentication } from "@simplewebauthn/browser";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,9 +11,10 @@ import {
   MailCheck,
   ShieldCheck
 } from "lucide-react";
-import { authClient, authConfigured, requestPasswordRecoveryCode, resetPasswordWithRecoveryCode } from "./auth-client";
+import { authClient, authConfigured, clearFlowPayPasskeySession, requestPasswordRecoveryCode, resetPasswordWithRecoveryCode, saveFlowPayPasskeySession } from "./auth-client";
 
 type LoginScreen = "login" | "forgot-email" | "forgot-code";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\\/$/, "") || "";
 
 export default function LoginPage() {
   const [screen, setScreen] = useState<LoginScreen>("login");
@@ -57,12 +59,13 @@ export default function LoginPage() {
     try {
       // Normal FlowPay login uses the account password. Email OTP is only
       // used in the explicit password-recovery flow below.
+      clearFlowPayPasskeySession();
       const result = await authClient.signIn.email({
         email: normalizedEmail,
         password
       });
       if (result.error) {
-        setError(result.error.message || "We could not sign you in. Check your details and try again.");
+        setError("We could not sign you in. Check your email and password. If you created this account with Google, use Forgot password to set a password for email sign-in.");
         return;
       }
       window.location.assign("/dashboard");
@@ -85,6 +88,7 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
+      clearFlowPayPasskeySession();
       const result = await authClient.signIn.social({
         provider: "google",
         callbackURL: "/dashboard",
@@ -98,6 +102,77 @@ export default function LoginPage() {
       setError(cause instanceof Error && cause.message !== "Failed to fetch"
         ? cause.message
         : "FlowPay could not reach Google sign-in. Check your connection and try again, or use your password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithPasskey() {
+    clearFeedback();
+
+    if (!normalizedEmail) {
+      setError("Enter the Gmail address registered to your FlowPay account first.");
+      return;
+    }
+    if (!API_BASE) {
+      setError("FlowPay API address is not configured. Please try again later.");
+      return;
+    }
+    if (!browserSupportsWebAuthn()) {
+      setError("This browser does not support device passkeys. Use Google or your email and password.");
+      return;
+    }
+
+    setBusy(true);
+    clearFlowPayPasskeySession();
+    try {
+      const optionsResponse = await fetch(API_BASE + "/auth/passkeys/authentication/options", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ email: normalizedEmail })
+      });
+      const optionsBody: unknown = await optionsResponse.json().catch(() => null);
+      const optionsRecord = optionsBody && typeof optionsBody === "object"
+        ? optionsBody as Record<string, unknown>
+        : {};
+      if (!optionsResponse.ok || typeof optionsRecord.challengeId !== "string" || !optionsRecord.options) {
+        const errorCode = typeof optionsRecord.error === "string" ? optionsRecord.error : "";
+        if (errorCode === "PASSKEY_NOT_AVAILABLE_FOR_ACCOUNT") {
+          throw new Error("No device passkey is registered for this email yet. Sign in with Google or your password, then register this phone in Security.");
+        }
+        throw new Error(typeof optionsRecord.message === "string" ? optionsRecord.message : "Unable to start fingerprint sign-in. Try your password or Google.");
+      }
+
+      const assertion = await startAuthentication({
+        optionsJSON: optionsRecord.options as never
+      });
+      const verifyResponse = await fetch(API_BASE + "/auth/passkeys/authentication/verify", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          challengeId: optionsRecord.challengeId,
+          response: assertion
+        })
+      });
+      const verifiedBody: unknown = await verifyResponse.json().catch(() => null);
+      if (!verifyResponse.ok) {
+        const errorCode = verifiedBody && typeof verifiedBody === "object" && "error" in verifiedBody
+          ? String((verifiedBody as Record<string, unknown>).error)
+          : "";
+        throw new Error(errorCode === "PASSKEY_AUTHENTICATION_FAILED"
+          ? "Device verification did not match a registered FlowPay passkey. Try again or use your password."
+          : "FlowPay could not verify this device passkey. Please try again.");
+      }
+      saveFlowPayPasskeySession(verifiedBody);
+      window.location.assign("/dashboard");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Unable to sign in with your device passkey.";
+      setError(message.includes("NotAllowedError") || message.toLowerCase().includes("cancel")
+        ? "Device verification was cancelled. Try again when your fingerprint or device PIN is ready."
+        : message);
     } finally {
       setBusy(false);
     }
@@ -380,16 +455,16 @@ normalizedEmail, code, newPassword);
             <button
               className="fp-login-opay-passkey"
               type="button"
-              disabled
-              aria-disabled="true"
-              title="Passkey sign-in is not enabled by the current managed authentication provider."
+              onClick={() => void signInWithPasskey()}
+              disabled={busy || !API_BASE}
+              title="Use a passkey registered to this FlowPay account on this device."
             >
               <Fingerprint size={21}/>
               <span>Sign in with fingerprint / passkey</span>
-              <span className="fp-login-opay-passkey-status">Not available yet</span>
+              <span className="fp-login-opay-passkey-status">{busy ? "Verifying…" : "Device secure"}</span>
             </button>
             <p className="fp-login-opay-passkey-note">
-              Device biometrics require server-side passkey support. FlowPay's current managed Neon Auth configuration does not expose that plugin, so this option stays disabled rather than pretending to authenticate.
+              Enter your registered email above, then confirm with your phone's fingerprint, face, or secure screen-lock prompt. Register this device once in Security after signing in.
             </p>
           </div>
         )}
