@@ -246,3 +246,4 @@ jobs:
         run: npm run build --prefix apps/web
         env:
           VITE_API_BASE_URL: https://flowpay-backend-qz79.onrender.com
+          VITE_NEON_AUTH_URL: https://ep-weathered-dust-akai74ps.neonauth.c-3.us-west-2.aws.neon.tech/flowpay/auth
