@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import { getPaystackBankRuntime } from "./paystack-mode.js";
 
 type Options = {
@@ -82,7 +83,7 @@ async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKS
   if (!bearer) return null;
   // Neon Managed Auth documents the branch Auth URL's origin as the JWT issuer.
   // It does not require an API audience claim, so verify the signature and issuer only.
-  const { payload } = await jwtVerify(bearer[1], jwks, { algorithms: ["EdDSA"], issuer });
+  const { payload } = await verifyFlowPayToken(bearer[1], jwks, { algorithms: ["EdDSA"], issuer });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query<Identity>(
     `SELECT app_user.id, app_user.role,
