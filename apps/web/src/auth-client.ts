@@ -81,6 +81,64 @@ function asAuthRecord(value: unknown): Record<string, unknown> | null {
  * Accept only JWT-shaped values; never send the opaque session cookie as a
  * Bearer token.
  */
+
+const PASSKEY_SESSION_KEY = "flowpay.passkey-session.v1";
+
+export type FlowPayPasskeySession = {
+  token: string;
+  expiresAt: number;
+  user: { id: string; email: string; name: string };
+};
+
+export function readFlowPayPasskeySession(): FlowPayPasskeySession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(PASSKEY_SESSION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as unknown;
+    const row = asAuthRecord(value);
+    const user = asAuthRecord(row?.user);
+    if (!row || !user || !isJwt(row.token) ||
+        typeof row.expiresAt !== "number" || row.expiresAt <= Date.now() + 5000 ||
+        typeof user.id !== "string" || typeof user.email !== "string" ||
+        typeof user.name !== "string") {
+      window.sessionStorage.removeItem(PASSKEY_SESSION_KEY);
+      return null;
+    }
+    return {
+      token: row.token,
+      expiresAt: row.expiresAt,
+      user: { id: user.id, email: user.email, name: user.name }
+    };
+  } catch {
+    try { window.sessionStorage.removeItem(PASSKEY_SESSION_KEY); } catch { /* storage unavailable */ }
+    return null;
+  }
+}
+
+export function saveFlowPayPasskeySession(value: unknown): FlowPayPasskeySession {
+  const row = asAuthRecord(value);
+  const user = asAuthRecord(row?.user);
+  if (!row || !user || !isJwt(row.accessToken) ||
+      typeof row.expiresAt !== "number" ||
+      typeof user.id !== "string" || typeof user.email !== "string" ||
+      typeof user.name !== "string") {
+    throw new Error("The passkey service returned an invalid session.");
+  }
+  const session: FlowPayPasskeySession = {
+    token: row.accessToken,
+    expiresAt: row.expiresAt,
+    user: { id: user.id, email: user.email, name: user.name }
+  };
+  if (typeof window === "undefined") throw new Error("Passkey sign-in requires a browser session.");
+  window.sessionStorage.setItem(PASSKEY_SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+export function clearFlowPayPasskeySession(): void {
+  try { window.sessionStorage.removeItem(PASSKEY_SESSION_KEY); } catch { /* storage unavailable */ }
+}
+
 export function readNeonApiJwt(value: unknown): string | null {
   const root = asAuthRecord(value);
   if (!root) return null;
@@ -115,6 +173,9 @@ export function readNeonApiJwt(value: unknown): string | null {
  * avoids relying on SDK session-cache behavior for the token response.
  */
 export async function getApiJwt(): Promise<string> {
+  const passkeySession = readFlowPayPasskeySession();
+  if (passkeySession) return passkeySession.token;
+
   if (!authUrl) {
     throw new Error("Neon Auth is not configured on this deployment.");
   }
