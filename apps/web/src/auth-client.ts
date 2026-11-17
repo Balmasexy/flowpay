@@ -69,6 +69,46 @@ function isJwt(value: unknown): value is string {
   return typeof value === "string" && value.trim().split(".").length === 3;
 }
 
+function asAuthRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/**
+ * Neon Auth's browser session cookie is opaque, while FlowPay's API expects
+ * the short-lived JWT exposed separately by Managed Auth as access_token.
+ * Accept only JWT-shaped values; never send the opaque session cookie as a
+ * Bearer token.
+ */
+export function readNeonApiJwt(value: unknown): string | null {
+  const root = asAuthRecord(value);
+  if (!root) return null;
+
+  const nestedData = asAuthRecord(root.data);
+  const session = asAuthRecord(root.session);
+  const nestedSession = asAuthRecord(nestedData?.session);
+  const sessionData = asAuthRecord(session?.data);
+  const candidates = [
+    root.access_token,
+    root.accessToken,
+    root.token,
+    session?.access_token,
+    session?.accessToken,
+    session?.token,
+    nestedSession?.access_token,
+    nestedSession?.accessToken,
+    nestedSession?.token,
+    nestedData?.access_token,
+    nestedData?.accessToken,
+    nestedData?.token,
+    sessionData?.access_token,
+    sessionData?.accessToken,
+    sessionData?.token,
+  ];
+  return candidates.find(isJwt) ?? null;
+}
+
 /**
  * Return a short-lived Neon Auth JWT for FlowPay API requests.
  * Call the documented Managed Auth /token endpoint directly first. This
@@ -89,10 +129,9 @@ export async function getApiJwt(): Promise<string> {
     });
     if (response.ok) {
       const payload: unknown = await response.json().catch(() => null);
-      if (payload && typeof payload === "object" && "token" in payload && isJwt(payload.token)) {
-        return payload.token;
-      }
-      endpointError = "Neon Auth token endpoint returned no valid JWT.";
+      const endpointJwt = readNeonApiJwt(payload);
+      if (endpointJwt) return endpointJwt;
+      endpointError = "Neon Auth token endpoint returned no valid access JWT.";
     } else {
       endpointError = "Neon Auth token endpoint returned HTTP " + response.status + ".";
     }
@@ -121,8 +160,8 @@ export async function getApiJwt(): Promise<string> {
   }
   // Neon Auth's React adapter injects set-auth-jwt into session data. Prefer
   // the typed session token, then fall back to the response header.
-  const sessionJwt = session.data.session?.token;
-  if (isJwt(sessionJwt)) return sessionJwt;
+  const sessionJwt = readNeonApiJwt(session.data);
+  if (sessionJwt) return sessionJwt;
   if (isJwt(headerJwt)) return headerJwt;
 
   throw new Error(
