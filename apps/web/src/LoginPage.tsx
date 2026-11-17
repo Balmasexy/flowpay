@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Eye,
   EyeOff,
+  Fingerprint,
   KeyRound,
   LockKeyhole,
   MailCheck,
@@ -26,6 +27,13 @@ export default function LoginPage() {
   const [notice, setNotice] = useState("");
 
   const normalizedEmail = email.trim().toLowerCase();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("oauth") === "error" || params.has("error")) {
+      setError("Google sign-in could not be completed. Please try again or use your email and password.");
+    }
+  }, []);
 
   function clearFeedback() {
     setError("");
@@ -60,6 +68,34 @@ export default function LoginPage() {
       window.location.assign("/dashboard");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to sign in. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    clearFeedback();
+
+    if (!authConfigured) {
+      setError("Google sign-in is not configured on this deployment. Please try again later.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/dashboard",
+        errorCallbackURL: "/login?oauth=error"
+      });
+
+      if (result.error) {
+        setError(result.error.message || "Google sign-in was declined. Please try again.");
+      }
+    } catch (cause) {
+      setError(cause instanceof Error
+        ? cause.message
+        : "FlowPay could not reach Google sign-in. Please try again or use your password.");
     } finally {
       setBusy(false);
     }
@@ -320,6 +356,40 @@ normalizedEmail, code, newPassword);
               <ArrowLeft size={16}/> Back to log in
             </button>
           </form>
+        )}
+
+        {isLogin && (
+          <div className="fp-login-opay-alternatives">
+            <div className="fp-login-opay-divider"><span>OR</span></div>
+            <button
+              className="fp-login-opay-google"
+              type="button"
+              onClick={() => void signInWithGoogle()}
+              disabled={busy || !authConfigured}
+            >
+              <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+                <path fill="#FFC107" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/>
+                <path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.9l-6.6-5.1c-1.8 1.2-4.1 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.2A20 20 0 0 0 24 44Z"/>
+                <path fill="#4A90E2" d="M12.6 27.5a12 12 0 0 1 0-7V15.3H5.8a20 20 0 0 0 0 17.4l6.8-5.2Z"/>
+                <path fill="#EA4335" d="M24 12.1c3 0 5.7 1 7.8 3.1l5.9-5.9A19.7 19.7 0 0 0 24 4 20 20 0 0 0 5.8 15.3l6.8 5.2c1.6-4.8 6.1-8.4 11.4-8.4Z"/>
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+            <button
+              className="fp-login-opay-passkey"
+              type="button"
+              disabled
+              aria-disabled="true"
+              title="Passkey sign-in is not enabled by the current managed authentication provider."
+            >
+              <Fingerprint size={21}/>
+              <span>Sign in with fingerprint / passkey</span>
+              <span className="fp-login-opay-passkey-status">Not available yet</span>
+            </button>
+            <p className="fp-login-opay-passkey-note">
+              Device biometrics require server-side passkey support. FlowPay's current managed Neon Auth configuration does not expose that plugin, so this option stays disabled rather than pretending to authenticate.
+            </p>
+          </div>
         )}
 
         {isLogin && (
