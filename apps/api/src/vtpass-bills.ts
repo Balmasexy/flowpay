@@ -2,7 +2,8 @@ import { randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypt
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { productionFaceVerificationAllowed } from "./customer-security.js";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 
 type Options = {
   pool: Pool | null;
@@ -94,7 +95,7 @@ async function providerRequest(cfg: Config, method: "GET" | "POST", endpoint: st
 async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string | undefined, req: IncomingMessage): Promise<string | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return null;
-  const { payload } = await jwtVerify(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+  const { payload } = await verifyFlowPayToken(token, jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
   const result = await pool.query(
     'SELECT app_user.id FROM neon_auth."user" AS auth_user JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true AND app_user.status = \'active\' AND app_user.role IN (\'customer\',\'super_admin\') LIMIT 1',
