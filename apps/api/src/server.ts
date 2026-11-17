@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { randomInt } from "node:crypto";
 import { Pool } from "pg";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet } from "jose";
+import { verifyFlowPayToken } from "./auth-tokens.js";
 import { createFaceVerificationHandler } from "./face-verification.js";
 import { createFlutterwaveCheckoutHandler } from "./flutterwave-checkout.js";
 import { createFlutterwaveWebhookHandler } from "./flutterwave-webhook.js";
@@ -280,7 +281,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -360,7 +361,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -429,7 +430,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -535,7 +536,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name AS cardholder_name
@@ -612,7 +613,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id
@@ -697,7 +698,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, app_user.role
@@ -799,7 +800,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id FROM neon_auth."user" AS auth_user
@@ -850,7 +851,7 @@ const server = createServer(async (req, res) => {
     const match = req.headers.authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
+      const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
         `SELECT app_user.id, auth_user.name, auth_user.email
@@ -920,7 +921,7 @@ const server = createServer(async (req, res) => {
     const match = authorization?.match(/^Bearer\s+(.+)$/i);
     if (!match) { send(res, 401, { error: "AUTHENTICATION_REQUIRED" }); return; }
     try {
-      const { payload } = await jwtVerify(match[1], jwks, {
+      const { payload } = await verifyFlowPayToken(match[1], jwks, {
         algorithms: ["EdDSA"],
         issuer,
         audience
