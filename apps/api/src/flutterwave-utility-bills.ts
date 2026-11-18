@@ -88,7 +88,7 @@ function positiveDecimalToMinor(value: unknown): string | null {
   return amount && BigInt(amount) > 0n ? amount : null;
 }
 export function flutterwaveBillWalletDebitMinor(billAmountMinor: string, feeMinor: string): string {
-  if (!/^[1-9]\\d{0,11}$/.test(billAmountMinor) || !/^\\d{1,11}$/.test(feeMinor)) {
+  if (!/^[1-9][0-9]{0,11}$/.test(billAmountMinor) || !/^[0-9]{1,11}$/.test(feeMinor)) {
     throw new Error("INVALID_FLUTTERWAVE_BILL_AMOUNT");
   }
   const total = BigInt(billAmountMinor) + BigInt(feeMinor);
