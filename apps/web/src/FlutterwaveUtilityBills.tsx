@@ -100,10 +100,20 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
     const controller = new AbortController();
     setCatalogBusy(true);
     setError("");
-    fetch(apiBase + "/customer/flutterwave/bills/categories", {
+    fetch(apiBase + "/ready", {
       credentials: "omit", signal: controller.signal,
       headers: { Authorization: "Bearer " + token }
     }).then(async response => {
+      const readyBody = asRecord(await response.json().catch(() => ({})));
+      const payments = asRecord(readyBody.payments);
+      const flutterwave = asRecord(payments.flutterwave);
+      if (!response.ok || flutterwave.billPayments !== true) {
+        throw new Error("Flutterwave electricity bills are not activated on the FlowPay API yet. The provider environment and database migration must both be ready.");
+      }
+      const response = await fetch(apiBase + "/customer/flutterwave/bills/categories", {
+        credentials: "omit", signal: controller.signal,
+        headers: { Authorization: "Bearer " + token }
+      });
       const body = asRecord(await response.json().catch(() => ({})));
       if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Utility bill categories are unavailable.");
       const rows = Array.isArray(body.categories) ? body.categories.map(value => {
