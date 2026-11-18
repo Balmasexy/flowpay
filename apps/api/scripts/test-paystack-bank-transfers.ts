@@ -344,6 +344,10 @@ test("pending VTpass bills reduce the available balance for bank transfers", asy
   assert.equal(response.result().status, 409);
   assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
   assert.equal(response.result().body.availableMinor, "4000000");
+  assert.ok(context.statements.some(item =>
+    item.sql.includes("SUM(reservation.amount_minor)") &&
+    item.sql.includes("fp_flutterwave_bill_payments")
+  ), "bank payout reservation query must include Flutterwave utility bill holds");
   assert.equal(transferInitiations, 0);
   assert.equal(context.ledgerValues.length, 0);
 });
