@@ -117,6 +117,9 @@ jobs:
       - name: Test VTpass bill payment validation and status handling
         run: npm run test:vtpass-bills --prefix apps/api
 
+      - name: Test Flutterwave utility bill safeguards and provider status
+        run: npm run test:flutterwave-utility-bills --prefix apps/api
+
       - name: Test signed Storyblok Visual Editor preview access
         run: npm run test:storyblok-preview --prefix apps/api
 
