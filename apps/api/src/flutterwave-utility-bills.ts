@@ -506,10 +506,9 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         }
         const minimum = positiveDecimalToMinor(data.minimum) ?? item.minimum_minor;
         const maximum = positiveDecimalToMinor(data.maximum) ?? item.maximum_minor;
-        if (!item.amount_minor && (!minimum || !maximum)) {
-          send(res, 422, { error: "UTILITY_BILL_AMOUNT_LIMITS_UNAVAILABLE", message: "Flutterwave did not return an allowed amount range for this bill item." });
-          return true;
-        }
+        // Flutterwave commonly returns minimum=0 and maximum=0 for a
+        // valid variable-amount electricity item. Treat zero as no bound;
+        // the provider remains authoritative when the bill is submitted.
         send(res, 200, {
           verified: true, customerName: safeString(data.name, 160),
           address: safeString(data.address, 240), minimumMinor: minimum,
