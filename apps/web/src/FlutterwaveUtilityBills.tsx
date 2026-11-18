@@ -39,6 +39,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
   const [customerAddress, setCustomerAddress] = useState("");
   const [minimumMinor, setMinimumMinor] = useState<string | null>(null);
   const [maximumMinor, setMaximumMinor] = useState<string | null>(null);
+  const [providerFeeMinor, setProviderFeeMinor] = useState("0");
   const [verified, setVerified] = useState(false);
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [validationBusy, setValidationBusy] = useState(false);
@@ -91,6 +92,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
     setCustomerAddress("");
     setMinimumMinor(null);
     setMaximumMinor(null);
+    setProviderFeeMinor(selectedItem?.feeMinor ?? "0");
   }
 
   useEffect(() => {
@@ -186,6 +188,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
   function selectItem(nextCode: string) {
     const next = items.find(item => item.code === nextCode);
     setItemCode(nextCode);
+    setProviderFeeMinor(next?.feeMinor ?? "0");
     setAmount(next?.amountMinor && BigInt(next.amountMinor) > 0n ? (Number(next.amountMinor) / 100).toFixed(2) : "");
     clearVerification();
     clearOutcome();
@@ -209,6 +212,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
       setCustomerAddress(typeof body.address === "string" ? body.address : "");
       setMinimumMinor(typeof body.minimumMinor === "string" ? body.minimumMinor : selectedItem?.minimumMinor ?? null);
       setMaximumMinor(typeof body.maximumMinor === "string" ? body.maximumMinor : selectedItem?.maximumMinor ?? null);
+      setProviderFeeMinor(typeof body.feeMinor === "string" ? body.feeMinor : selectedItem?.feeMinor ?? "0");
       const fixedPrice = selectedItem?.amountMinor;
       if (fixedPrice && BigInt(fixedPrice) > 0n) setAmount((Number(fixedPrice) / 100).toFixed(2));
       setNotice("Flutterwave verified the meter details. Confirm the amount before continuing.");
@@ -303,7 +307,9 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
       {minimumMinor || maximumMinor ? "Allowed range: " + naira(minimumMinor) + " – " + naira(maximumMinor) :
         selectedItem?.amountMinor ? "Flutterwave package amount: " + naira(selectedItem.amountMinor) :
         "Use the amount confirmed by Flutterwave for this meter."}
-      {selectedItem?.feeMinor && BigInt(selectedItem.feeMinor) > 0n ? " · Provider fee: " + naira(selectedItem.feeMinor) : ""}
+    </p>}
+    {verified && amountMinor && <p className="fp-bulk-notice">
+      Service amount: {naira(amountMinor)} · Provider fee: {naira(providerFeeMinor)} · Total wallet debit: {naira((BigInt(amountMinor) + BigInt(providerFeeMinor)).toString())}
     </p>}
 
     <label htmlFor="flw-electricity-pin">FlowPay transaction PIN</label>
