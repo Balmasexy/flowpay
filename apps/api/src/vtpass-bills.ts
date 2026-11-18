@@ -496,6 +496,9 @@ export function createVtpassBillsHandler(options: Options) {
           client.query("SELECT COALESCE(SUM(entry.amount_minor),0)::text AS amount_minor FROM public.fp_ledger_entries entry JOIN public.fp_ledger_transactions tx ON tx.id = entry.transaction_id WHERE entry.account_id = $1 AND entry.currency = 'NGN' AND tx.status = 'posted'", [walletId]),
           client.query(`SELECT COALESCE(SUM(reservation.amount_minor),0)::text AS amount_minor
             FROM (
+              SELECT amount_minor FROM public.fp_paystack_bank_transfers
+               WHERE account_id = $1 AND status IN ('initiating','pending','otp','unknown')
+              UNION ALL
               SELECT amount_minor FROM public.fp_vtpass_bill_payments
                WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
               UNION ALL
