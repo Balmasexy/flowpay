@@ -78,9 +78,11 @@ function amountMinor(value: unknown): value is string {
 }
 function decimalToMinor(value: unknown): string | null {
   if (typeof value !== "string" && typeof value !== "number") return null;
-  const match = /^(0|[1-9]\d{0,8})(?:\.(\d{1,2}))?$/.exec(String(value).trim());
+  const match = /^(0|[1-9][0-9]{0,8})(?:\.([0-9]{1,4}))?$/.exec(String(value).trim());
   if (!match) return null;
-  const result = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
+  const fractional = match[2] ?? "";
+  if (fractional.length > 2 && /[1-9]/.test(fractional.slice(2))) return null;
+  const result = BigInt(match[1]) * 100n + BigInt(fractional.slice(0, 2).padEnd(2, "0"));
   return result <= 10_000_000_000n ? result.toString() : null;
 }
 function positiveDecimalToMinor(value: unknown): string | null {
@@ -118,7 +120,10 @@ function providerState(body: ProviderBody): "success" | "failed" | "pending" | "
 export function resolveFlutterwaveBillsConfig(): Config | null {
   const secretKey = process.env.FLW_SECRET_KEY?.trim() ?? "";
   const environment = process.env.FLW_BILLS_ENVIRONMENT?.trim().toLowerCase();
-  if (environment === "test" && secretKey.startsWith("FLWSECK_TEST-")) return { environment: "test", secretKey };
+  if (environment === "test" && process.env.NODE_ENV !== "production" &&
+      process.env.FLOWPAY_RUNTIME_ENV === "development" && secretKey.startsWith("FLWSECK_TEST-")) {
+    return { environment: "test", secretKey };
+  }
   if (environment === "live" && process.env.NODE_ENV === "production" &&
       process.env.FLW_BILLS_LIVE_ENABLED === "true" && secretKey.startsWith("FLWSECK_LIVE-")) {
     return { environment: "live", secretKey };
