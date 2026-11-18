@@ -440,8 +440,8 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           label: safeString(row.label_name, 100) || "Meter number",
           amountMinor: decimalToMinor(row.amount),
           feeMinor: decimalToMinor(row.fee) ?? "0",
-          minimumMinor: decimalToMinor(row.minimum),
-          maximumMinor: decimalToMinor(row.maximum),
+          minimumMinor: positiveDecimalToMinor(row.minimum),
+          maximumMinor: positiveDecimalToMinor(row.maximum),
           resolvable: row.is_resolvable === true || String(row.is_resolvable).toLowerCase() === "true"
         })).filter(row => row.code && row.name);
         send(res, 200, { items });
@@ -708,7 +708,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 202, { requestId: bill.request_id, status: bill.status, final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, message: "Flutterwave status is not final yet. The amount remains reserved." });
           return true;
         }
-        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.amount_minor);
+        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.bill_amount_minor);
         const finalState = await reconcile(pool, bill, state, statusResult.body);
         const tokenValue = safeString(providerData(statusResult.body).extra ?? providerData(statusResult.body).token, 180);
         send(res, 200, {
