@@ -309,6 +309,7 @@ jobs:
             import fs from "node:fs";
             const ready = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/flowpay-live-ready.json", "utf8"));
             const paystack = ready.payments?.paystack ?? {};
+            const vtpass = ready.payments?.vtpass ?? {};
             const report = {
               api: ready.service,
               status: ready.status,
@@ -318,7 +319,11 @@ jobs:
               bank_directory: paystack.bankDirectory === true,
               beneficiary_verification: paystack.beneficiaryVerification === true,
               bank_transfers: paystack.bankTransfers === true,
-              bank_transfer_gate: paystack.bankTransferGate ?? "unknown"
+              bank_transfer_gate: paystack.bankTransferGate ?? "unknown",
+              vtpass_environment: vtpass.environment ?? null,
+              vtpass_credentials_configured: vtpass.credentialsConfigured === true,
+              vtpass_bill_api_ready: vtpass.billApiReady === true,
+              vtpass_live_purchases_enabled: vtpass.livePurchasesEnabled === true
             };
             console.log(JSON.stringify(report, null, 2));
             if (ready.service !== "flowpay-api" || ready.status !== "ready" ||
@@ -326,6 +331,16 @@ jobs:
                 paystack.bankDirectory !== true ||
                 paystack.beneficiaryVerification !== true) {
               throw new Error("Live API, database, Paystack bank directory or beneficiary-name verification is not ready.");
+            }
+            if (typeof vtpass.credentialsConfigured !== "boolean" ||
+                typeof vtpass.billApiReady !== "boolean" ||
+                typeof vtpass.livePurchasesEnabled !== "boolean") {
+              throw new Error("VTpass capability readiness fields are missing from the live API response.");
+            }
+            if (vtpass.credentialsConfigured !== true) {
+              console.warn("VTpass credentials are not configured; airtime/data/electricity purchases are not yet enabled.");
+            } else if (vtpass.billApiReady !== true) {
+              console.warn("VTpass credentials exist, but the bill-payment database or clearing-account capability is not ready.");
             }
             if (paystack.bankTransfers !== true) {
               console.warn("Bank-name verification is ready, but bank payout submission remains behind its independent approval/feature gate.");
