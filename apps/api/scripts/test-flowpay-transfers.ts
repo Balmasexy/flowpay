@@ -26,6 +26,7 @@ const localJwks = createLocalJWKSet({
 type SetupOptions = {
   balance?: string;
   held?: string;
+  flutterwaveTable?: boolean;
   savedPin?: string;
   recipientId?: string;
   prior?: boolean;
@@ -104,6 +105,12 @@ async function makeContext(options: SetupOptions = {}) {
       }
       if (sql.includes("COALESCE(SUM(entry.amount_minor)")) {
         return { rowCount: 1, rows: [{ balance_minor: options.balance ?? "20000000" }] };
+      }
+      if (sql.includes("to_regclass('public.fp_flutterwave_bill_payments')")) {
+        return { rowCount: 1, rows: [{ available: options.flutterwaveTable ?? true }] };
+      }
+      if (sql.includes("FROM public.fp_flutterwave_bill_payments") && sql.includes("SUM(amount_minor)")) {
+        return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
       }
       if (sql.includes("SUM(reservation.amount_minor)")) {
         return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
