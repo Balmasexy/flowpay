@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, RefreshCw, ShieldCheck, Zap } from "lucide-react";
 
-type Category = { code: string; name: string; description: string };
 type Biller = { code: string; name: string; description?: string };
 type BillItem = {
   code: string; name: string; label: string; amountMinor: string | null;
@@ -28,7 +27,6 @@ function naira(minor: string | null | undefined): string {
 
 export default function FlutterwaveUtilityBills({ token }: { token: string }) {
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-  const [categories, setCategories] = useState<Category[]>([]);
   const [billers, setBillers] = useState<Biller[]>([]);
   const [items, setItems] = useState<BillItem[]>([]);
   const [categoryCode, setCategoryCode] = useState("UTILITYBILLS");
@@ -110,7 +108,6 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
         const row = asRecord(value);
         return { code: String(row.code ?? ""), name: String(row.name ?? ""), description: String(row.description ?? "") };
       }).filter(row => row.code) : [];
-      setCategories(rows);
       const utility = rows.find(row => row.code.toUpperCase() === "UTILITYBILLS");
       if (utility) setCategoryCode(utility.code);
       else throw new Error("Flutterwave has not returned a utility-bills category for Nigeria.");
