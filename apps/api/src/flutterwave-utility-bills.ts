@@ -448,7 +448,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       const requestedAmount = typeof input.amountMinor === "string" ? input.amountMinor : "";
       if (Object.keys(input).some(key => !["billerCode", "itemCode", "customerId", "amountMinor", "transactionPin", "idempotencyKey"].includes(key)) ||
           !validCode(billerCode) || !validCode(itemCode) || !/^[0-9A-Za-z+ .-]{5,40}$/.test(customerId) ||
-          !amountMinor(requestedAmount) || !/^\\d{6}$/.test(pin) || !validUuid(idempotencyKey)) {
+          !amountMinor(requestedAmount) || !/^\d{6}$/.test(pin) || !validUuid(idempotencyKey)) {
         send(res, 400, { error: "INVALID_UTILITY_BILL_PAYMENT_DETAILS" }); return true;
       }
       let biller: Record<string, unknown> | null;
