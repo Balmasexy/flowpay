@@ -25,6 +25,7 @@ const localJwks = createLocalJWKSet({
 
 type SetupOptions = {
   balance?: string;
+  held?: string;
   savedPin?: string;
   recipientId?: string;
   prior?: boolean;
@@ -103,6 +104,9 @@ async function makeContext(options: SetupOptions = {}) {
       }
       if (sql.includes("COALESCE(SUM(entry.amount_minor)")) {
         return { rowCount: 1, rows: [{ balance_minor: options.balance ?? "20000000" }] };
+      }
+      if (sql.includes("SUM(reservation.amount_minor)")) {
+        return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
       }
       if (sql.includes("INSERT INTO public.fp_ledger_transactions")) {
         return { rowCount: 1, rows: [{ id: transactionId }] };
@@ -189,6 +193,17 @@ test("posts a ₦50,000 transfer with one balanced sender debit and recipient cr
   assert.equal(received?.[6], "success");
   assert.ok(String(sent?.[9]).includes(accountName));
   assert.ok(String(received?.[9]).includes("Test Sender"));
+});
+
+test("pending Flutterwave utility bills reduce available FlowPay internal-transfer balance", async () => {
+  const context = await makeContext({ balance: "10000000", held: "6000000" });
+  const response = context.response();
+  await context.handler(context.request(transferBody()), response.res);
+  assert.equal(response.result().status, 409);
+  assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
+  const reservation = context.statements.find(item => item.sql.includes("SUM(reservation.amount_minor)"));
+  assert.ok(reservation?.sql.includes("fp_flutterwave_bill_payments"));
+  assert.equal(context.ledgerValues.length, 0);
 });
 
 test("does not create a ledger transaction when the sender balance is insufficient", async () => {
