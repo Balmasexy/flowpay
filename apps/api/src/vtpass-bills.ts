@@ -489,7 +489,14 @@ export function createVtpassBillsHandler(options: Options) {
         const walletId = String(wallets.rows[0].id);
         const [balanceRows, heldRows] = await Promise.all([
           client.query("SELECT COALESCE(SUM(entry.amount_minor),0)::text AS amount_minor FROM public.fp_ledger_entries entry JOIN public.fp_ledger_transactions tx ON tx.id = entry.transaction_id WHERE entry.account_id = $1 AND entry.currency = 'NGN' AND tx.status = 'posted'", [walletId]),
-          client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount_minor FROM public.fp_vtpass_bill_payments WHERE account_id = $1 AND status IN ('initiating','pending','unknown')", [walletId])
+          client.query(`SELECT COALESCE(SUM(reservation.amount_minor),0)::text AS amount_minor
+            FROM (
+              SELECT amount_minor FROM public.fp_vtpass_bill_payments
+               WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
+              UNION ALL
+              SELECT amount_minor FROM public.fp_flutterwave_bill_payments
+               WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
+            ) AS reservation`, [walletId])
         ]);
         const available = BigInt(balanceRows.rows[0]?.amount_minor ?? "0") - BigInt(heldRows.rows[0]?.amount_minor ?? "0");
         if (available < BigInt(amount)) {
