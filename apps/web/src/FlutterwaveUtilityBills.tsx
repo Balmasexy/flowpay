@@ -104,7 +104,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
       credentials: "omit", signal: controller.signal,
       headers: { Authorization: "Bearer " + token }
     }).then(async readyResponse => {
-      const readyBody = asRecord(await response.json().catch(() => ({})));
+      const readyBody = asRecord(await readyResponse.json().catch(() => ({})));
       const payments = asRecord(readyBody.payments);
       const flutterwave = asRecord(payments.flutterwave);
       if (!readyResponse.ok || flutterwave.billPayments !== true) {
