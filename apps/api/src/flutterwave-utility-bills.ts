@@ -101,7 +101,7 @@ function minorToNaira(value: string): string {
   const amount = BigInt(value);
   return (amount / 100n).toString() + "." + (amount % 100n).toString().padStart(2, "0");
 }
-function isElectricityBiller(value: unknown, code?: unknown): boolean {
+export function isElectricityBiller(value: unknown, code?: unknown): boolean {
   const billerCode = safeString(code, 12).toUpperCase();
   const documentedElectricityCodes = new Set(["BIL112", "BIL113", "BIL114", "BIL115", "BIL116", "BIL117", "BIL118", "BIL119", "BIL120", "BIL204"]);
   return documentedElectricityCodes.has(billerCode) || /\b(electric|electricity|disco|power)\b/i.test(safeString(value, 200));
