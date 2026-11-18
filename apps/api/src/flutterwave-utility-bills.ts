@@ -225,7 +225,7 @@ async function reconcile(pool: Pool, bill: BillRow, state: "success" | "failed" 
   try {
     await client.query("BEGIN");
     const locked = await client.query<BillRow>(
-      "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE request_id=$1 FOR UPDATE",
+      "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,bill_amount_minor::text AS bill_amount_minor,provider_fee_minor::text AS provider_fee_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE request_id=$1 FOR UPDATE",
       [bill.request_id]
     );
     if (locked.rowCount !== 1) throw new Error("FLUTTERWAVE_BILL_NOT_FOUND");
@@ -337,7 +337,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           return true;
         }
         const found = await pool.query<BillRow>(
-          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE flw_tx_ref=$1 OR flw_reference=$1 OR provider_reference=$1 LIMIT 1",
+          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,bill_amount_minor::text AS bill_amount_minor,provider_fee_minor::text AS provider_fee_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE flw_tx_ref=$1 OR flw_reference=$1 OR provider_reference=$1 LIMIT 1",
           [reference]
         );
         if (found.rowCount !== 1) {
@@ -354,7 +354,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 503, { error: "FLUTTERWAVE_BILL_STATUS_REQUERY_FAILED" });
           return true;
         }
-        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.amount_minor);
+        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.bill_amount_minor);
         const finalState = await reconcile(pool, bill, state, statusResult.body);
         send(res, 200, { received: true, processed: ["success", "failed"].includes(finalState), requestId: bill.request_id, status: finalState });
       } catch (error) {
@@ -559,16 +559,16 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       try {
         await client.query("BEGIN");
         const prior = await client.query<BillRow>(
-          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE idempotency_key=$1 FOR UPDATE",
+          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,bill_amount_minor::text AS bill_amount_minor,provider_fee_minor::text AS provider_fee_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE idempotency_key=$1 FOR UPDATE",
           [dbKey]
         );
         if (prior.rowCount === 1) {
           const saved = prior.rows[0];
           const same = saved.biller_code === billerCode && saved.item_code === itemCode &&
-            saved.customer_id === customerId && saved.amount_minor === requestedAmount;
+            saved.customer_id === customerId && saved.bill_amount_minor === requestedAmount;
           await client.query("COMMIT");
           if (!same) { send(res, 409, { error: "BILL_IDEMPOTENCY_KEY_REUSED" }); return true; }
-          send(res, 200, { requestId: saved.request_id, status: saved.status, duplicate: true, final: ["success", "failed"].includes(saved.status), amountMinor: saved.amount_minor });
+          send(res, 200, { requestId: saved.request_id, status: saved.status, duplicate: true, final: ["success", "failed"].includes(saved.status), amountMinor: saved.amount_minor, billAmountMinor: saved.bill_amount_minor, feeMinor: saved.provider_fee_minor });
           return true;
         }
         const pinState = await verifyPin(client, userId, pin);
@@ -606,16 +606,17 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         );
         const transactionId = String(transaction.rows[0].id);
         await client.query(
-          "INSERT INTO public.fp_flutterwave_bill_payments(transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor,status,provider_reference) VALUES($1,$2,$3,$4,$5,'UTILITYBILLS',$6,$7,$8,$9,$10,$11,'initiating',$12)",
+          "INSERT INTO public.fp_flutterwave_bill_payments(transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor,bill_amount_minor,provider_fee_minor,status,provider_reference) VALUES($1,$2,$3,$4,$5,'UTILITYBILLS',$6,$7,$8,$9,$10,$11,$12,$13,'initiating',$14)",
           [transactionId, userId, walletId, dbKey, localRequestId, billerCode,
-            safeString(biller.name ?? biller.short_name, 160), itemCode, item.name, customerId, requestedAmount, providerReference]
+            safeString(biller.name ?? biller.short_name, 160), itemCode, item.name, customerId, walletAmountMinor, requestedAmount, providerFeeMinor, providerReference]
         );
         await client.query("COMMIT");
         bill = {
           transaction_id: transactionId, user_id: userId, account_id: walletId, idempotency_key: dbKey,
           request_id: localRequestId, category_code: "UTILITYBILLS", biller_code: billerCode,
           biller_name: safeString(biller.name ?? biller.short_name, 160), item_code: itemCode,
-          item_name: item.name, customer_id: customerId, amount_minor: requestedAmount,
+          item_name: item.name, customer_id: customerId, amount_minor: walletAmountMinor,
+          bill_amount_minor: requestedAmount, provider_fee_minor: providerFeeMinor,
           status: "initiating", flw_tx_ref: null, flw_reference: providerReference
         };
       } catch (error) {
@@ -642,7 +643,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
             "UPDATE public.fp_flutterwave_bill_payments SET status='unknown',flw_tx_ref=NULLIF($2,''),provider_status=NULLIF($3,''),status_note='Flutterwave did not return a verifiable bill reference. Amount remains reserved; do not retry until reconciled.',updated_at=NOW() WHERE request_id=$1 AND status='initiating'",
             [bill.request_id, txRef, safeString(result.body.message, 120)]
           );
-          send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: requestedAmount, currency: "NGN", message: "Flutterwave has not confirmed this bill request. The amount remains reserved; check status before retrying." });
+          send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, currency: "NGN", message: "Flutterwave has not confirmed this bill request. The amount remains reserved; check status before retrying." });
           return true;
         }
         const flwReference = safeString(data.reference, 120);
@@ -656,13 +657,13 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         // itself is not treated as proof that electricity was delivered.
         const verified = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(txRef) + "?verbose=1");
         const state = verified.ok
-          ? classifyFlutterwaveBillStatus(verified.body, txRef, requestedAmount)
+          ? classifyFlutterwaveBillStatus(verified.body, txRef, bill.bill_amount_minor)
           : "unknown";
         const finalState = await reconcile(pool, bill, state, verified.body);
         const tokenValue = safeString(providerData(verified.body).extra ?? providerData(verified.body).token, 180);
         send(res, finalState === "success" ? 201 : finalState === "failed" ? 502 : 202, {
           requestId: bill.request_id, status: finalState, final: ["success", "failed"].includes(finalState),
-          amountMinor: requestedAmount, currency: "NGN", token: finalState === "success" ? tokenValue : undefined,
+          amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, currency: "NGN", token: finalState === "success" ? tokenValue : undefined,
           message: finalState === "success"
             ? "Flutterwave confirmed the utility payment. FlowPay posted the matching wallet debit."
             : finalState === "failed"
@@ -676,7 +677,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           "UPDATE public.fp_flutterwave_bill_payments SET status='unknown',status_note='Provider outcome is unconfirmed. Amount remains reserved; requery before retrying.',updated_at=NOW() WHERE request_id=$1 AND status IN ('initiating','pending')",
           [bill.request_id]
         ).catch(() => undefined);
-        send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: requestedAmount, currency: "NGN", message: "The provider outcome is unconfirmed. The amount remains reserved; requery this request before retrying." });
+        send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, currency: "NGN", message: "The provider outcome is unconfirmed. The amount remains reserved; requery this request before retrying." });
         return true;
       }
     }
@@ -686,7 +687,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       if (!/^FPB-[0-9a-f-]{36}$/i.test(request)) { send(res, 400, { error: "INVALID_BILL_REQUEST_ID" }); return true; }
       try {
         const found = await pool.query<BillRow>(
-          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE request_id=$1 AND user_id=$2 LIMIT 1",
+          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,bill_amount_minor::text AS bill_amount_minor,provider_fee_minor::text AS provider_fee_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE request_id=$1 AND user_id=$2 LIMIT 1",
           [request, userId]
         );
         if (found.rowCount !== 1) { send(res, 404, { error: "UTILITY_BILL_PAYMENT_NOT_FOUND" }); return true; }
@@ -695,16 +696,16 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           const saved = await pool.query<{ provider_token: string | null }>(
             "SELECT provider_token FROM public.fp_flutterwave_bill_payments WHERE request_id=$1", [bill.request_id]
           );
-          send(res, 200, { requestId: bill.request_id, status: bill.status, final: true, amountMinor: bill.amount_minor, token: saved.rows[0]?.provider_token ?? undefined });
+          send(res, 200, { requestId: bill.request_id, status: bill.status, final: true, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, token: saved.rows[0]?.provider_token ?? undefined });
           return true;
         }
         if (!bill.flw_tx_ref) {
-          send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: bill.amount_minor, message: "Flutterwave has not supplied a transaction reference. Funds remain reserved and this request needs provider reconciliation." });
+          send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, message: "Flutterwave has not supplied a transaction reference. Funds remain reserved and this request needs provider reconciliation." });
           return true;
         }
         const statusResult = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(bill.flw_tx_ref) + "?verbose=1");
         if (!statusResult.ok) {
-          send(res, 202, { requestId: bill.request_id, status: bill.status, final: false, amountMinor: bill.amount_minor, message: "Flutterwave status is not final yet. The amount remains reserved." });
+          send(res, 202, { requestId: bill.request_id, status: bill.status, final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, message: "Flutterwave status is not final yet. The amount remains reserved." });
           return true;
         }
         const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.amount_minor);
@@ -712,7 +713,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         const tokenValue = safeString(providerData(statusResult.body).extra ?? providerData(statusResult.body).token, 180);
         send(res, 200, {
           requestId: bill.request_id, status: finalState, final: ["success", "failed"].includes(finalState),
-          amountMinor: bill.amount_minor, token: finalState === "success" ? tokenValue : undefined,
+          amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, token: finalState === "success" ? tokenValue : undefined,
           message: finalState === "success" ? "Flutterwave confirmed this utility bill payment." :
             finalState === "failed" ? "Flutterwave confirmed this utility bill payment failed." :
             "Flutterwave has not returned a final result. Funds remain reserved."
