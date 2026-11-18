@@ -92,7 +92,7 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
     setCustomerAddress("");
     setMinimumMinor(null);
     setMaximumMinor(null);
-    setProviderFeeMinor(selectedItem?.feeMinor ?? "0");
+    setProviderFeeMinor("0");
   }
 
   useEffect(() => {
@@ -188,9 +188,9 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
   function selectItem(nextCode: string) {
     const next = items.find(item => item.code === nextCode);
     setItemCode(nextCode);
-    setProviderFeeMinor(next?.feeMinor ?? "0");
     setAmount(next?.amountMinor && BigInt(next.amountMinor) > 0n ? (Number(next.amountMinor) / 100).toFixed(2) : "");
     clearVerification();
+    setProviderFeeMinor(next?.feeMinor ?? "0");
     clearOutcome();
   }
   async function validateMeter() {
