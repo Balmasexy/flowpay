@@ -39,16 +39,17 @@ test("Flutterwave utility bills require an explicitly selected matching environm
 test("Flutterwave utility bill success requires matching provider reference and exact NGN amount", () => {
   const successful = {
     status: "success",
-    data: { tx_ref: "CF-FLYAPI-123", amount: "24900.00", currency: "NGN", extra: "TOKEN123" }
+    data: { tx_ref: "CF-FLYAPI-123", amount: "24900.00", fee: 100, currency: "NGN", extra: "TOKEN123" }
   };
-  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-123", "2490000"), "success");
-  assert.equal(classifyFlutterwaveBillStatus({ ...successful, data: { ...successful.data, amount: "24900.0000" } }, "CF-FLYAPI-123", "2490000"), "success");
-  assert.equal(classifyFlutterwaveBillStatus({ ...successful, data: { ...successful.data, amount: "24900.0010" } }, "CF-FLYAPI-123", "2490000"), "unknown");
-  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-OTHER", "2490000"), "unknown");
-  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-123", "2490001"), "unknown");
-  assert.equal(classifyFlutterwaveBillStatus({ status: "pending", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000"), "pending");
-  assert.equal(classifyFlutterwaveBillStatus({ status: "failed", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000"), "failed");
-  assert.equal(classifyFlutterwaveBillStatus({ status: "success", data: { tx_ref: "CF-FLYAPI-123", amount: "24900.00", currency: "USD" } }, "CF-FLYAPI-123", "2490000"), "unknown");
+  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-123", "2490000", "10000"), "success");
+  assert.equal(classifyFlutterwaveBillStatus({ ...successful, data: { ...successful.data, amount: "24900.0000" } }, "CF-FLYAPI-123", "2490000", "10000"), "success");
+  assert.equal(classifyFlutterwaveBillStatus({ ...successful, data: { ...successful.data, amount: "24900.0010" } }, "CF-FLYAPI-123", "2490000", "10000"), "unknown");
+  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-OTHER", "2490000", "10000"), "unknown");
+  assert.equal(classifyFlutterwaveBillStatus({ ...successful, data: { ...successful.data, fee: 101 } }, "CF-FLYAPI-123", "2490000", "10000"), "unknown");
+  assert.equal(classifyFlutterwaveBillStatus(successful, "CF-FLYAPI-123", "2490001", "10000"), "unknown");
+  assert.equal(classifyFlutterwaveBillStatus({ status: "pending", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000", "10000"), "pending");
+  assert.equal(classifyFlutterwaveBillStatus({ status: "failed", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000", "10000"), "failed");
+  assert.equal(classifyFlutterwaveBillStatus({ status: "success", data: { tx_ref: "CF-FLYAPI-123", amount: "24900.00", fee: 100, currency: "USD" } }, "CF-FLYAPI-123", "2490000", "10000"), "unknown");
 });
 
 test("reserves the complete customer bill debit including Flutterwave fee", () => {
