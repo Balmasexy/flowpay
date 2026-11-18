@@ -61,7 +61,6 @@ export default function ServicePreview({ path, token }: { path: string; token: s
   const [statusBusy, setStatusBusy] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
-  if (isElectricity) return <FlutterwaveUtilityBills token={token}/>;
   const selectedNetwork = networks.find(item => item.label === network) ?? networks[0];
   const serviceId = isAirtime ? selectedNetwork.airtime : isData ? selectedNetwork.data : provider;
   const selectedVariation = variations.find(item => item.code === variationCode) ?? null;
@@ -71,7 +70,7 @@ export default function ServicePreview({ path, token }: { path: string; token: s
     (!isElectricity || meterVerified) && transactionPin.length === 6 && !busy;
 
   useEffect(() => {
-    if (!isData && !isElectricity) return;
+    if (!isData) return;
     if (!token || !apiBase) { setCatalogError("Authenticated FlowPay API is not configured."); return; }
     const controller = new AbortController();
     setCatalogLoading(true); setCatalogError(""); setVariations([]); setVariationCode("");
@@ -157,6 +156,8 @@ export default function ServicePreview({ path, token }: { path: string; token: s
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Status requery failed."); }
     finally { setStatusBusy(false); }
   }
+
+  if (isElectricity) return <FlutterwaveUtilityBills token={token}/>;
 
   const Icon = isAirtime ? Phone : isData ? Wifi : isTelevision ? Cable : Zap;
   if (isTelevision) return <section className="fp-panel fp-form-panel">
