@@ -437,7 +437,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       try {
         const result = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(categoryCode) + "/billers?country=NG");
         if (!result.ok || result.body.status !== "success") throw new Error("FLUTTERWAVE_BILLERS_UNAVAILABLE");
-        const billers = providerRows(result.body).filter(row => isElectricityBiller(row.name ?? row.short_name ?? row.description));
+        const billers = providerRows(result.body).filter(row => isElectricityBiller(row.name ?? row.short_name ?? row.description, row.biller_code));
         send(res, 200, { billers: billers.map(row => ({
           code: safeString(row.biller_code, 40), name: safeString(row.name ?? row.short_name, 160),
           description: safeString(row.description, 200), logo: safeString(row.logo, 500)
@@ -563,9 +563,8 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           if (requestedAmount !== item.amount_minor) {
             send(res, 422, { error: "UTILITY_BILL_AMOUNT_MISMATCH", message: "Use the exact amount returned by Flutterwave for this bill item." }); return true;
           }
-        } else if (!min || !max) {
-          send(res, 422, { error: "UTILITY_BILL_AMOUNT_LIMITS_UNAVAILABLE" }); return true;
-        } else if (BigInt(requestedAmount) < BigInt(min) || BigInt(requestedAmount) > BigInt(max)) {
+        } else if ((min && BigInt(requestedAmount) < BigInt(min)) ||
+                   (max && BigInt(requestedAmount) > BigInt(max))) {
           send(res, 422, { error: "UTILITY_BILL_AMOUNT_OUT_OF_RANGE", minimumMinor: min, maximumMinor: max }); return true;
         }
       } catch (error) {
