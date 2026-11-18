@@ -203,6 +203,11 @@ async function reconcile(pool: Pool, bill: BillRow, state: BillStatus, body: Pro
     const saved = locked.rows[0];
     const transaction = await client.query("SELECT status FROM public.fp_ledger_transactions WHERE id = $1 FOR UPDATE", [saved.transaction_id]);
     if (transaction.rowCount !== 1) throw new Error("VTPASS_LEDGER_TRANSACTION_NOT_FOUND");
+    const wallet = await client.query(
+      "SELECT id FROM public.fp_accounts WHERE id=$1 AND user_id=$2 AND account_type='customer' AND currency='NGN' AND status='active' FOR UPDATE",
+      [saved.account_id, saved.user_id]
+    );
+    if (wallet.rowCount !== 1) throw new Error("VTPASS_CUSTOMER_WALLET_NOT_ACTIVE");
     const current = String(saved.status);
     if (current === "success" && state === "success") {
       await client.query("UPDATE public.fp_vtpass_bill_payments SET provider_transaction_id = COALESCE($2, provider_transaction_id), provider_code = NULLIF($3,''), provider_status = NULLIF($4,''), verified_at = COALESCE(verified_at,NOW()), updated_at = NOW() WHERE request_id = $1", [bill.request_id, providerId, providerCode, providerStatus]);
