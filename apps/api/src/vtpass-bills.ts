@@ -501,12 +501,20 @@ export function createVtpassBillsHandler(options: Options) {
               UNION ALL
               SELECT amount_minor FROM public.fp_vtpass_bill_payments
                WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
-              UNION ALL
-              SELECT amount_minor FROM public.fp_flutterwave_bill_payments
-               WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
             ) AS reservation`, [walletId])
         ]);
-        const available = BigInt(balanceRows.rows[0]?.amount_minor ?? "0") - BigInt(heldRows.rows[0]?.amount_minor ?? "0");
+        const flutterwaveBillsTable = await client.query<{ available: boolean }>(
+          "SELECT to_regclass('public.fp_flutterwave_bill_payments') IS NOT NULL AS available"
+        );
+        const flutterwaveBillHolds = flutterwaveBillsTable.rows[0]?.available === true
+          ? await client.query<{ amount_minor: string }>(
+              "SELECT COALESCE(SUM(amount_minor),0)::text AS amount_minor FROM public.fp_flutterwave_bill_payments WHERE account_id=$1 AND status IN ('initiating','pending','unknown')",
+              [walletId]
+            )
+          : { rows: [{ amount_minor: "0" }] };
+        const totalHeld = BigInt(heldRows.rows[0]?.amount_minor ?? "0") +
+          BigInt(flutterwaveBillHolds.rows[0]?.amount_minor ?? "0");
+        const available = BigInt(balanceRows.rows[0]?.amount_minor ?? "0") - totalHeld;
         if (available < BigInt(amount)) {
           await client.query("ROLLBACK"); send(res, 409, { error: "INSUFFICIENT_AVAILABLE_BALANCE", availableMinor: available.toString() }); return true;
         }
