@@ -79,7 +79,7 @@ function decimalToMinor(value: unknown): string | null {
   const match = /^(0|[1-9]\d{0,8})(?:\.(\d{1,2}))?$/.exec(String(value).trim());
   if (!match) return null;
   const result = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
-  return result <= 10_000_000_000n ? result.toString() : null;
+  return result > 0n && result <= 10_000_000_000n ? result.toString() : null;
 }
 function minorToNaira(value: string): string {
   const amount = BigInt(value);
@@ -420,10 +420,16 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 422, { error: "UTILITY_CUSTOMER_NOT_VERIFIED", message: safeString(data.response_message, 160) || "Flutterwave did not verify this meter number." });
           return true;
         }
+        const minimum = decimalToMinor(data.minimum) ?? item.minimum_minor;
+        const maximum = decimalToMinor(data.maximum) ?? item.maximum_minor;
+        if (!item.amount_minor && (!minimum || !maximum)) {
+          send(res, 422, { error: "UTILITY_BILL_AMOUNT_LIMITS_UNAVAILABLE", message: "Flutterwave did not return an allowed amount range for this bill item." });
+          return true;
+        }
         send(res, 200, {
           verified: true, customerName: safeString(data.name, 160),
-          address: safeString(data.address, 240), minimumMinor: decimalToMinor(data.minimum),
-          maximumMinor: decimalToMinor(data.maximum), feeMinor: decimalToMinor(data.fee) ?? item.fee_minor,
+          address: safeString(data.address, 240), minimumMinor: minimum,
+          maximumMinor: maximum, feeMinor: decimalToMinor(data.fee) ?? item.fee_minor,
           itemName: item.name, label: item.label_name
         });
       } catch (error) {
@@ -472,7 +478,9 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           if (requestedAmount !== item.amount_minor) {
             send(res, 422, { error: "UTILITY_BILL_AMOUNT_MISMATCH", message: "Use the exact amount returned by Flutterwave for this bill item." }); return true;
           }
-        } else if ((min && BigInt(requestedAmount) < BigInt(min)) || (max && BigInt(requestedAmount) > BigInt(max))) {
+        } else if (!min || !max) {
+          send(res, 422, { error: "UTILITY_BILL_AMOUNT_LIMITS_UNAVAILABLE" }); return true;
+        } else if (BigInt(requestedAmount) < BigInt(min) || BigInt(requestedAmount) > BigInt(max)) {
           send(res, 422, { error: "UTILITY_BILL_AMOUNT_OUT_OF_RANGE", minimumMinor: min, maximumMinor: max }); return true;
         }
       } catch (error) {
