@@ -119,6 +119,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
     if (!token || token.split(".").length !== 3) {
       setOverview(null); setError("Your secure session is not ready. Refresh after signing in again."); setLoading(false); return;
     }
+    // Keep the last verified ledger snapshot visible while refreshing.
+    // A transient network/auth failure must not erase a previously confirmed balance.
     setLoading(true); setError("");
     const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setError("FlowPay API address is not configured."); setLoading(false); return; }
@@ -146,8 +148,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       if (!parsed) throw new Error("The account overview service returned an invalid response.");
       setOverview(parsed);
     } catch (cause) {
-      setOverview(null);
-      setError(cause instanceof Error ? cause.message : "Unable to load your account overview.");
+      setError(cause instanceof Error ? cause.message : "Unable to refresh your account overview.");
     } finally { setLoading(false); }
   }, [token]);
 
@@ -160,13 +161,13 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   return <>
     <section className="fp-balance">
       <div className="fp-balance-top"><span>Wallet balance</span><div className="fp-balance-top-actions"><button type="button" className="fp-balance-history" onClick={() => go("/activity")}><Activity size={15}/> Transaction history <ChevronRight size={14}/></button><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div></div>
-      {loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading…</strong> : error ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Temporarily unavailable</strong> : overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Not available</strong>}
-      <small>{error ? "We could not refresh your verified account data. No estimated or sample amount is displayed." : overview?.balance.available && overview.balance.balances.length > 0 ? isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service." : !loading && overview?.balance.available ? "No active customer account is available for balance calculation." : "Balance is unavailable until the ledger sign convention is confirmed. No estimated or sample amount is shown."}</small>
+      {overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading verified balance…</strong> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Balance not yet verified</strong>}
+      <small>{overview?.balance.available && overview.balance.balances.length > 0 ? (error ? "Showing the last verified ledger balance. Refresh failed; this value is retained and is not a live update." : isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service.") : error ? "We could not verify a balance yet. No estimated or sample amount is displayed." : "Balance appears after the authenticated ledger service verifies your account."}</small>
       <div className="fp-balance-actions">
         <button onClick={() => go("/transfers?mode=flowpay")}><ArrowDownLeft size={17}/> To FlowPay</button>
         <button onClick={() => go("/transfers?mode=bank")}><ArrowUpRight size={17}/> To Bank</button>
       </div>
-      {!loading && !error && overview?.generatedAt && <small className="fp-overview-updated">Last updated {dateLabel(overview.generatedAt)}</small>}
+      {overview?.generatedAt && <small className="fp-overview-updated">{error ? "Last verified " : "Last updated "}{dateLabel(overview.generatedAt)}</small>}
     </section>
 
     <section className="fp-overview-grid" aria-label="Your FlowPay account">
