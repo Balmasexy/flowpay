@@ -764,6 +764,9 @@ export function createPaystackBankTransfersHandler(options: Options) {
                UNION ALL
                SELECT amount_minor FROM public.fp_vtpass_bill_payments
                 WHERE account_id = $1 AND status IN ('initiating', 'pending', 'unknown')
+               UNION ALL
+               SELECT amount_minor FROM public.fp_flutterwave_bill_payments
+                WHERE account_id = $1 AND status IN ('initiating', 'pending', 'unknown')
              ) AS reservation`,
           [walletId]
         )
