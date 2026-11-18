@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS public.fp_flutterwave_bill_payments (
   item_name TEXT NOT NULL,
   customer_id TEXT NOT NULL,
   amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+  bill_amount_minor BIGINT NOT NULL CHECK (bill_amount_minor > 0),
+  provider_fee_minor BIGINT NOT NULL DEFAULT 0 CHECK (provider_fee_minor >= 0),
   currency CHAR(3) NOT NULL DEFAULT 'NGN' CHECK (currency = 'NGN'),
   provider_reference TEXT NOT NULL UNIQUE,
   flw_tx_ref TEXT UNIQUE,
