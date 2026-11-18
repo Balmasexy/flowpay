@@ -120,8 +120,10 @@ function providerState(body: ProviderBody): "success" | "failed" | "pending" | "
 export function resolveFlutterwaveBillsConfig(): Config | null {
   const secretKey = process.env.FLW_SECRET_KEY?.trim() ?? "";
   const environment = process.env.FLW_BILLS_ENVIRONMENT?.trim().toLowerCase();
-  if (environment === "test" && process.env.NODE_ENV !== "production" &&
-      process.env.FLOWPAY_RUNTIME_ENV === "development" && secretKey.startsWith("FLWSECK_TEST-")) {
+  // A test key is safe to use from the deployed API: Flutterwave's test
+  // ledger is separate from live money movement. Never infer test mode from
+  // NODE_ENV or silently fall back from live to test.
+  if (environment === "test" && secretKey.startsWith("FLWSECK_TEST-")) {
     return { environment: "test", secretKey };
   }
   if (environment === "live" && process.env.NODE_ENV === "production" &&
@@ -338,7 +340,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
     if (!supported) return false;
     if (req.method === "POST" && path === "/webhooks/flutterwave/bills") {
       const cfg = resolveFlutterwaveBillsConfig();
-      const secretHash = process.env.FLW_BILLS_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      const secretHash = (process.env.FLW_BILLS_WEBHOOK_SECRET_HASH ?? process.env.FLW_WEBHOOK_SECRET_HASH ?? "").trim();
       const supplied = req.headers["verif-hash"];
       if (!pool || !cfg || !secretHash) {
         send(res, 503, { error: "FLUTTERWAVE_BILL_WEBHOOK_NOT_CONFIGURED" });
