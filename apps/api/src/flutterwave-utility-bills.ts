@@ -85,8 +85,10 @@ function minorToNaira(value: string): string {
   const amount = BigInt(value);
   return (amount / 100n).toString() + "." + (amount % 100n).toString().padStart(2, "0");
 }
-function isElectricityBiller(value: unknown): boolean {
-  return /\b(electric|electricity|disco|power)\b/i.test(safeString(value, 200));
+function isElectricityBiller(value: unknown, code?: unknown): boolean {
+  const billerCode = safeString(code, 12).toUpperCase();
+  const documentedElectricityCodes = new Set(["BIL112", "BIL113", "BIL114", "BIL115", "BIL116", "BIL117", "BIL118", "BIL119", "BIL120", "BIL204"]);
+  return documentedElectricityCodes.has(billerCode) || /\b(electric|electricity|disco|power)\b/i.test(safeString(value, 200));
 }
 function utilityCategory(value: unknown): boolean {
   return safeString(value, 60).toUpperCase() === "UTILITYBILLS";
@@ -163,7 +165,7 @@ async function getElectricityBiller(cfg: Config, categoryCode: string, billerCod
   const response = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(categoryCode) + "/billers?country=NG");
   if (!response.ok || response.body.status !== "success") throw new Error("FLUTTERWAVE_BILLER_CATALOG_UNAVAILABLE");
   const biller = providerRows(response.body).find(row =>
-    safeString(row.biller_code, 40) === billerCode && isElectricityBiller(row.name ?? row.short_name ?? row.description));
+    safeString(row.biller_code, 40) === billerCode && isElectricityBiller(row.name ?? row.short_name ?? row.description, row.biller_code));
   return biller ?? null;
 }
 async function getUtilityItem(cfg: Config, billerCode: string, itemCode: string): Promise<UtilityItem | null> {
@@ -297,6 +299,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const supported =
+      (req.method === "POST" && path === "/webhooks/flutterwave/bills") ||
       (req.method === "GET" && [
         "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers",
         "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/status"
@@ -305,6 +308,55 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase"
       ].includes(path));
     if (!supported) return false;
+    if (req.method === "POST" && path === "/webhooks/flutterwave/bills") {
+      const cfg = resolveFlutterwaveBillsConfig();
+      const secretHash = process.env.FLW_BILLS_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      const supplied = req.headers["verif-hash"];
+      if (!pool || !cfg || !secretHash) {
+        send(res, 503, { error: "FLUTTERWAVE_BILL_WEBHOOK_NOT_CONFIGURED" });
+        return true;
+      }
+      const expectedBytes = Buffer.from(secretHash, "utf8");
+      const suppliedBytes = typeof supplied === "string" ? Buffer.from(supplied, "utf8") : Buffer.alloc(0);
+      if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+        send(res, 401, { error: "INVALID_FLUTTERWAVE_BILL_WEBHOOK_SIGNATURE" });
+        return true;
+      }
+      try {
+        const payload = await readJson(req);
+        const data = record(payload.data);
+        const reference = safeString(data.tx_ref ?? data.reference, 120);
+        if (!reference) {
+          send(res, 200, { received: true, processed: false, reason: "BILL_REFERENCE_MISSING" });
+          return true;
+        }
+        const found = await pool.query<BillRow>(
+          "SELECT transaction_id,user_id,account_id,idempotency_key,request_id,category_code,biller_code,biller_name,item_code,item_name,customer_id,amount_minor::text AS amount_minor,status,flw_tx_ref,flw_reference FROM public.fp_flutterwave_bill_payments WHERE flw_tx_ref=$1 OR flw_reference=$1 OR provider_reference=$1 LIMIT 1",
+          [reference]
+        );
+        if (found.rowCount !== 1) {
+          send(res, 200, { received: true, processed: false, reason: "FLOWPAY_BILL_NOT_FOUND" });
+          return true;
+        }
+        const bill = found.rows[0];
+        if (!bill.flw_tx_ref) {
+          send(res, 200, { received: true, processed: false, reason: "PROVIDER_TRANSACTION_REFERENCE_PENDING" });
+          return true;
+        }
+        const statusResult = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(bill.flw_tx_ref) + "?verbose=1");
+        if (!statusResult.ok) {
+          send(res, 503, { error: "FLUTTERWAVE_BILL_STATUS_REQUERY_FAILED" });
+          return true;
+        }
+        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.amount_minor);
+        const finalState = await reconcile(pool, bill, state, statusResult.body);
+        send(res, 200, { received: true, processed: ["success", "failed"].includes(finalState), requestId: bill.request_id, status: finalState });
+      } catch (error) {
+        console.error("FlowPay Flutterwave bill webhook processing failed:", error instanceof Error ? error.message : "unknown error");
+        send(res, 503, { error: "FLUTTERWAVE_BILL_WEBHOOK_PROCESSING_UNAVAILABLE" });
+      }
+      return true;
+    }
     if (!pool || !jwks || !issuer) {
       send(res, 503, { error: "FLUTTERWAVE_BILL_SERVICE_NOT_CONFIGURED" });
       return true;
@@ -581,11 +633,13 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: requestedAmount, currency: "NGN", message: "Flutterwave has not confirmed this bill request. The amount remains reserved; check status before retrying." });
           return true;
         }
+        const flwReference = safeString(data.reference, 120);
         await pool.query(
-          "UPDATE public.fp_flutterwave_bill_payments SET status='pending',flw_tx_ref=$2,provider_status=NULLIF($3,''),updated_at=NOW() WHERE request_id=$1 AND status='initiating'",
-          [bill.request_id, txRef, safeString(result.body.message, 120)]
+          "UPDATE public.fp_flutterwave_bill_payments SET status='pending',flw_tx_ref=$2,flw_reference=NULLIF($3,''),provider_status=NULLIF($4,''),updated_at=NOW() WHERE request_id=$1 AND status='initiating'",
+          [bill.request_id, txRef, flwReference, safeString(result.body.message, 120)]
         );
         bill.flw_tx_ref = txRef;
+        bill.flw_reference = flwReference || null;
         // Immediately query the authoritative status endpoint. The create response
         // itself is not treated as proof that electricity was delivered.
         const verified = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(txRef) + "?verbose=1");
