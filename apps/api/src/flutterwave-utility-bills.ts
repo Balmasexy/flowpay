@@ -36,6 +36,8 @@ type BillRow = {
   item_name: string;
   customer_id: string;
   amount_minor: string;
+  bill_amount_minor: string;
+  provider_fee_minor: string;
   status: "initiating" | "pending" | "unknown" | "success" | "failed";
   flw_tx_ref: string | null;
   flw_reference: string | null;
@@ -79,7 +81,11 @@ function decimalToMinor(value: unknown): string | null {
   const match = /^(0|[1-9]\d{0,8})(?:\.(\d{1,2}))?$/.exec(String(value).trim());
   if (!match) return null;
   const result = BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0"));
-  return result > 0n && result <= 10_000_000_000n ? result.toString() : null;
+  return result <= 10_000_000_000n ? result.toString() : null;
+}
+function positiveDecimalToMinor(value: unknown): string | null {
+  const amount = decimalToMinor(value);
+  return amount && BigInt(amount) > 0n ? amount : null;
 }
 function minorToNaira(value: string): string {
   const amount = BigInt(value);
@@ -182,8 +188,8 @@ async function getUtilityItem(cfg: Config, billerCode: string, itemCode: string)
     label_name: safeString(row.label_name, 100) || "Meter number",
     amount_minor: amount && BigInt(amount) > 0n ? amount : null,
     fee_minor: fee,
-    minimum_minor: decimalToMinor(row.minimum),
-    maximum_minor: decimalToMinor(row.maximum),
+    minimum_minor: positiveDecimalToMinor(row.minimum),
+    maximum_minor: positiveDecimalToMinor(row.maximum),
     is_resolvable: row.is_resolvable === true || String(row.is_resolvable).toLowerCase() === "true"
   };
 }
@@ -472,8 +478,8 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 422, { error: "UTILITY_CUSTOMER_NOT_VERIFIED", message: safeString(data.response_message, 160) || "Flutterwave did not verify this meter number." });
           return true;
         }
-        const minimum = decimalToMinor(data.minimum) ?? item.minimum_minor;
-        const maximum = decimalToMinor(data.maximum) ?? item.maximum_minor;
+        const minimum = positiveDecimalToMinor(data.minimum) ?? item.minimum_minor;
+        const maximum = positiveDecimalToMinor(data.maximum) ?? item.maximum_minor;
         if (!item.amount_minor && (!minimum || !maximum)) {
           send(res, 422, { error: "UTILITY_BILL_AMOUNT_LIMITS_UNAVAILABLE", message: "Flutterwave did not return an allowed amount range for this bill item." });
           return true;
@@ -512,6 +518,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       let biller: Record<string, unknown> | null;
       let item: UtilityItem | null;
       let validation: ProviderBody;
+      let providerFeeMinor = "0";
       try {
         biller = await getElectricityBiller(cfg, "UTILITYBILLS", billerCode);
         item = biller ? await getUtilityItem(cfg, billerCode, itemCode) : null;
@@ -524,8 +531,9 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 422, { error: "UTILITY_CUSTOMER_VALIDATION_FAILED", message: safeString(details.response_message ?? validation.message, 160) || "Verify the meter number before paying." });
           return true;
         }
-        const min = decimalToMinor(details.minimum) ?? item.minimum_minor;
-        const max = decimalToMinor(details.maximum) ?? item.maximum_minor;
+        const min = positiveDecimalToMinor(details.minimum) ?? item.minimum_minor;
+        const max = positiveDecimalToMinor(details.maximum) ?? item.maximum_minor;
+        providerFeeMinor = decimalToMinor(details.fee) ?? item.fee_minor;
         if (item.amount_minor) {
           if (requestedAmount !== item.amount_minor) {
             send(res, 422, { error: "UTILITY_BILL_AMOUNT_MISMATCH", message: "Use the exact amount returned by Flutterwave for this bill item." }); return true;
@@ -539,6 +547,10 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         send(res, 503, { error: error instanceof Error ? error.message : "UTILITY_BILL_VALIDATION_UNAVAILABLE" }); return true;
       }
 
+      const walletAmountMinor = (BigInt(requestedAmount) + BigInt(providerFeeMinor)).toString();
+      if (BigInt(walletAmountMinor) > 10_000_000_000n) {
+        send(res, 422, { error: "UTILITY_BILL_TOTAL_OUT_OF_RANGE" }); return true;
+      }
       const dbKey = "flutterwave-utility-bill:" + userId + ":" + idempotencyKey;
       const localRequestId = requestId();
       const providerReference = randomUUID();
