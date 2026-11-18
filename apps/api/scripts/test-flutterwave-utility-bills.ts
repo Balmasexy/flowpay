@@ -18,7 +18,7 @@ test("Flutterwave utility bills require an explicitly selected matching environm
     process.env.FLW_SECRET_KEY = "FLWSECK_TEST-sandbox";
     assert.equal(resolveFlutterwaveBillsConfig()?.environment, "test");
     process.env.NODE_ENV = "production";
-    assert.equal(resolveFlutterwaveBillsConfig(), null);
+    assert.equal(resolveFlutterwaveBillsConfig()?.environment, "test", "an explicit test key stays in Flutterwave sandbox on Render production");
     process.env.FLW_BILLS_ENVIRONMENT = "live";
     assert.equal(resolveFlutterwaveBillsConfig(), null);
     process.env.FLW_BILLS_LIVE_ENABLED = "true";
