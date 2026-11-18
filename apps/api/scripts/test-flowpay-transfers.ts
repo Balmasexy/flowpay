@@ -208,8 +208,10 @@ test("pending Flutterwave utility bills reduce available FlowPay internal-transf
   await context.handler(context.request(transferBody()), response.res);
   assert.equal(response.result().status, 409);
   assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
-  const reservation = context.statements.find(item => item.sql.includes("SUM(reservation.amount_minor)"));
-  assert.ok(reservation?.sql.includes("fp_flutterwave_bill_payments"));
+  const tableGuard = context.statements.find(item => item.sql.includes("to_regclass('public.fp_flutterwave_bill_payments')"));
+  const billHold = context.statements.find(item => item.sql.includes("FROM public.fp_flutterwave_bill_payments") && item.sql.includes("SUM(amount_minor)"));
+  assert.ok(tableGuard, "checks whether the additive bill table exists before querying it");
+  assert.ok(billHold, "subtracts pending Flutterwave bill holds from available balance");
   assert.equal(context.ledgerValues.length, 0);
 });
 
