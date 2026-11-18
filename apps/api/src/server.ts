@@ -20,7 +20,7 @@ import { createCustomerNotificationsHandler } from "./customer-notifications.js"
 import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-accounts.js";
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
-import { createVtpassBillsHandler } from "./vtpass-bills.js";
+import { createVtpassBillsHandler, resolveVtpassConfig } from "./vtpass-bills.js";
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 import { createPasskeysHandler } from "./passkeys.js";
@@ -130,7 +130,8 @@ const server = createServer(async (req, res) => {
             dedicatedAccountRequery: false, webhookVerificationAvailable: false,
             webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
           },
-          flutterwave: { deposits: false }
+          flutterwave: { deposits: false },
+          vtpass: { environment: null, credentialsConfigured: false, billApiReady: false, livePurchasesEnabled: false }
         }
       });
       return;
@@ -141,6 +142,7 @@ const server = createServer(async (req, res) => {
         pool.query<{
           bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; dva_requery_columns: boolean; clearing_account: boolean;
           flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
+          vtpass_bills: boolean; vtpass_clearing_account: boolean;
         }>(
           `SELECT
              to_regclass('public.fp_paystack_bank_transfers') IS NOT NULL AS bank_payouts,
@@ -154,6 +156,7 @@ const server = createServer(async (req, res) => {
                   AND column_name IN ('bank_slug','last_requery_at')
              ) AS dva_requery_columns,
              to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
+             to_regclass('public.fp_vtpass_bill_payments') IS NOT NULL AS vtpass_bills,
              to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
              EXISTS (
                SELECT 1 FROM public.fp_accounts
@@ -164,7 +167,12 @@ const server = createServer(async (req, res) => {
                SELECT 1 FROM public.fp_accounts
                 WHERE account_type = 'system' AND currency = 'NGN'
                   AND system_account_role = 'flutterwave_ngn_clearing' AND status = 'active'
-             ) AS flutterwave_clearing_account`
+             ) AS flutterwave_clearing_account,
+             EXISTS (
+               SELECT 1 FROM public.fp_accounts
+                WHERE account_type = 'system' AND currency = 'NGN'
+                  AND system_account_role = 'vtpass_ngn_clearing' AND status = 'active'
+             ) AS vtpass_clearing_account`
         )
       ]);
       const paystackBankRuntime = getPaystackBankRuntime();
@@ -209,6 +217,12 @@ const server = createServer(async (req, res) => {
       const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
       const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
       const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
+      const vtpassRuntime = resolveVtpassConfig();
+      const vtpassBillsReady = Boolean(
+        jwksUrl && issuer && vtpassRuntime &&
+        schema.rows[0]?.vtpass_bills === true &&
+        schema.rows[0]?.vtpass_clearing_account === true
+      );
       const flwDepositsReady = Boolean(
         process.env.NODE_ENV !== "production" &&
         process.env.FLOWPAY_RUNTIME_ENV === "development" &&
@@ -250,6 +264,12 @@ const server = createServer(async (req, res) => {
         flutterwave: {
           environment: process.env.FLW_ENVIRONMENT === "test" ? "test" : null,
           deposits: flwDepositsReady
+        },
+        vtpass: {
+          environment: vtpassRuntime?.environment ?? null,
+          credentialsConfigured: Boolean(vtpassRuntime),
+          billApiReady: vtpassBillsReady,
+          livePurchasesEnabled: vtpassRuntime?.environment === "live"
         }
       };
       send(res, 200, {
@@ -272,7 +292,8 @@ const server = createServer(async (req, res) => {
             dedicatedAccountRequery: false, webhookVerificationAvailable: false,
             webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
           },
-          flutterwave: { deposits: false }
+          flutterwave: { deposits: false },
+          vtpass: { environment: null, credentialsConfigured: false, billApiReady: false, livePurchasesEnabled: false }
         }
       });
     }
