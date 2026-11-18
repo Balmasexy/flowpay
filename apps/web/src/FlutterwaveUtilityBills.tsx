@@ -103,11 +103,11 @@ export default function FlutterwaveUtilityBills({ token }: { token: string }) {
     fetch(apiBase + "/ready", {
       credentials: "omit", signal: controller.signal,
       headers: { Authorization: "Bearer " + token }
-    }).then(async response => {
+    }).then(async readyResponse => {
       const readyBody = asRecord(await response.json().catch(() => ({})));
       const payments = asRecord(readyBody.payments);
       const flutterwave = asRecord(payments.flutterwave);
-      if (!response.ok || flutterwave.billPayments !== true) {
+      if (!readyResponse.ok || flutterwave.billPayments !== true) {
         throw new Error("Flutterwave electricity bills are not activated on the FlowPay API yet. The provider environment and database migration must both be ready.");
       }
       const response = await fetch(apiBase + "/customer/flutterwave/bills/categories", {
