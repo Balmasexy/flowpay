@@ -203,6 +203,11 @@ async function reconcile(pool: Pool, bill: BillRow, state: BillStatus, body: Pro
     const saved = locked.rows[0];
     const transaction = await client.query("SELECT status FROM public.fp_ledger_transactions WHERE id = $1 FOR UPDATE", [saved.transaction_id]);
     if (transaction.rowCount !== 1) throw new Error("VTPASS_LEDGER_TRANSACTION_NOT_FOUND");
+    const wallet = await client.query(
+      "SELECT id FROM public.fp_accounts WHERE id=$1 AND user_id=$2 AND account_type='customer' AND currency='NGN' AND status='active' FOR UPDATE",
+      [saved.account_id, saved.user_id]
+    );
+    if (wallet.rowCount !== 1) throw new Error("VTPASS_CUSTOMER_WALLET_NOT_ACTIVE");
     const current = String(saved.status);
     if (current === "success" && state === "success") {
       await client.query("UPDATE public.fp_vtpass_bill_payments SET provider_transaction_id = COALESCE($2, provider_transaction_id), provider_code = NULLIF($3,''), provider_status = NULLIF($4,''), verified_at = COALESCE(verified_at,NOW()), updated_at = NOW() WHERE request_id = $1", [bill.request_id, providerId, providerCode, providerStatus]);
@@ -489,9 +494,27 @@ export function createVtpassBillsHandler(options: Options) {
         const walletId = String(wallets.rows[0].id);
         const [balanceRows, heldRows] = await Promise.all([
           client.query("SELECT COALESCE(SUM(entry.amount_minor),0)::text AS amount_minor FROM public.fp_ledger_entries entry JOIN public.fp_ledger_transactions tx ON tx.id = entry.transaction_id WHERE entry.account_id = $1 AND entry.currency = 'NGN' AND tx.status = 'posted'", [walletId]),
-          client.query("SELECT COALESCE(SUM(amount_minor),0)::text AS amount_minor FROM public.fp_vtpass_bill_payments WHERE account_id = $1 AND status IN ('initiating','pending','unknown')", [walletId])
+          client.query(`SELECT COALESCE(SUM(reservation.amount_minor),0)::text AS amount_minor
+            FROM (
+              SELECT amount_minor FROM public.fp_paystack_bank_transfers
+               WHERE account_id = $1 AND status IN ('initiating','pending','otp','unknown')
+              UNION ALL
+              SELECT amount_minor FROM public.fp_vtpass_bill_payments
+               WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
+            ) AS reservation`, [walletId])
         ]);
-        const available = BigInt(balanceRows.rows[0]?.amount_minor ?? "0") - BigInt(heldRows.rows[0]?.amount_minor ?? "0");
+        const flutterwaveBillsTable = await client.query<{ available: boolean }>(
+          "SELECT to_regclass('public.fp_flutterwave_bill_payments') IS NOT NULL AS available"
+        );
+        const flutterwaveBillHolds = flutterwaveBillsTable.rows[0]?.available === true
+          ? await client.query<{ amount_minor: string }>(
+              "SELECT COALESCE(SUM(amount_minor),0)::text AS amount_minor FROM public.fp_flutterwave_bill_payments WHERE account_id=$1 AND status IN ('initiating','pending','unknown')",
+              [walletId]
+            )
+          : { rows: [{ amount_minor: "0" }] };
+        const totalHeld = BigInt(heldRows.rows[0]?.amount_minor ?? "0") +
+          BigInt(flutterwaveBillHolds.rows[0]?.amount_minor ?? "0");
+        const available = BigInt(balanceRows.rows[0]?.amount_minor ?? "0") - totalHeld;
         if (available < BigInt(amount)) {
           await client.query("ROLLBACK"); send(res, 409, { error: "INSUFFICIENT_AVAILABLE_BALANCE", availableMinor: available.toString() }); return true;
         }

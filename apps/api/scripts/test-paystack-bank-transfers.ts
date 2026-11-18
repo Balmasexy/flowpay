@@ -36,6 +36,8 @@ type SetupOptions = {
   wrongPin?: boolean;
   existing?: boolean;
   held?: string;
+  flutterwaveHeld?: string;
+  flutterwaveTable?: boolean;
   environment?: "test" | "live";
   ledgerStatus?: string;
 };
@@ -134,6 +136,12 @@ async function setup(options: SetupOptions = {}) {
           }
           if (sql.includes("SUM(entry.amount_minor)")) {
             return { rowCount: 1, rows: [{ amount_minor: options.balance ?? "20000000" }] };
+          }
+          if (sql.includes("to_regclass('public.fp_flutterwave_bill_payments')")) {
+            return { rowCount: 1, rows: [{ available: options.flutterwaveTable ?? true }] };
+          }
+          if (sql.includes("FROM public.fp_flutterwave_bill_payments") && sql.includes("SUM(amount_minor)")) {
+            return { rowCount: 1, rows: [{ amount_minor: options.flutterwaveHeld ?? "0" }] };
           }
           if (sql.includes("SUM(reservation.amount_minor)") && sql.includes("fp_paystack_bank_transfers") && sql.includes("fp_vtpass_bill_payments")) {
             return { rowCount: 1, rows: [{ amount_minor: options.held ?? "0" }] };
@@ -344,6 +352,9 @@ test("pending VTpass bills reduce the available balance for bank transfers", asy
   assert.equal(response.result().status, 409);
   assert.equal(response.result().body.error, "INSUFFICIENT_AVAILABLE_BALANCE");
   assert.equal(response.result().body.availableMinor, "4000000");
+  assert.ok(context.statements.some(item =>
+    item.sql.includes("to_regclass('public.fp_flutterwave_bill_payments')")
+  ), "bank payout flow must detect whether the additive Flutterwave bill table exists");
   assert.equal(transferInitiations, 0);
   assert.equal(context.ledgerValues.length, 0);
 });

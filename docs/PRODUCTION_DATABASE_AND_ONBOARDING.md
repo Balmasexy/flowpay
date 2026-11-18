@@ -104,7 +104,10 @@ Existing FlowPay features remain provider-gated:
 - Paystack deposits and dedicated bank accounts require the approved environment and matching secrets.
 - Bank withdrawals use Paystack payout/transfer and remain disabled unless the bank payout feature flag and provider live approval are satisfied.
 - FlowPay internal transfers, bank withdrawals and VTpass bill purchases require production face verification when `FLOWPAY_REQUIRE_FACE_VERIFICATION=true`.
-- VTpass airtime, data and electricity require valid sandbox/live credentials and the matching live feature switch.
+- VTpass airtime and data require valid sandbox/live credentials and the matching live feature switch.
+- Electricity / NEPA uses Flutterwave Utility Bills. Before enabling the FlowPay customer route, apply additive migration `023_flutterwave_utility_bills.sql` to the currently active FlowPay Development database branch without changing existing customer, wallet or ledger rows.
+- Configure on the backend only: `FLW_BILLS_ENVIRONMENT=test` with an `FLWSECK_TEST-` secret key for Flutterwave sandbox (this test-only mode may run from the Render production service); live requires `FLW_BILLS_ENVIRONMENT=live`, an `FLWSECK_LIVE-` secret key, `FLW_BILLS_LIVE_ENABLED=true`, and `NODE_ENV=production`.
+- Flutterwave also requires merchant KYC/product activation, a funded source balance, and allowlisting the Render backend's outbound IP. Set `FLW_BILLS_CALLBACK_URL=https://flowpay-backend-qz79.onrender.com/webhooks/flutterwave/bills` and a random `FLW_BILLS_WEBHOOK_SECRET_HASH` (or reuse the account-wide `FLW_WEBHOOK_SECRET_HASH`). The callback URL must be HTTPS. Keep every secret in the backend environment only. Do not place any Flutterwave key in a Vite/browser variable.
 - A virtual card is shown as pending until an approved issuer provisions a real card. The application must not invent card number, CVV, expiry or PIN data.
 
 Do not enable live Paystack, VTpass, Flutterwave or card-issuer modes until the business/provider approvals, production secrets, settlement/reconciliation and operational controls are confirmed.

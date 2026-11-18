@@ -21,6 +21,7 @@ import { createPaystackDedicatedAccountsHandler } from "./paystack-dedicated-acc
 import { createCustomerAiHandler } from "./customer-ai.js";
 import { createDepositReceiptsHandler } from "./deposit-receipts.js";
 import { createVtpassBillsHandler, resolveVtpassConfig } from "./vtpass-bills.js";
+import { createFlutterwaveUtilityBillsHandler, resolveFlutterwaveBillsConfig } from "./flutterwave-utility-bills.js";
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 import { createPasskeysHandler } from "./passkeys.js";
@@ -62,6 +63,7 @@ const paystackDedicatedAccountsHandler = createPaystackDedicatedAccountsHandler(
 const customerAiHandler = createCustomerAiHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const depositReceiptsHandler = createDepositReceiptsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const vtpassBillsHandler = createVtpassBillsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const flutterwaveUtilityBillsHandler = createFlutterwaveUtilityBillsHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const storyblokPreviewHandler = createStoryblokPreviewHandler({
   spaceId: process.env.STORYBLOK_SPACE_ID,
   previewToken: process.env.STORYBLOK_PREVIEW_API_TOKEN,
@@ -94,6 +96,7 @@ const server = createServer(async (req, res) => {
   if (await customerBootstrapHandler(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
   if (await depositReceiptsHandler(req, res)) return;
+  if (await flutterwaveUtilityBillsHandler(req, res)) return;
   if (await vtpassBillsHandler(req, res)) return;
   if (await faceVerificationHandler(req, res)) return;
   if (await flutterwaveWebhookHandler(req, res)) return;
@@ -112,7 +115,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers", "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase", "/customer/flutterwave/bills/status", "/webhooks/flutterwave/bills", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -130,7 +133,7 @@ const server = createServer(async (req, res) => {
             dedicatedAccountRequery: false, webhookVerificationAvailable: false,
             webhookSigningSecretConfigured: false, webhookSignatureMode: "not_configured"
           },
-          flutterwave: { deposits: false },
+          flutterwave: { deposits: false, billPayments: false, billEnvironment: null },
           vtpass: { environment: null, credentialsConfigured: false, billApiReady: false, livePurchasesEnabled: false }
         }
       });
@@ -141,7 +144,7 @@ const server = createServer(async (req, res) => {
         pool.query<{ database_name: string }>("SELECT current_database() AS database_name"),
         pool.query<{
           bank_payouts: boolean; paystack_deposits: boolean; dedicated_accounts: boolean; dva_requery_columns: boolean; clearing_account: boolean;
-          flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean;
+          flutterwave_deposits: boolean; payment_events: boolean; flutterwave_clearing_account: boolean; flutterwave_bill_table: boolean;
           vtpass_bills: boolean; vtpass_clearing_account: boolean;
         }>(
           `SELECT
@@ -156,6 +159,7 @@ const server = createServer(async (req, res) => {
                   AND column_name IN ('bank_slug','last_requery_at')
              ) AS dva_requery_columns,
              to_regclass('public.fp_flutterwave_deposits') IS NOT NULL AS flutterwave_deposits,
+             to_regclass('public.fp_flutterwave_bill_payments') IS NOT NULL AS flutterwave_bill_table,
              to_regclass('public.fp_vtpass_bill_payments') IS NOT NULL AS vtpass_bills,
              to_regclass('public.fp_payment_events') IS NOT NULL AS payment_events,
              EXISTS (
@@ -214,6 +218,12 @@ const server = createServer(async (req, res) => {
         schema.rows[0]?.dva_requery_columns === true
       );
       const flwSecret = process.env.FLW_SECRET_KEY?.trim() ?? "";
+      const flwBillsRuntime = resolveFlutterwaveBillsConfig();
+      const flwBillsReady = Boolean(
+        jwksUrl && issuer && flwBillsRuntime &&
+        schema.rows[0]?.flutterwave_bill_table === true &&
+        schema.rows[0]?.flutterwave_clearing_account === true
+      );
       const flwMin = Number(process.env.FLW_DEPOSIT_MIN_MINOR);
       const flwMax = Number(process.env.FLW_DEPOSIT_MAX_MINOR);
       const flwWebhookHash = process.env.FLW_WEBHOOK_SECRET_HASH?.trim() ?? "";
@@ -263,7 +273,9 @@ const server = createServer(async (req, res) => {
         },
         flutterwave: {
           environment: process.env.FLW_ENVIRONMENT === "test" ? "test" : null,
-          deposits: flwDepositsReady
+          deposits: flwDepositsReady,
+          billEnvironment: flwBillsRuntime?.environment ?? null,
+          billPayments: flwBillsReady
         },
         vtpass: {
           environment: vtpassRuntime?.environment ?? null,

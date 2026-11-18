@@ -19,7 +19,7 @@ FlowPay uses OPay only as a usability benchmark. FlowPay keeps its own name, vis
 | Cards | Existing issuer-linked card metadata and a clearly marked card design preview | No issuer-confirmed card creation, PAN/CVV reveal, card PIN, freeze, or card-control integration is available. Do not treat the design preview as a payment card. |
 | Airtime | VTpass API adapter, catalogue, transaction PIN, idempotent reservation, purchase, status, and settlement/reversal handling | Code and regression tests are present. Sandbox requires VTpass credentials on the API. Live purchases require separate provider approval and VTPASS_LIVE_ENABLED=true. |
 | Data | VTpass plan catalogue, selected bundle validation, purchase and status handling | Same VTpass credential and environment gates as airtime. Plan availability/pricing comes from the provider. |
-| Electricity / NEPA | Meter verification, prepaid/postpaid selection, provider purchase, status, and settlement/reversal handling | Same VTpass credential and environment gates. Meter details must be provider-verified before purchase. |
+| Electricity / NEPA | Flutterwave utility-bill categories, electricity billers and item catalogue; meter validation; prepaid/postpaid selection; customer-wallet reservation; provider status requery; balanced ledger posting after confirmed delivery; prepaid token display | Uses Flutterwave's Nigerian Utility Bills category and electricity billers. Requires migration `023_flutterwave_utility_bills.sql`, `FLW_BILLS_ENVIRONMENT`, a matching server-only `FLW_SECRET_KEY`, and a funded/approved Flutterwave source balance. Live execution additionally requires `FLW_BILLS_LIVE_ENABLED=true` and the provider's merchant/IP approval. Pending or unconfirmed outcomes remain reserved. |
 | Cable TV / television | Customer-facing service route | Not connected to a provider in the current implementation; it is not a completed subscription or payment service. |
 | Savings / fixed savings / spend-save | Planning and goal previews | No savings account, investment product, recurring debit, interest accrual, or withdrawal is connected. |
 | Betting | Local funding-detail preview | No operator validation or provider-backed funding; it cannot debit a wallet. |
@@ -41,14 +41,15 @@ FlowPay uses OPay only as a usability benchmark. FlowPay keeps its own name, vis
 - Live Paystack payouts require Paystack business Transfers approval, a matching sk_live key, PAYSTACK_ENVIRONMENT=live, production runtime, and PAYSTACK_LIVE_TRANSFERS_ENABLED=true.
 - Paystack live deposits require their own live checkout flag, verified webhook, callback URL, and settlement/reconciliation configuration.
 - Paystack live dedicated virtual accounts require provider approval, express customer consent and customer identity/bank validation. An assigned Paystack DVA accepts external NGN bank transfers, with wallet credit only after signed webhook, transaction-verification and balanced-ledger checks. Paystack controls bank-side account-name enquiry; FlowPay's desired `FlowPay / customer name` label requires its custom DVA naming feature to be enabled by Paystack. The API must not invent a NUBAN or rename the bank record locally.
-- VTpass live services require separate live credentials and VTPASS_LIVE_ENABLED=true.
+- VTpass live airtime/data services require separate live credentials and VTPASS_LIVE_ENABLED=true.
+- Flutterwave utility bills require `FLW_BILLS_ENVIRONMENT=test` with a `FLWSECK_TEST-` key for sandbox, or `FLW_BILLS_ENVIRONMENT=live`, `FLWSECK_LIVE-`, production runtime, and `FLW_BILLS_LIVE_ENABLED=true` for live. Complete merchant KYC, fund the Flutterwave source balance, and allowlist the Render outbound IP before live use.
 - Flutterwave virtual-card issuance and secure reveal remain unavailable until Flutterwave provides written product approval and an approved PCI-compliant card-data delivery mechanism.
 - Smile ID is sandbox-only in the current implementation.
 - Keep all provider secrets exclusively in the backend's managed environment. Never expose them to the browser or Android WebView.
 
 ## Verification coverage
 
-The GitHub Actions workflow runs API type-checking and regression suites for Smile ID result decisions, Flutterwave checkout/webhooks, Paystack deposits/mode selection/bank directory/payouts/dedicated accounts/DVA settlement, VTpass bills, Storyblok preview, internal transfers, customer notifications, customer AI, and private deposit receipts. It also runs API readiness smoke checks, dependency audits, and a production web build.
+The GitHub Actions workflow runs API type-checking and regression suites for Smile ID result decisions, Flutterwave checkout/webhooks/utility bills, Paystack deposits/mode selection/bank directory/payouts/dedicated accounts/DVA settlement, VTpass bills, Storyblok preview, internal transfers, customer notifications, customer AI, and private deposit receipts. It also runs API readiness smoke checks, dependency audits, and a production web build.
 
 Automated tests prove the covered code paths against their test fixtures; they do not prove Paystack/VTpass/Flutterwave business approval, live credentials, or a live-money transaction. A real authenticated user journey must still be confirmed with authorized test accounts and provider sandbox credentials.
 
@@ -57,7 +58,7 @@ Automated tests prove the covered code paths against their test fixtures; they d
 1. Use a dedicated production Neon branch/project with approved retention, backup/restore, access controls, and data-residency settings. The current configured Neon project is named FlowPay Development.
 2. Complete production SMTP/sender-domain configuration for Neon Managed Auth, then test sign-up verification and password recovery with a new test account.
 3. Obtain Paystack live product approval for deposits, Transfers, and dedicated virtual accounts separately; configure the matching Render secrets and webhook endpoints only after approval.
-4. Obtain VTpass live approval and configure the three backend credentials plus the live feature switch.
+4. Obtain VTpass live approval and configure the three backend credentials plus the live feature switch. Flutterwave Utility Bills requires a funded source balance, bill-payment product activation, and Render outbound IP allowlisting.
 5. Obtain Flutterwave virtual-card issuer approval and a PCI-compliant hosted/reveal component before advertising cards as issued.
 6. Complete legal/compliance review, KYC policy, customer support staffing, fraud/chargeback operations, monitoring, alerting, incident response, reconciliation, and backup restoration drills before general live-money launch.
 

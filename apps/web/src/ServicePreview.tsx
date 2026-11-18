@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FlutterwaveUtilityBills from "./FlutterwaveUtilityBills";
 import { AlertCircle, Cable, CheckCircle2, Clock3, Phone, RefreshCw, ShieldCheck, Wifi, Zap } from "lucide-react";
 
 type Variation = { code: string; name: string; amount: string };
@@ -69,7 +70,7 @@ export default function ServicePreview({ path, token }: { path: string; token: s
     (!isElectricity || meterVerified) && transactionPin.length === 6 && !busy;
 
   useEffect(() => {
-    if (!isData && !isElectricity) return;
+    if (!isData) return;
     if (!token || !apiBase) { setCatalogError("Authenticated FlowPay API is not configured."); return; }
     const controller = new AbortController();
     setCatalogLoading(true); setCatalogError(""); setVariations([]); setVariationCode("");
@@ -155,6 +156,8 @@ export default function ServicePreview({ path, token }: { path: string; token: s
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Status requery failed."); }
     finally { setStatusBusy(false); }
   }
+
+  if (isElectricity) return <FlutterwaveUtilityBills token={token}/>;
 
   const Icon = isAirtime ? Phone : isData ? Wifi : isTelevision ? Cable : Zap;
   if (isTelevision) return <section className="fp-panel fp-form-panel">
