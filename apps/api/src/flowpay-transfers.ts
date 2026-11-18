@@ -411,13 +411,21 @@ export function createFlowPayTransfersHandler(options: Options) {
                UNION ALL
                SELECT amount_minor FROM public.fp_vtpass_bill_payments
                 WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
-               UNION ALL
-               SELECT amount_minor FROM public.fp_flutterwave_bill_payments
-                WHERE account_id = $1 AND status IN ('initiating','pending','unknown')
              ) AS reservation`,
           [senderWallets[0].id]
         );
-        const available = BigInt(balance.rows[0]?.balance_minor ?? "0") - BigInt(reservations.rows[0]?.amount_minor ?? "0");
+        const flutterwaveBillsTable = await client.query<{ available: boolean }>(
+          "SELECT to_regclass('public.fp_flutterwave_bill_payments') IS NOT NULL AS available"
+        );
+        const flutterwaveBillHolds = flutterwaveBillsTable.rows[0]?.available === true
+          ? await client.query<{ amount_minor: string }>(
+              "SELECT COALESCE(SUM(amount_minor),0)::text AS amount_minor FROM public.fp_flutterwave_bill_payments WHERE account_id=$1 AND status IN ('initiating','pending','unknown')",
+              [senderWallets[0].id]
+            )
+          : { rows: [{ amount_minor: "0" }] };
+        const totalHeld = BigInt(reservations.rows[0]?.amount_minor ?? "0") +
+          BigInt(flutterwaveBillHolds.rows[0]?.amount_minor ?? "0");
+        const available = BigInt(balance.rows[0]?.balance_minor ?? "0") - totalHeld;
         const amount = BigInt(input.amountMinor);
         if (available < amount) {
           await client.query("ROLLBACK");
