@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyFlutterwaveBillStatus, resolveFlutterwaveBillsConfig } from "../src/flutterwave-utility-bills.js";
+import {
+  classifyFlutterwaveBillStatus,
+  flutterwaveBillWalletDebitMinor,
+  resolveFlutterwaveBillsConfig
+} from "../src/flutterwave-utility-bills.js";
 
 test("Flutterwave utility bills require an explicitly selected matching environment and key", () => {
   const names = ["NODE_ENV", "FLW_BILLS_ENVIRONMENT", "FLW_BILLS_LIVE_ENABLED", "FLW_SECRET_KEY"];
@@ -40,4 +44,12 @@ test("Flutterwave utility bill success requires matching provider reference and 
   assert.equal(classifyFlutterwaveBillStatus({ status: "pending", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000"), "pending");
   assert.equal(classifyFlutterwaveBillStatus({ status: "failed", data: { tx_ref: "CF-FLYAPI-123" } }, "CF-FLYAPI-123", "2490000"), "failed");
   assert.equal(classifyFlutterwaveBillStatus({ status: "success", data: { tx_ref: "CF-FLYAPI-123", amount: "24900.00", currency: "USD" } }, "CF-FLYAPI-123", "2490000"), "unknown");
+});
+
+test("reserves the complete customer bill debit including Flutterwave fee", () => {
+  assert.equal(flutterwaveBillWalletDebitMinor("2490000", "10000"), "2500000");
+  assert.equal(flutterwaveBillWalletDebitMinor("2490000", "0"), "2490000");
+  assert.throws(() => flutterwaveBillWalletDebitMinor("0", "100"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
+  assert.throws(() => flutterwaveBillWalletDebitMinor("2490000", "-1"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
+  assert.throws(() => flutterwaveBillWalletDebitMinor("9999999999", "1"), /FLUTTERWAVE_BILL_TOTAL_OUT_OF_RANGE/);
 });
