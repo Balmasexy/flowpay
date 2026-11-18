@@ -250,6 +250,11 @@ async function reconcile(pool: Pool, bill: BillRow, state: "success" | "failed" 
     const saved = locked.rows[0];
     const transaction = await client.query<{ status: string }>("SELECT status FROM public.fp_ledger_transactions WHERE id=$1 FOR UPDATE", [saved.transaction_id]);
     if (transaction.rowCount !== 1) throw new Error("FLUTTERWAVE_BILL_LEDGER_NOT_FOUND");
+    const wallet = await client.query(
+      "SELECT id FROM public.fp_accounts WHERE id=$1 AND user_id=$2 AND account_type='customer' AND currency='NGN' AND status='active' FOR UPDATE",
+      [saved.account_id, saved.user_id]
+    );
+    if (wallet.rowCount !== 1) throw new Error("FLUTTERWAVE_CUSTOMER_WALLET_NOT_ACTIVE");
     if (saved.status === "success") {
       await client.query(
         "UPDATE public.fp_flutterwave_bill_payments SET flw_tx_ref=COALESCE($2,flw_tx_ref),flw_reference=COALESCE($3,flw_reference),provider_token=COALESCE(NULLIF($4,''),provider_token),provider_status=NULLIF($5,''),updated_at=NOW() WHERE request_id=$1",
@@ -411,7 +416,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       try {
         const result = await providerRequest(cfg, "GET", "/top-bill-categories?country=NG");
         if (!result.ok || result.body.status !== "success") throw new Error("FLUTTERWAVE_BILL_CATEGORIES_UNAVAILABLE");
-        const categories = providerRows(result.body).filter(row => /utility/i.test(safeString(row.name ?? row.description, 120)));
+        const categories = providerRows(result.body).filter(row => utilityCategory(row.code) || /utility/i.test(safeString(row.name ?? row.description, 120)));
         send(res, 200, { categories: categories.map(row => ({
           code: safeString(row.code, 40), name: safeString(row.name, 100), description: safeString(row.description, 160)
         })).filter(row => row.code) });
