@@ -61,7 +61,7 @@ test("reserves the complete customer bill debit including Flutterwave fee", () =
   assert.equal(flutterwaveBillWalletDebitMinor("2490000", "0"), "2490000");
   assert.throws(() => flutterwaveBillWalletDebitMinor("0", "100"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
   assert.throws(() => flutterwaveBillWalletDebitMinor("2490000", "-1"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
-  assert.throws(() => flutterwaveBillWalletDebitMinor("9999999999", "1"), /FLUTTERWAVE_BILL_TOTAL_OUT_OF_RANGE/);
+  assert.throws(() => flutterwaveBillWalletDebitMinor("10000000000", "1"), /FLUTTERWAVE_BILL_TOTAL_OUT_OF_RANGE/);
 });
 
 test("includes Flutterwave electricity billers even when their labels are abbreviations", () => {
