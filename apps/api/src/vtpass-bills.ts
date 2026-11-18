@@ -62,13 +62,13 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("INVALID_PAYLOAD");
   return parsed as Record<string, unknown>;
 }
-function config(): Config | null {
+export function resolveVtpassConfig(): Config | null {
   const environment = process.env.VTPASS_ENVIRONMENT;
   const apiKey = process.env.VTPASS_API_KEY?.trim() ?? "";
   const publicKey = process.env.VTPASS_PUBLIC_KEY?.trim() ?? "";
   const secretKey = process.env.VTPASS_SECRET_KEY?.trim() ?? "";
   if (!apiKey || !publicKey || !secretKey) return null;
-  if (environment === "sandbox" && process.env.NODE_ENV !== "production") {
+  if (environment === "sandbox") {
     return { environment: "sandbox", baseUrl: "https://sandbox.vtpass.com/api", apiKey, publicKey, secretKey };
   }
   if (environment === "live" && process.env.NODE_ENV === "production" && process.env.VTPASS_LIVE_ENABLED === "true") {
@@ -291,7 +291,7 @@ export function createVtpassBillsHandler(options: Options) {
       send(res, jwtError(error) ? 401 : 503, { error: jwtError(error) ? "INVALID_SESSION" : "VTPASS_AUTH_UNAVAILABLE" });
       return true;
     }
-    const cfg = config();
+    const cfg = resolveVtpassConfig();
     if (!cfg) {
       send(res, 503, { error: "VTPASS_PROVIDER_NOT_CONFIGURED", message: "VTpass sandbox/live credentials and the matching environment switch are required on the API service." });
       return true;
