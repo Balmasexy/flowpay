@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   classifyFlutterwaveBillStatus,
   flutterwaveBillWalletDebitMinor,
+  isElectricityBiller,
   resolveFlutterwaveBillsConfig
 } from "../src/flutterwave-utility-bills.js";
 
@@ -61,4 +62,11 @@ test("reserves the complete customer bill debit including Flutterwave fee", () =
   assert.throws(() => flutterwaveBillWalletDebitMinor("0", "100"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
   assert.throws(() => flutterwaveBillWalletDebitMinor("2490000", "-1"), /INVALID_FLUTTERWAVE_BILL_AMOUNT/);
   assert.throws(() => flutterwaveBillWalletDebitMinor("9999999999", "1"), /FLUTTERWAVE_BILL_TOTAL_OUT_OF_RANGE/);
+});
+
+test("includes Flutterwave electricity billers even when their labels are abbreviations", () => {
+  assert.equal(isElectricityBiller("EKEDC", "BIL112"), true);
+  assert.equal(isElectricityBiller("IKEDC", "BIL113"), true);
+  assert.equal(isElectricityBiller("YEDC", "BIL118"), true);
+  assert.equal(isElectricityBiller("Unrelated service", "BIL999"), false);
 });
