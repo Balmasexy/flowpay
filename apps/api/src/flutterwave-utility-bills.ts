@@ -87,6 +87,14 @@ function positiveDecimalToMinor(value: unknown): string | null {
   const amount = decimalToMinor(value);
   return amount && BigInt(amount) > 0n ? amount : null;
 }
+export function flutterwaveBillWalletDebitMinor(billAmountMinor: string, feeMinor: string): string {
+  if (!/^[1-9]\\d{0,11}$/.test(billAmountMinor) || !/^\\d{1,11}$/.test(feeMinor)) {
+    throw new Error("INVALID_FLUTTERWAVE_BILL_AMOUNT");
+  }
+  const total = BigInt(billAmountMinor) + BigInt(feeMinor);
+  if (total > 10_000_000_000n) throw new Error("FLUTTERWAVE_BILL_TOTAL_OUT_OF_RANGE");
+  return total.toString();
+}
 function minorToNaira(value: string): string {
   const amount = BigInt(value);
   return (amount / 100n).toString() + "." + (amount % 100n).toString().padStart(2, "0");
@@ -547,8 +555,10 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         send(res, 503, { error: error instanceof Error ? error.message : "UTILITY_BILL_VALIDATION_UNAVAILABLE" }); return true;
       }
 
-      const walletAmountMinor = (BigInt(requestedAmount) + BigInt(providerFeeMinor)).toString();
-      if (BigInt(walletAmountMinor) > 10_000_000_000n) {
+      let walletAmountMinor: string;
+      try {
+        walletAmountMinor = flutterwaveBillWalletDebitMinor(requestedAmount, providerFeeMinor);
+      } catch {
         send(res, 422, { error: "UTILITY_BILL_TOTAL_OUT_OF_RANGE" }); return true;
       }
       const dbKey = "flutterwave-utility-bill:" + userId + ":" + idempotencyKey;
@@ -597,7 +607,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           )
         ]);
         const available = BigInt(balance.rows[0]?.amount_minor ?? "0") - BigInt(held.rows[0]?.amount_minor ?? "0");
-        if (available < BigInt(requestedAmount)) {
+        if (available < BigInt(walletAmountMinor)) {
           await client.query("ROLLBACK"); send(res, 409, { error: "INSUFFICIENT_AVAILABLE_BALANCE", availableMinor: available.toString() }); return true;
         }
         const transaction = await client.query(
