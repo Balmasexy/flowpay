@@ -130,20 +130,25 @@ export function resolveFlutterwaveBillsConfig(): Config | null {
   }
   return null;
 }
-export function classifyFlutterwaveBillStatus(body: ProviderBody, expectedTxRef: string, expectedAmountMinor: string): "success" | "failed" | "pending" | "unknown" {
+export function classifyFlutterwaveBillStatus(
+  body: ProviderBody,
+  expectedTxRef: string,
+  expectedAmountMinor: string,
+  expectedFeeMinor?: string
+): "success" | "failed" | "pending" | "unknown" {
   const data = record(body.data);
   const explicit = providerState(body);
   if (explicit === "failed" || explicit === "pending") return explicit;
   const txRef = safeString(data.tx_ref, 120);
   const returnedAmount = decimalToMinor(data.amount);
+  const returnedFee = decimalToMinor(data.fee);
   const currency = safeString(data.currency, 8).toUpperCase();
-  if (explicit === "success" && txRef === expectedTxRef && returnedAmount === expectedAmountMinor &&
-      (!currency || currency === "NGN")) return "success";
-  // The v3 status endpoint reports status:"success" around a data object after
-  // the bill is located; require the provider tx_ref and exact NGN amount.
-  if (safeString(body.status, 30).toLowerCase() === "success" &&
-      txRef === expectedTxRef && returnedAmount === expectedAmountMinor &&
-      (!currency || currency === "NGN")) return "success";
+  const amountMatches = txRef === expectedTxRef && returnedAmount === expectedAmountMinor &&
+    (expectedFeeMinor === undefined || returnedFee === expectedFeeMinor) &&
+    (!currency || currency === "NGN");
+  if ((explicit === "success" || safeString(body.status, 30).toLowerCase() === "success") && amountMatches) {
+    return "success";
+  }
   return "unknown";
 }
 async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string | undefined, req: IncomingMessage): Promise<string | null> {
@@ -367,7 +372,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           send(res, 503, { error: "FLUTTERWAVE_BILL_STATUS_REQUERY_FAILED" });
           return true;
         }
-        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.bill_amount_minor);
+        const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.bill_amount_minor, bill.provider_fee_minor);
         const finalState = await reconcile(pool, bill, state, statusResult.body);
         send(res, 200, { received: true, processed: ["success", "failed"].includes(finalState), requestId: bill.request_id, status: finalState });
       } catch (error) {
@@ -653,9 +658,13 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           });
         const data = providerData(result.body);
         const txRef = safeString(data.tx_ref, 120);
-        if (!result.ok || result.body.status !== "success" || !txRef) {
+        const createAmount = data.amount === undefined || data.amount === null ? null : decimalToMinor(data.amount);
+        const createFee = data.fee === undefined || data.fee === null ? null : decimalToMinor(data.fee);
+        const createAmountMismatch = createAmount !== null && createAmount !== bill.bill_amount_minor;
+        const createFeeMismatch = createFee !== null && createFee !== bill.provider_fee_minor;
+        if (!result.ok || result.body.status !== "success" || !txRef || createAmountMismatch || createFeeMismatch) {
           await pool.query(
-            "UPDATE public.fp_flutterwave_bill_payments SET status='unknown',flw_tx_ref=NULLIF($2,''),provider_status=NULLIF($3,''),status_note='Flutterwave did not return a verifiable bill reference. Amount remains reserved; do not retry until reconciled.',updated_at=NOW() WHERE request_id=$1 AND status='initiating'",
+            "UPDATE public.fp_flutterwave_bill_payments SET status='unknown',flw_tx_ref=NULLIF($2,''),provider_status=NULLIF($3,''),status_note='Flutterwave did not return a matching bill reference, amount and fee. Amount remains reserved; do not retry until reconciled.',updated_at=NOW() WHERE request_id=$1 AND status='initiating'",
             [bill.request_id, txRef, safeString(result.body.message, 120)]
           );
           send(res, 202, { requestId: bill.request_id, status: "unknown", final: false, amountMinor: bill.amount_minor, billAmountMinor: bill.bill_amount_minor, feeMinor: bill.provider_fee_minor, currency: "NGN", message: "Flutterwave has not confirmed this bill request. The amount remains reserved; check status before retrying." });
@@ -672,7 +681,7 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         // itself is not treated as proof that electricity was delivered.
         const verified = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(txRef) + "?verbose=1");
         const state = verified.ok
-          ? classifyFlutterwaveBillStatus(verified.body, txRef, bill.bill_amount_minor)
+          ? classifyFlutterwaveBillStatus(verified.body, txRef, bill.bill_amount_minor, bill.provider_fee_minor)
           : "unknown";
         const finalState = await reconcile(pool, bill, state, verified.body);
         const tokenValue = safeString(providerData(verified.body).extra ?? providerData(verified.body).token, 180);
