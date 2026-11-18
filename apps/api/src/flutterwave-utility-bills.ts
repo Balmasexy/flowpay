@@ -137,19 +137,18 @@ export function classifyFlutterwaveBillStatus(
   expectedFeeMinor?: string
 ): "success" | "failed" | "pending" | "unknown" {
   const data = record(body.data);
-  const explicit = providerState(body);
-  if (explicit === "failed" || explicit === "pending") return explicit;
+  const state = providerState(body);
+  if (state === "unknown") return "unknown";
   const txRef = safeString(data.tx_ref, 120);
   const returnedAmount = decimalToMinor(data.amount);
   const returnedFee = decimalToMinor(data.fee);
   const currency = safeString(data.currency, 8).toUpperCase();
-  const amountMatches = txRef === expectedTxRef && returnedAmount === expectedAmountMinor &&
+  const matches = txRef === expectedTxRef &&
+    returnedAmount === expectedAmountMinor &&
     (expectedFeeMinor === undefined || returnedFee === expectedFeeMinor) &&
     (!currency || currency === "NGN");
-  if ((explicit === "success" || safeString(body.status, 30).toLowerCase() === "success") && amountMatches) {
-    return "success";
-  }
-  return "unknown";
+  if (!matches) return "unknown";
+  return state;
 }
 async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKSet>, issuer: string, audience: string | undefined, req: IncomingMessage): Promise<string | null> {
   const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
@@ -364,12 +363,12 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
           [reference]
         );
         if (found.rowCount !== 1) {
-          send(res, 200, { received: true, processed: false, reason: "FLOWPAY_BILL_NOT_FOUND" });
+          send(res, 503, { error: "FLOWPAY_BILL_NOT_FOUND_YET" });
           return true;
         }
         const bill = found.rows[0];
         if (!bill.flw_tx_ref) {
-          send(res, 200, { received: true, processed: false, reason: "PROVIDER_TRANSACTION_REFERENCE_PENDING" });
+          send(res, 503, { error: "PROVIDER_TRANSACTION_REFERENCE_PENDING" });
           return true;
         }
         const statusResult = await providerRequest(cfg, "GET", "/bills/" + encodeURIComponent(bill.flw_tx_ref) + "?verbose=1");
@@ -379,7 +378,11 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
         }
         const state = classifyFlutterwaveBillStatus(statusResult.body, bill.flw_tx_ref, bill.bill_amount_minor, bill.provider_fee_minor);
         const finalState = await reconcile(pool, bill, state, statusResult.body);
-        send(res, 200, { received: true, processed: ["success", "failed"].includes(finalState), requestId: bill.request_id, status: finalState });
+        if (!["success", "failed"].includes(finalState)) {
+          send(res, 503, { error: "FLUTTERWAVE_BILL_STILL_PENDING", requestId: bill.request_id, status: finalState });
+          return true;
+        }
+        send(res, 200, { received: true, processed: true, requestId: bill.request_id, status: finalState });
       } catch (error) {
         console.error("FlowPay Flutterwave bill webhook processing failed:", error instanceof Error ? error.message : "unknown error");
         send(res, 503, { error: "FLUTTERWAVE_BILL_WEBHOOK_PROCESSING_UNAVAILABLE" });
@@ -654,12 +657,19 @@ export function createFlutterwaveUtilityBillsHandler(options: Options) {
       if (!bill) { send(res, 503, { error: "UTILITY_BILL_RESERVATION_UNAVAILABLE" }); return true; }
 
       try {
-        const callbackUrl = process.env.FLW_BILLS_CALLBACK_URL?.trim();
+        const configuredCallback = process.env.FLW_BILLS_CALLBACK_URL?.trim() ?? "";
+        const callbackHash = process.env.FLW_BILLS_WEBHOOK_SECRET_HASH?.trim() ?? "";
+        let callbackUrl = "";
+        try {
+          const parsed = new URL(configuredCallback);
+          if (parsed.protocol === "https:" && parsed.pathname === "/webhooks/flutterwave/bills" &&
+              !parsed.search && !parsed.hash && callbackHash) callbackUrl = parsed.toString();
+        } catch { callbackUrl = ""; }
         const result = await providerRequest(cfg, "POST",
           "/billers/" + encodeURIComponent(billerCode) + "/items/" + encodeURIComponent(itemCode) + "/payment",
           {
             country: "NG", customer_id: customerId, amount: minorToNaira(requestedAmount),
-            reference: providerReference, ...(callbackUrl && callbackUrl.startsWith("https://") ? { callback_url: callbackUrl } : {})
+            reference: providerReference, ...(callbackUrl ? { callback_url: callbackUrl } : {})
           });
         const data = providerData(result.body);
         const txRef = safeString(data.tx_ref, 120);
