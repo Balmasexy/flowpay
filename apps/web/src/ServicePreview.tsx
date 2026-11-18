@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FlutterwaveUtilityBills from "./FlutterwaveUtilityBills";
 import { AlertCircle, Cable, CheckCircle2, Clock3, Phone, RefreshCw, ShieldCheck, Wifi, Zap } from "lucide-react";
 
 type Variation = { code: string; name: string; amount: string };
@@ -60,6 +61,7 @@ export default function ServicePreview({ path, token }: { path: string; token: s
   const [statusBusy, setStatusBusy] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+  if (isElectricity) return <FlutterwaveUtilityBills token={token}/>;
   const selectedNetwork = networks.find(item => item.label === network) ?? networks[0];
   const serviceId = isAirtime ? selectedNetwork.airtime : isData ? selectedNetwork.data : provider;
   const selectedVariation = variations.find(item => item.code === variationCode) ?? null;
