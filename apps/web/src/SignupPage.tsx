@@ -102,7 +102,7 @@ export default function SignupPage() {
     event.preventDefault();
     setMessage("");
     setError("");
-    if (!/^\\d{4,10}$/.test(emailCode.trim())) {
+    if (!/^\d{4,10}$/.test(emailCode.trim())) {
       setError("Enter the numeric verification code from your email.");
       return;
     }
@@ -181,24 +181,15 @@ export default function SignupPage() {
       if (!bootstrap.ok) {
         throw new Error(responseError(bootstrapBody, "FlowPay customer onboarding could not be completed."));
       }
-      const alias = await fetch(apiBase + "/customer/phone-alias/confirm", {
-        method: "POST",
-        credentials: "omit",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + jwt
-        },
-        body: JSON.stringify({ phoneNumber })
-      });
-      const aliasBody: unknown = await alias.json().catch(() => null);
-      if (!alias.ok) {
-        throw new Error(responseError(aliasBody, "Your verified phone number could not be linked to your FlowPay wallet."));
-      }
       const accountNumber = bootstrapBody && typeof bootstrapBody === "object" &&
         typeof (bootstrapBody as Record<string, unknown>).flowpayAccountNumber === "string"
         ? String((bootstrapBody as Record<string, unknown>).flowpayAccountNumber) : "";
-      if (!/^[1-9]\\d{9}$/.test(accountNumber)) {
+      if (!/^[1-9]\d{9}$/.test(accountNumber)) {
         throw new Error("FlowPay did not return a valid permanent 10-digit customer ID.");
+      }
+      if (!bootstrapBody || typeof bootstrapBody !== "object" ||
+          (bootstrapBody as Record<string, unknown>).phoneAliasVerified !== true) {
+        throw new Error("FlowPay did not confirm the Neon-verified phone alias during onboarding.");
       }
       setPhoneVerified(true);
       setMessage("Registration complete. Your permanent FlowPay ID has been assigned and your verified phone number is linked.");
@@ -223,7 +214,7 @@ export default function SignupPage() {
     event.preventDefault();
     setMessage("");
     setError("");
-    if (!/^\\d{6}$/.test(phoneCode.trim())) {
+    if (!/^\d{6}$/.test(phoneCode.trim())) {
       setError("Enter the 6-digit phone verification code sent by Neon Auth.");
       return;
     }
