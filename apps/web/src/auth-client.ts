@@ -22,7 +22,7 @@ export type NeonAuthResult = {
 };
 
 /** Call a documented Neon Managed Auth endpoint using the browser session cookie. */
-async function postNeonAuth(path: string, body: Record<string, string>): Promise<NeonAuthResult> {
+async function postNeonAuth(path: string, body: Record<string, unknown>): Promise<NeonAuthResult> {
   if (!authUrl) {
     return { data: null, error: { message: "Authentication is not configured on this deployment." } };
   }
@@ -63,6 +63,30 @@ export function verifySignupEmailCode(email: string, otp: string): Promise<NeonA
 
 export function sendSignupEmailCode(email: string): Promise<NeonAuthResult> {
   return postNeonAuth("/email-otp/send-verification-otp", { email, type: "email-verification" });
+}
+
+/** Normalize Nigerian mobile numbers before Neon Auth receives them. */
+export function normalizeFlowPayPhone(value: string): string | null {
+  const compact = value.trim().replace(/[\\s().-]/g, "");
+  const digits = compact.startsWith("+") ? compact.slice(1) : compact;
+  if (/^0[789]\\d{9}$/.test(digits)) return "+234" + digits.slice(1);
+  if (/^234[789]\\d{9}$/.test(digits)) return "+" + digits;
+  if (/^[789]\\d{9}$/.test(digits)) return "+234" + digits;
+  return null;
+}
+
+/** Neon generates and validates this OTP; the configured send.otp webhook delivers it. */
+export function sendSignupPhoneCode(phoneNumber: string): Promise<NeonAuthResult> {
+  return postNeonAuth("/phone-number/send-otp", { phoneNumber });
+}
+
+/** Link the phone to the signed-in, email-verified Neon Auth user only after OTP confirmation. */
+export function verifySignupPhoneCode(phoneNumber: string, code: string): Promise<NeonAuthResult> {
+  return postNeonAuth("/phone-number/verify", {
+    phoneNumber,
+    code,
+    updatePhoneNumber: true
+  });
 }
 
 function isJwt(value: unknown): value is string {
