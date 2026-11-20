@@ -188,7 +188,7 @@ export function createCustomerBootstrapHandler(options: Options) {
       return true;
     }
 
-    let authUser: { id: string; email: string; emailVerified: boolean; phoneE164: string | null; phoneVerified: boolean; newCustomerRequiresPhone: boolean };
+    let authUser: { id: string; email: string; emailVerified: boolean; phoneE164: string | null; phoneVerified: boolean };
     try {
       const { payload } = await verifyFlowPayToken(token, jwks, {
         algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
@@ -224,7 +224,8 @@ export function createCustomerBootstrapHandler(options: Options) {
       }
       const phone = normalizeNigerianPhone(found.rows[0].phone_number);
       const phoneVerified = found.rows[0].phone_verified === "true" && phone !== null;
-      if (!found.rows[0].existing_customer && !phoneVerified) {
+      const phoneRegistrationEnabled = process.env.FLOWPAY_PHONE_REGISTRATION_ENABLED === "true";
+      if (phoneRegistrationEnabled && !found.rows[0].existing_customer && !phoneVerified) {
         send(res, 403, { error: "PHONE_NUMBER_VERIFICATION_REQUIRED", message: "Verify your mobile number with Neon Auth during registration before FlowPay creates your customer wallet." });
         return true;
       }
@@ -233,8 +234,7 @@ export function createCustomerBootstrapHandler(options: Options) {
         email: found.rows[0].email,
         emailVerified: found.rows[0].emailVerified,
         phoneE164: phoneVerified && phone ? phone.e164 : null,
-        phoneVerified,
-        newCustomerRequiresPhone: !found.rows[0].existing_customer
+        phoneVerified
       };
     } catch (error) {
       if (isJwtError(error)) {
