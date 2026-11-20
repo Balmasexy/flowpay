@@ -162,14 +162,12 @@ export default function SignupPage() {
     }
   }
 
-  async function finishRegistration() {
-    if (busy) return;
+  async function completeRegistration() {
     const apiBase = apiAddress();
     if (!apiBase) {
       setError("FlowPay API address is not configured. Your phone is verified; final onboarding cannot finish yet.");
       return;
     }
-    setBusy(true);
     setError("");
     setMessage("Creating your permanent FlowPay ID and linking your verified phone number…");
     try {
@@ -208,6 +206,14 @@ export default function SignupPage() {
     } catch (caught) {
       setPhoneVerified(true);
       setError(caught instanceof Error ? caught.message : "Phone verified, but final FlowPay onboarding failed. Retry below.");
+    }
+  }
+
+  async function finishRegistration() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await completeRegistration();
     } finally {
       setBusy(false);
     }
@@ -234,7 +240,7 @@ export default function SignupPage() {
       }
       setPhoneCode("");
       setPhoneVerified(true);
-      await finishRegistration();
+      await completeRegistration();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to verify this phone number. Please try again.");
     } finally {
