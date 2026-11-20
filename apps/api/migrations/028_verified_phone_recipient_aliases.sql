@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.fp_customer_phone_aliases (
   verified_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT fp_customer_phone_aliases_phone_format_check
-    CHECK (phone_e164 ~ '^\\+234[789][0-9]{9}$')
+    CHECK (phone_e164 ~ '^\+234[789][0-9]{9}$')
 );
 
 INSERT INTO public.schema_migrations(version)
