@@ -44,7 +44,7 @@ export function verifyNeonWebhookSignature(
   jwk: JsonWebKey,
   nowMs = Date.now()
 ): boolean {
-  if (!/^\\d{10,16}$/.test(timestamp)) return false;
+  if (!/^\d{10,16}$/.test(timestamp)) return false;
   const eventTime = Number(timestamp);
   if (!Number.isSafeInteger(eventTime) || eventTime > nowMs + 60_000 || nowMs - eventTime > 300_000) return false;
 
@@ -110,7 +110,7 @@ async function deliverSmsOtp(
 ) {
   const phone = normalizeNigerianPhone(phoneValue);
   if (!phone) throw new Error("NEON_OTP_PHONE_INVALID");
-  const response = await fetch(baseUrl.replace(/\\/+$/, "") + "/api/sms/send", {
+  const response = await fetch(baseUrl.replace(/\/+$/, "") + "/api/sms/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -133,13 +133,13 @@ export function createNeonAuthOtpWebhookHandler(options: Options) {
   const jwksUrl = options.jwksUrl?.trim() ?? "";
   const termiiApiKey = options.termiiApiKey?.trim() ?? "";
   const termiiSenderId = options.termiiSenderId?.trim() ?? "";
-  const termiiBaseUrl = (options.termiiBaseUrl?.trim() || "https://api.ng.termii.com").replace(/\\/+$/, "");
+  const termiiBaseUrl = (options.termiiBaseUrl?.trim() || "https://api.ng.termii.com").replace(/\/+$/, "");
   const termiiChannel = options.termiiChannel?.trim() || "dnd";
   const resendApiKey = options.resendApiKey?.trim() ?? "";
   const emailFrom = options.emailFrom?.trim() ?? "";
 
   return async function handleNeonAuthOtpWebhook(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\\/+$/, "") || "/";
+    const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || path !== "/webhooks/neon-auth/otp") return false;
 
     if (!jwksUrl) {
@@ -196,7 +196,7 @@ export function createNeonAuthOtpWebhookHandler(options: Options) {
     const preference = typeof eventData.delivery_preference === "string"
       ? eventData.delivery_preference : "email";
 
-    if (!/^\\d{6}$/.test(code)) {
+    if (!/^\d{6}$/.test(code)) {
       send(res, 400, { error: "INVALID_NEON_OTP_EVENT" });
       return true;
     }
