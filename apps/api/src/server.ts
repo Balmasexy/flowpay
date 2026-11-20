@@ -25,7 +25,6 @@ import { createFlutterwaveUtilityBillsHandler, resolveFlutterwaveBillsConfig } f
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 import { createPasskeysHandler } from "./passkeys.js";
-import { createCustomerPhoneAliasHandler } from "./customer-phone-alias.js";
 import { createNeonAuthOtpWebhookHandler } from "./neon-auth-otp-webhook.js";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -47,7 +46,6 @@ const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
-const customerPhoneAliasHandler = createCustomerPhoneAliasHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const neonAuthOtpWebhookHandler = createNeonAuthOtpWebhookHandler({
   jwksUrl,
   termiiApiKey: process.env.TERMII_API_KEY,
@@ -105,7 +103,6 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
   if (await neonAuthOtpWebhookHandler(req, res)) return;
-  if (await customerPhoneAliasHandler(req, res)) return;
   if (await passkeysHandler(req, res)) return;
   if (await customerBootstrapHandler(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
@@ -129,7 +126,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/phone-alias/confirm", "/webhooks/neon-auth/otp", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers", "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase", "/customer/flutterwave/bills/status", "/webhooks/flutterwave/bills", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/webhooks/neon-auth/otp", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers", "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase", "/customer/flutterwave/bills/status", "/webhooks/flutterwave/bills", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
