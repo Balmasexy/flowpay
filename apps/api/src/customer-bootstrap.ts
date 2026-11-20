@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool, PoolClient } from "pg";
 import { createRemoteJWKSet, type JWTVerifyGetKey } from "jose";
 import { verifyFlowPayToken } from "./auth-tokens.js";
+import { normalizeNigerianPhone } from "./customer-phone-alias.js";
 
 type Options = {
   pool: Pool | null;
@@ -31,7 +32,7 @@ type ProvisionedCustomer = {
   cardStatus: string;
 };
 
-async function ensureCustomer(client: PoolClient, email: string, authSubject: string): Promise<ProvisionedCustomer> {
+async function ensureCustomer(client: PoolClient, email: string, authSubject: string, phoneE164: string | null): Promise<ProvisionedCustomer> {
   let user = await client.query<{id:string; email:string; status:string; role:string}>(
     `SELECT id, email, status, role
        FROM public.fp_users
@@ -77,6 +78,27 @@ async function ensureCustomer(client: PoolClient, email: string, authSubject: st
   const customer = user.rows[0];
   if (customer.status !== "active") throw new Error("CUSTOMER_ACCOUNT_NOT_ACTIVE");
   if (customer.role !== "customer") throw new Error("CUSTOMER_ROLE_REQUIRED");
+
+  if (phoneE164) {
+    const aliasTable = await client.query<{ available: boolean }>(
+      "SELECT to_regclass('public.fp_customer_phone_aliases') IS NOT NULL AS available"
+    );
+    if (aliasTable.rows[0]?.available !== true) throw new Error("PHONE_ALIAS_MIGRATION_REQUIRED");
+    await client.query(
+      `INSERT INTO public.fp_customer_phone_aliases (user_id, phone_e164, verified_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE
+         SET phone_e164 = EXCLUDED.phone_e164, verified_at = NOW()`,
+      [customer.id, phoneE164]
+    );
+    await client.query(
+      `INSERT INTO public.fp_customer_profiles (user_id, phone_number, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id) DO UPDATE
+         SET phone_number = EXCLUDED.phone_number, updated_at = NOW()`,
+      [customer.id, phoneE164]
+    );
+  }
 
   await client.query(
     `INSERT INTO public.fp_accounts (user_id, account_type, currency, status)
@@ -166,7 +188,7 @@ export function createCustomerBootstrapHandler(options: Options) {
       return true;
     }
 
-    let authUser: { id: string; email: string; emailVerified: boolean };
+    let authUser: { id: string; email: string; emailVerified: boolean; phoneE164: string | null; phoneVerified: boolean; newCustomerRequiresPhone: boolean };
     try {
       const { payload } = await verifyFlowPayToken(token, jwks, {
         algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {})
@@ -175,10 +197,23 @@ export function createCustomerBootstrapHandler(options: Options) {
         send(res, 401, { error: "INVALID_SESSION" });
         return true;
       }
-      const found = await pool.query<{id:string; email:string; emailVerified:boolean}>(
-        `SELECT id::text AS id, email, "emailVerified"
-           FROM neon_auth."user"
-          WHERE id::text = $1
+      const found = await pool.query<{
+        id: string; email: string; emailVerified: boolean;
+        phone_number: string | null; phone_verified: string | null; existing_customer: boolean;
+      }>(
+        `SELECT auth_user.id::text AS id, auth_user.email, auth_user."emailVerified",
+                COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                         to_jsonb(auth_user)->>'phone_number') AS phone_number,
+                COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                         to_jsonb(auth_user)->>'phone_number_verified') AS phone_verified,
+                EXISTS (
+                  SELECT 1 FROM public.fp_users AS app_user
+                   WHERE app_user.auth_subject = auth_user.id::text
+                      OR (lower(app_user.email) = lower(auth_user.email)
+                          AND app_user.auth_subject IS NULL)
+                ) AS existing_customer
+           FROM neon_auth."user" AS auth_user
+          WHERE auth_user.id::text = $1
           LIMIT 1`,
         [payload.sub]
       );
@@ -187,7 +222,20 @@ export function createCustomerBootstrapHandler(options: Options) {
         send(res, 403, { error: "VERIFIED_EMAIL_REQUIRED" });
         return true;
       }
-      authUser = found.rows[0];
+      const phone = normalizeNigerianPhone(found.rows[0].phone_number);
+      const phoneVerified = found.rows[0].phone_verified === "true" && phone !== null;
+      if (!found.rows[0].existing_customer && !phoneVerified) {
+        send(res, 403, { error: "PHONE_NUMBER_VERIFICATION_REQUIRED", message: "Verify your mobile number with Neon Auth during registration before FlowPay creates your customer wallet." });
+        return true;
+      }
+      authUser = {
+        id: found.rows[0].id,
+        email: found.rows[0].email,
+        emailVerified: found.rows[0].emailVerified,
+        phoneE164: phoneVerified && phone ? phone.e164 : null,
+        phoneVerified,
+        newCustomerRequiresPhone: !found.rows[0].existing_customer
+      };
     } catch (error) {
       if (isJwtError(error)) {
         send(res, 401, { error: "INVALID_SESSION" });
@@ -207,7 +255,7 @@ export function createCustomerBootstrapHandler(options: Options) {
     }
     try {
       await client.query("BEGIN");
-      const customer = await ensureCustomer(client, authUser.email.trim(), authUser.id);
+      const customer = await ensureCustomer(client, authUser.email.trim(), authUser.id, authUser.phoneE164);
       await client.query("COMMIT");
       send(res, 200, {
         provisioned: true,
@@ -228,7 +276,12 @@ export function createCustomerBootstrapHandler(options: Options) {
     } catch (error) {
       await client.query("ROLLBACK").catch(() => undefined);
       const message = error instanceof Error ? error.message : "unknown bootstrap error";
-      if (message === "CUSTOMER_ACCOUNT_NOT_ACTIVE") {
+      const databaseCode = error && typeof error === "object" ? (error as { code?: unknown }).code : null;
+      if (message === "PHONE_ALIAS_MIGRATION_REQUIRED") {
+        send(res, 503, { error: "PHONE_ALIAS_MIGRATION_REQUIRED" });
+      } else if (databaseCode === "23505" && authUser.phoneVerified) {
+        send(res, 409, { error: "PHONE_NUMBER_ALREADY_LINKED" });
+      } else if (message === "CUSTOMER_ACCOUNT_NOT_ACTIVE") {
         send(res, 403, { error: "CUSTOMER_ACCOUNT_NOT_ACTIVE" });
       } else if (message === "CUSTOMER_ROLE_REQUIRED") {
         send(res, 403, { error: "CUSTOMER_ROLE_REQUIRED" });
