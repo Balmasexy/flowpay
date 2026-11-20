@@ -26,6 +26,7 @@ import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 import { createPasskeysHandler } from "./passkeys.js";
 import { createNeonAuthOtpWebhookHandler } from "./neon-auth-otp-webhook.js";
+import { normalizeNigerianPhone } from "./customer-phone-alias.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -829,7 +830,11 @@ const server = createServer(async (req, res) => {
       const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
-        `SELECT app_user.id, auth_user.name, auth_user.email
+        `SELECT app_user.id, auth_user.name, auth_user.email,
+                COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                         to_jsonb(auth_user)->>'phone_number') AS verified_phone,
+                COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                         to_jsonb(auth_user)->>'phone_number_verified') AS phone_verified
            FROM neon_auth."user" AS auth_user
            JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
@@ -854,6 +859,18 @@ const server = createServer(async (req, res) => {
       const phone = typeof input.phoneNumber === "string" ? input.phoneNumber.trim() : "";
       const address = typeof input.residentialAddress === "string" ? input.residentialAddress.trim() : "";
       if (phone.length > 24 || (phone && !/^\+?[0-9][0-9 ()-]{6,22}$/.test(phone))) { send(res, 400, { error: "INVALID_PHONE_NUMBER" }); return; }
+      if (process.env.FLOWPAY_PHONE_REGISTRATION_ENABLED === "true") {
+        const suppliedPhone = normalizeNigerianPhone(phone);
+        const authPhone = normalizeNigerianPhone(identity.rows[0].verified_phone);
+        if (phone && (!suppliedPhone || !authPhone || suppliedPhone.e164 !== authPhone.e164 ||
+            identity.rows[0].phone_verified !== "true")) {
+          send(res, 403, {
+            error: "PHONE_NUMBER_MUST_BE_VERIFIED_WITH_NEON",
+            message: "Verify a new mobile number with Neon Auth before changing your FlowPay recipient alias."
+          });
+          return;
+        }
+      }
       if (address.length > 500) { send(res, 400, { error: "ADDRESS_TOO_LONG" }); return; }
       let photoData: Buffer | null = null;
       let photoMime: string | null = null;
