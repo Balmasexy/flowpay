@@ -12,6 +12,7 @@ type Profile = {
 };
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+const neonPhoneVerificationEnabled = import.meta.env.VITE_FLOWPAY_PHONE_REGISTRATION_ENABLED === "true";
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
 export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string)=>void;user:{name?:string|null;email?:string|null;image?:string|null};onPhotoChange:(photo:string|null)=>void}) {
@@ -43,6 +44,7 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
         INVALID_SESSION:"Your session expired. Please sign in again.",
         AUTHENTICATION_REQUIRED:"Please sign in again to update your profile.",
         INVALID_PHONE_NUMBER:"Enter a valid phone number, including country code if needed.",
+        PHONE_NUMBER_MUST_BE_VERIFIED_WITH_NEON:"Phone number changes must be verified by Neon Auth before they can be used for FlowPay transfers.",
         ADDRESS_TOO_LONG:"Residential address must be 500 characters or fewer.",
         INVALID_PROFILE_PHOTO:"Choose a JPG, PNG or WebP image up to 3 MB.",
         PROFILE_PAYLOAD_TOO_LARGE:"The profile photo is too large. Choose an image under 3 MB."
@@ -177,7 +179,8 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
       <div className="fp-profile-section-title"><h3>Personal information</h3><span>Verified identity details are read-only</span></div>
       <label htmlFor="fp-profile-name">Full name</label><input id="fp-profile-name" value={displayName} readOnly/>
       <label htmlFor="fp-profile-email">Email address</label><input id="fp-profile-email" type="email" value={profile.email||user.email||""} readOnly/>
-      <label htmlFor="fp-profile-phone">Phone number</label><input id="fp-profile-phone" type="tel" autoComplete="tel" maxLength={24} value={profile.phoneNumber} onChange={event=>setProfile(current=>({...current,phoneNumber:event.target.value}))} placeholder="+234 800 000 0000"/>
+      <label htmlFor="fp-profile-phone">Phone number</label><input id="fp-profile-phone" type="tel" autoComplete="tel" maxLength={24} value={profile.phoneNumber} onChange={event=>setProfile(current=>({...current,phoneNumber:event.target.value}))} placeholder="+234 800 000 0000" readOnly={neonPhoneVerificationEnabled}/>
+      {neonPhoneVerificationEnabled && <small className="fp-muted">This is your verified FlowPay recipient alias. To change it, Neon Auth must verify the new number first.</small>}
       <label htmlFor="fp-profile-address">Residential address</label><textarea id="fp-profile-address" rows={3} maxLength={500} autoComplete="street-address" value={profile.residentialAddress} onChange={event=>setProfile(current=>({...current,residentialAddress:event.target.value}))} placeholder="Enter your residential address"/>
       <button className="fp-primary" type="submit" disabled={saving||loading||photoBusy}>{saving?"Saving…":"Save profile"}</button>
     </form>
