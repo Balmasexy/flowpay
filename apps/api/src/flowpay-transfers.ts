@@ -321,10 +321,10 @@ export function createFlowPayTransfersHandler(options: Options) {
       }
       const recipientIdentifier = parseRecipientIdentifier(input, "recipientAccountNumber", "recipientPhoneNumber");
       if (!recipientIdentifier ||
-          typeof input.amountMinor !== "string" || !/^\\d{1,15}$/.test(input.amountMinor) ||
+          typeof input.amountMinor !== "string" || !/^\d{1,15}$/.test(input.amountMinor) ||
           !Number.isSafeInteger(Number(input.amountMinor)) || BigInt(input.amountMinor) <= 0n ||
           input.currency !== "NGN" || !validUuid(input.idempotencyKey) ||
-          typeof input.transactionPin !== "string" || !/^\\d{6}$/.test(input.transactionPin)) {
+          typeof input.transactionPin !== "string" || !/^\d{6}$/.test(input.transactionPin)) {
         send(res, 400, { error: "INVALID_FLOWPAY_TRANSFER_DETAILS" });
         return true;
       }
