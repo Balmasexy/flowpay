@@ -7,6 +7,8 @@ import {
 
 type Step = "signup" | "verify-email" | "verify-phone";
 
+const phoneRegistrationEnabled = import.meta.env.VITE_FLOWPAY_PHONE_REGISTRATION_ENABLED === "true";
+
 function apiAddress() {
   return String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
 }
@@ -56,8 +58,8 @@ export default function SignupPage() {
       setError("Registration is not configured on this deployment yet. Please try again later.");
       return;
     }
-    const normalizedPhone = normalizeFlowPayPhone(phoneInput);
-    if (!normalizedPhone) {
+    const normalizedPhone = phoneRegistrationEnabled ? normalizeFlowPayPhone(phoneInput) : null;
+    if (phoneRegistrationEnabled && !normalizedPhone) {
       setError("Enter a valid Nigerian mobile number, such as 08012345678.");
       return;
     }
@@ -69,7 +71,7 @@ export default function SignupPage() {
       setError("The passwords do not match.");
       return;
     }
-    setPhoneNumber(normalizedPhone);
+    if (normalizedPhone) setPhoneNumber(normalizedPhone);
     setBusy(true);
     try {
       const result = await authClient.signUp.email({
@@ -84,9 +86,14 @@ export default function SignupPage() {
       setPassword("");
       setConfirmPassword("");
       if (result.data?.user && result.data.user.emailVerified) {
-        setStep("verify-phone");
-        setMessage("Your email is already verified. Neon phone verification is the final registration step.");
-        await requestPhoneCode(normalizedPhone);
+        if (phoneRegistrationEnabled && normalizedPhone) {
+          setStep("verify-phone");
+          setMessage("Your email is already verified. Neon phone verification is the final registration step.");
+          await requestPhoneCode(normalizedPhone);
+        } else {
+          setMessage("Your email is verified. Sign in to finish onboarding. FlowPay assigns your permanent 10-digit ID automatically.");
+          window.location.assign("/login");
+        }
         return;
       }
       setStep("verify-email");
@@ -118,9 +125,14 @@ export default function SignupPage() {
         return;
       }
       setEmailCode("");
-      setStep("verify-phone");
-      setMessage("Email verified. Requesting the phone verification code from Neon Auth…");
-      await requestPhoneCode(phoneNumber);
+      if (phoneRegistrationEnabled) {
+        setStep("verify-phone");
+        setMessage("Email verified. Requesting the phone verification code from Neon Auth…");
+        await requestPhoneCode(phoneNumber);
+      } else {
+        setMessage("Email verified successfully. Sign in to finish FlowPay onboarding.");
+        window.location.assign("/login");
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to verify this email. Please try again.");
     } finally {
@@ -265,9 +277,11 @@ export default function SignupPage() {
           <input id="fp-signup-name" autoComplete="name" required minLength={2} maxLength={100} placeholder="Your full name" value={name} onChange={e => setName(e.target.value)}/>
           <label htmlFor="fp-signup-email">Email address</label>
           <input id="fp-signup-email" type="email" autoComplete="email" required maxLength={254} placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)}/>
-          <label htmlFor="fp-signup-phone">Mobile phone number</label>
-          <input id="fp-signup-phone" type="tel" inputMode="tel" autoComplete="tel" required maxLength={24} placeholder="08012345678" value={phoneInput} onChange={e => setPhoneInput(e.target.value)}/>
-          <small className="fp-muted">This number is verified by Neon Auth and becomes your FlowPay recipient alias.</small>
+          {phoneRegistrationEnabled && <>
+            <label htmlFor="fp-signup-phone">Mobile phone number</label>
+            <input id="fp-signup-phone" type="tel" inputMode="tel" autoComplete="tel" required maxLength={24} placeholder="08012345678" value={phoneInput} onChange={e => setPhoneInput(e.target.value)}/>
+            <small className="fp-muted">Neon Auth verifies this number before it is linked to your permanent FlowPay ID.</small>
+          </>}
           <label htmlFor="fp-signup-password">Password</label>
           <div className="fp-password-field"><input id="fp-signup-password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} placeholder="At least 8 characters" value={password} onChange={e => setPassword(e.target.value)}/><LockKeyhole size={17}/></div>
           <label htmlFor="fp-signup-confirm">Confirm password</label>
