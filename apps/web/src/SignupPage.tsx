@@ -10,7 +10,7 @@ type Step = "signup" | "verify-email" | "verify-phone";
 const phoneRegistrationEnabled = import.meta.env.VITE_FLOWPAY_PHONE_REGISTRATION_ENABLED === "true";
 
 function apiAddress() {
-  return String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+  return String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 }
 
 function responseError(body: unknown, fallback: string): string {
