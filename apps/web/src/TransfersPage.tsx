@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { getApiJwt } from "./auth-client";
+import { getApiJwt, normalizeFlowPayPhone } from "./auth-client";
 import {
   ArrowLeftRight, Building2, CheckCircle2, Clock3, RefreshCw, Search,
   ShieldCheck, Wallet
@@ -11,6 +11,17 @@ type WalletAccount = { currency: string; status: string; createdAt: string };
 type TransferRecord = { id: string; type: string; status: string; createdAt: string; destinationAccountMasked: string };
 type Bank = { code: string; name: string };
 type LookupState = "idle" | "loading" | "verified" | "failed";
+
+type RecipientLookupInput =
+  | { kind: "flowpay_id"; payload: { accountNumber: string } }
+  | { kind: "phone"; payload: { phoneNumber: string } };
+
+function recipientLookupInput(value: string): RecipientLookupInput | null {
+  const compact = value.trim().replace(/[\s().-]/g, "");
+  if (/^[1-9]\d{9}$/.test(compact)) return { kind: "flowpay_id", payload: { accountNumber: compact } };
+  const phoneNumber = normalizeFlowPayPhone(value);
+  return phoneNumber ? { kind: "phone", payload: { phoneNumber } } : null;
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -57,6 +68,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
 
   const [recipientNumber, setRecipientNumber] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [recipientResolvedAccountNumber, setRecipientResolvedAccountNumber] = useState("");
   const [recipientCanTransfer, setRecipientCanTransfer] = useState(false);
   const [recipientLookup, setRecipientLookup] = useState<LookupState>("idle");
 
@@ -191,9 +203,11 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   useEffect(() => {
     if (mode !== "flowpay") { setRecipientLookup("idle"); return; }
     setRecipientName("");
+    setRecipientResolvedAccountNumber("");
     setRecipientCanTransfer(false);
     setTransferResult(null);
-    if (!/^[1-9]\d{9}$/.test(recipientNumber)) { setRecipientLookup("idle"); return; }
+    const identifier = recipientLookupInput(recipientNumber);
+    if (!identifier) { setRecipientLookup("idle"); return; }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setRecipientLookup("loading");
@@ -201,17 +215,25 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         const response = await fetch(apiAddress() + "/customer/flowpay/recipients/lookup", {
           method: "POST", credentials: "omit", signal: controller.signal,
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
-          body: JSON.stringify({ accountNumber: recipientNumber })
+          body: JSON.stringify(identifier.payload)
         });
         const body = asRecord(await response.json().catch(() => ({})));
-        if (!response.ok || body.verified !== true || body.accountNumber !== recipientNumber || typeof body.recipientName !== "string") {
+        if (!response.ok || body.verified !== true || body.lookupType !== identifier.kind ||
+            typeof body.accountNumber !== "string" || !/^[1-9]\d{9}$/.test(body.accountNumber) ||
+            typeof body.recipientName !== "string") {
           throw new Error(typeof body.error === "string" ? body.error : "FLOWPAY_RECIPIENT_NOT_FOUND");
         }
         setRecipientName(body.recipientName);
+        setRecipientResolvedAccountNumber(body.accountNumber);
         setRecipientCanTransfer(body.canTransfer === true);
         setRecipientLookup("verified");
       } catch {
-        if (!controller.signal.aborted) { setRecipientName(""); setRecipientCanTransfer(false); setRecipientLookup("failed"); }
+        if (!controller.signal.aborted) {
+          setRecipientName("");
+          setRecipientResolvedAccountNumber("");
+          setRecipientCanTransfer(false);
+          setRecipientLookup("failed");
+        }
       }
     }, 400);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -286,6 +308,11 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       setTransferError("Verify an eligible FlowPay recipient before continuing.");
       return;
     }
+    const recipientIdentifier = recipientLookupInput(recipientNumber);
+    if (!recipientIdentifier || !recipientResolvedAccountNumber) {
+      setTransferError("Enter a valid 10-digit FlowPay ID or Nigerian mobile number and verify the recipient.");
+      return;
+    }
     if (!activeNgnWallet) { setTransferError("An active NGN FlowPay wallet is required."); return; }
     if (!/^\d{6}$/.test(transactionPin)) { setTransferError("Enter your 6-digit transaction PIN."); return; }
 
@@ -297,7 +324,9 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         method: "POST", credentials: "omit",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
         body: JSON.stringify({
-          recipientAccountNumber: recipientNumber,
+          ...(recipientIdentifier.kind === "flowpay_id"
+            ? { recipientAccountNumber: recipientIdentifier.payload.accountNumber }
+            : { recipientPhoneNumber: recipientIdentifier.payload.phoneNumber }),
           amountMinor,
           currency: "NGN",
           idempotencyKey,
@@ -471,19 +500,19 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       <div className="fp-transfer-form-card" style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
         <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
-        <p className="fp-muted" style={{marginTop:-4}}>Enter the recipient's 10-digit FlowPay account number. We will confirm the customer's name before you continue.</p>
+        <p className="fp-muted" style={{marginTop:-4}}>Find the recipient with their permanent 10-digit FlowPay ID or Neon-verified Nigerian mobile number. Both resolve to the same FlowPay wallet.</p>
         {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
-        <label htmlFor="fp-flowpay-recipient">Recipient FlowPay account number</label>
-        <input id="fp-flowpay-recipient" value={recipientNumber}
-          onChange={event => { setRecipientNumber(event.target.value.replace(/\D/g, "").slice(0, 10)); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
-          inputMode="numeric" autoComplete="off" placeholder="Enter 10-digit FlowPay account number" maxLength={10}/>
+        <label htmlFor="fp-flowpay-recipient">Recipient FlowPay ID or verified phone number</label>
+        <input id="fp-flowpay-recipient" type="tel" inputMode="tel" autoComplete="off" value={recipientNumber}
+          onChange={event => { setRecipientNumber(event.target.value.replace(/[^0-9+ ().-]/g, "").slice(0, 24)); setRecipientResolvedAccountNumber(""); setRecipientName(""); setRecipientLookup("idle"); setRecipientCanTransfer(false); setTransferResult(null); setTransferError(""); setAmount(""); setIdempotencyKey(crypto.randomUUID()); }}
+          placeholder="10-digit FlowPay ID or 08012345678" maxLength={24}/>
         {recipientLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying FlowPay recipient…</p>}
         {recipientLookup === "verified" && <div className="fp-detail-list" role="status">
           <div><span>Verified recipient name</span><b>{recipientName}</b></div>
-          <div><span>Account number</span><b>{recipientNumber}</b></div>
+          <div><span>Permanent FlowPay ID</span><b>{recipientResolvedAccountNumber}</b></div>
           {!recipientCanTransfer && <div><span>Transfer status</span><b>Cannot transfer to your own account</b></div>}
         </div>}
-        {recipientLookup === "failed" && <div className="fp-preview-warning" role="alert">No active verified FlowPay customer was found for that account number.</div>}
+        {recipientLookup === "failed" && <div className="fp-preview-warning" role="alert">No active verified FlowPay customer was found for that ID or phone number.</div>}
 
         {!pinStatusLoading && !pinSet ? <form onSubmit={setupPin} style={{display:"grid",gap:10,marginTop:16,border:"1px solid var(--fp-border, #d8dce3)",borderRadius:12,padding:14}}>
           <b>Set your transaction PIN</b>

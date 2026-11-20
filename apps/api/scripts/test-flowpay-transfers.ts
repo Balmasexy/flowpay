@@ -27,6 +27,7 @@ type SetupOptions = {
   balance?: string;
   held?: string;
   flutterwaveTable?: boolean;
+  phoneAliasTable?: boolean;
   savedPin?: string;
   recipientId?: string;
   prior?: boolean;
@@ -51,6 +52,9 @@ async function makeContext(options: SetupOptions = {}) {
     query: async (sql: string, values?: unknown[]) => {
       statements.push({ sql, values });
       if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") return { rowCount: 0, rows: [] };
+      if (sql.includes("to_regclass('public.fp_customer_phone_aliases')")) {
+        return { rowCount: 1, rows: [{ available: options.phoneAliasTable ?? false }] };
+      }
       if (sql.includes("FROM public.fp_customer_account_numbers AS account_number")) {
         return {
           rowCount: 1,
@@ -200,6 +204,49 @@ test("posts a ₦50,000 transfer with one balanced sender debit and recipient cr
   assert.equal(received?.[6], "success");
   assert.ok(String(sent?.[9]).includes(accountName));
   assert.ok(String(received?.[9]).includes("Test Sender"));
+});
+
+test("accepts a verified phone alias and posts to the same canonical FlowPay account", async () => {
+  const context = await makeContext({ phoneAliasTable: true });
+  const response = context.response();
+  const body = {
+    recipientPhoneNumber: "+2348012345678",
+    amountMinor: "5000000",
+    currency: "NGN",
+    idempotencyKey,
+    transactionPin: "123456"
+  };
+  await context.handler(context.request(body), response.res);
+  assert.equal(response.result().status, 201);
+  assert.equal(response.result().body.status, "posted");
+  assert.equal(response.result().body.recipientName, accountName);
+  assert.equal(context.ledgerValues.length, 1);
+  assert.deepEqual(context.ledgerValues[0], [
+    transactionId, senderWalletId, "-5000000", recipientWalletId, "5000000"
+  ]);
+  const phoneLookup = context.statements.find(item =>
+    item.sql.includes("LEFT JOIN public.fp_customer_phone_aliases") &&
+    item.sql.includes("phone_alias.phone_e164 = $1")
+  );
+  assert.ok(phoneLookup, "resolves the verified phone alias through the alias table");
+  assert.deepEqual(phoneLookup?.values, ["+2348012345678"]);
+  const internalTransfer = context.statements.find(item =>
+    item.sql.includes("INSERT INTO public.fp_internal_transfer_details")
+  );
+  assert.ok(internalTransfer);
+  assert.equal(internalTransfer?.values?.[3], recipientAccountNumber,
+    "ledger history stores the recipient's permanent FlowPay ID, not the phone number");
+});
+
+test("rejects a request that supplies both FlowPay ID and phone alias", async () => {
+  const context = await makeContext({ phoneAliasTable: true });
+  const response = context.response();
+  await context.handler(context.request(transferBody({
+    recipientPhoneNumber: "+2348012345678"
+  })), response.res);
+  assert.equal(response.result().status, 400);
+  assert.equal(response.result().body.error, "INVALID_FLOWPAY_TRANSFER_DETAILS");
+  assert.equal(context.ledgerValues.length, 0);
 });
 
 test("pending Flutterwave utility bills reduce available FlowPay internal-transfer balance", async () => {

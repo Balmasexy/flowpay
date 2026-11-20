@@ -25,6 +25,8 @@ import { createFlutterwaveUtilityBillsHandler, resolveFlutterwaveBillsConfig } f
 import { createStoryblokPreviewHandler } from "./storyblok-preview.js";
 import { createCustomerBootstrapHandler } from "./customer-bootstrap.js";
 import { createPasskeysHandler } from "./passkeys.js";
+import { createNeonAuthOtpWebhookHandler } from "./neon-auth-otp-webhook.js";
+import { normalizeNigerianPhone } from "./customer-phone-alias.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -45,6 +47,15 @@ const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const neonAuthOtpWebhookHandler = createNeonAuthOtpWebhookHandler({
+  jwksUrl,
+  termiiApiKey: process.env.TERMII_API_KEY,
+  termiiSenderId: process.env.TERMII_SENDER_ID,
+  termiiBaseUrl: process.env.TERMII_BASE_URL,
+  termiiChannel: process.env.TERMII_CHANNEL,
+  resendApiKey: process.env.RESEND_API_KEY,
+  emailFrom: process.env.FLOWPAY_AUTH_EMAIL_FROM
+});
 const passkeysHandler = createPasskeysHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
@@ -92,6 +103,7 @@ const server = createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
+  if (await neonAuthOtpWebhookHandler(req, res)) return;
   if (await passkeysHandler(req, res)) return;
   if (await customerBootstrapHandler(req, res)) return;
   if (await storyblokPreviewHandler(req, res)) return;
@@ -115,7 +127,7 @@ const server = createServer(async (req, res) => {
   if (await bankAccountLookupHandler(req, res)) return;
 
   if (req.method === "GET" && pathname === "/") {
-    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers", "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase", "/customer/flutterwave/bills/status", "/webhooks/flutterwave/bills", "/storyblok/preview"] }); return;
+    send(res, 200, { service: "flowpay-api", status: "ok", endpoints: ["/health", "/ready", "/admin/session", "/customer/bootstrap", "/webhooks/neon-auth/otp", "/customer/profile", "/customer/overview", "/customer/activity", "/customer/cards", "/customer/money-received", "/customer/money-sent", "/customer/security", "/customer/passkeys/registration/options", "/customer/passkeys/registration/verify", "/auth/passkeys/authentication/options", "/auth/passkeys/authentication/verify", "/customer/flutterwave/deposits", "/webhooks/flutterwave", "/customer/paystack/deposits", "/customer/paystack/deposits/status", "/webhooks/paystack", "/customer/dedicated-bank-account", "/customer/dedicated-bank-account/requery", "/admin/paystack/virtual-terminals", "/face-verification/status", "/face-verification/callback", "/customer/face-verification", "/customer/support-requests", "/customer/banks", "/customer/bank-account-lookup", "/customer/flowpay/recipients/lookup", "/customer/transfers/flowpay", "/customer/notifications", "/customer/notifications/read", "/customer/transaction-pin/status", "/customer/transaction-pin/setup", "/customer-ai/chat", "/customer/deposit-receipts", "/admin/deposit-receipts", "/customer/bills/catalog", "/customer/bills/validate", "/customer/bills/purchase", "/customer/bills/status", "/customer/flutterwave/bills/categories", "/customer/flutterwave/bills/billers", "/customer/flutterwave/bills/items", "/customer/flutterwave/bills/validate", "/customer/flutterwave/bills/purchase", "/customer/flutterwave/bills/status", "/webhooks/flutterwave/bills", "/storyblok/preview"] }); return;
   }
   if (req.method === "GET" && pathname === "/health") {
     send(res, 200, { service: "flowpay-api", status: "ok", environment: process.env.NODE_ENV ?? "development" }); return;
@@ -586,29 +598,6 @@ const server = createServer(async (req, res) => {
            FROM public.fp_cards
           WHERE user_id = $1
           ORDER BY created_at DESC`, [identity.rows[0].id]);
-      const providerDomain = process.env.PAYSTACK_ENVIRONMENT === "live" && process.env.NODE_ENV === "production"
-        ? "live" : "test";
-      const dedicatedAccountV2Schema = await pool.query<{ available: boolean }>(
-        "SELECT to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS available"
-      );
-      const dedicatedAccountRows = dedicatedAccountV2Schema.rows[0]?.available === true
-        ? await pool.query(
-            `SELECT account_number, bank_name, account_name, status
-               FROM public.fp_paystack_dedicated_accounts_v2
-              WHERE user_id = $1 AND provider_domain = $2 LIMIT 1`,
-            [identity.rows[0].id, providerDomain]
-          )
-        : await pool.query(
-            `SELECT account_number, bank_name, account_name, status
-               FROM public.fp_paystack_dedicated_accounts
-              WHERE user_id = $1 LIMIT 1`,
-            [identity.rows[0].id]
-          );
-      const virtualBankAccount = dedicatedAccountRows.rows[0];
-      const virtualBankAccountAssigned = virtualBankAccount?.status === "assigned" &&
-        /^[0-9]{10}$/.test(String(virtualBankAccount.account_number ?? "")) &&
-        typeof virtualBankAccount.bank_name === "string" &&
-        typeof virtualBankAccount.account_name === "string";
       send(res, 200, {
         cardholderName: typeof identity.rows[0].cardholder_name === "string" && identity.rows[0].cardholder_name.trim()
           ? identity.rows[0].cardholder_name.trim() : null,
@@ -618,19 +607,6 @@ const server = createServer(async (req, res) => {
           expiryMonth: row.expiry_month, expiryYear: row.expiry_year,
           createdAt: row.created_at, updatedAt: row.updated_at
         })),
-        virtualBankAccount: virtualBankAccountAssigned ? {
-          assigned: true,
-          status: "assigned",
-          environment: providerDomain,
-          accountNumber: String(virtualBankAccount.account_number),
-          bankName: String(virtualBankAccount.bank_name),
-          accountName: String(virtualBankAccount.account_name)
-        } : {
-          assigned: false,
-          status: typeof virtualBankAccount?.status === "string" ? virtualBankAccount.status : "not_requested",
-          environment: providerDomain,
-          accountNumber: null, bankName: null, accountName: null
-        },
         actionsEnabled: false,
         cardIssuanceAvailable: false,
         cardSensitiveDetailsAvailable: false,
@@ -777,51 +753,13 @@ const server = createServer(async (req, res) => {
         throw new Error("FLOWPAY_ACCOUNT_NUMBER_ASSIGNMENT_FAILED");
       }
 
-      const providerDomain = process.env.PAYSTACK_ENVIRONMENT === "live" && process.env.NODE_ENV === "production"
-        ? "live" : "test";
-      const virtualAccountSchema = await pool.query<{ available: boolean }>(
-        "SELECT to_regclass('public.fp_paystack_dedicated_accounts_v2') IS NOT NULL AS available"
-      );
-      const virtualAccount = virtualAccountSchema.rows[0]?.available === true
-        ? await pool.query(
-            `SELECT account_number, bank_name, account_name, status
-               FROM public.fp_paystack_dedicated_accounts_v2
-              WHERE user_id = $1 AND provider_domain = $2
-              LIMIT 1`,
-            [identity.rows[0].id, providerDomain]
-          )
-        : await pool.query(
-            `SELECT account_number, bank_name, account_name, status
-               FROM public.fp_paystack_dedicated_accounts
-              WHERE user_id = $1
-              LIMIT 1`,
-            [identity.rows[0].id]
-          );
-      const assignedVirtualAccount = virtualAccount.rows[0] ?? null;
       send(res, 200, {
         walletAccounts: accounts.rows.map(row => ({
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
         flowpayAccountNumber: String(flowpayAccount.rows[0].account_number).trim(),
-        virtualBankAccount: assignedVirtualAccount &&
-          assignedVirtualAccount.status === "assigned" &&
-          /^[0-9]{10}$/.test(String(assignedVirtualAccount.account_number ?? "")) &&
-          typeof assignedVirtualAccount.bank_name === "string" &&
-          typeof assignedVirtualAccount.account_name === "string" ? {
-            assigned: true,
-            status: "assigned",
-            environment: providerDomain,
-            accountNumber: String(assignedVirtualAccount.account_number).trim(),
-            bankName: String(assignedVirtualAccount.bank_name),
-            accountName: String(assignedVirtualAccount.account_name)
-          } : {
-            assigned: false,
-            status: typeof assignedVirtualAccount?.status === "string" ? assignedVirtualAccount.status : "not_requested",
-            environment: providerDomain,
-            accountNumber: null, bankName: null, accountName: null
-          },
         profileRole: identity.rows[0].role,
-        message: "Your 10-digit FlowPay number is for wallet-to-wallet transfers. The separate bank virtual account appears only after Paystack confirms assignment."
+        message: "Your 10-digit FlowPay ID and Neon-verified phone number are the two FlowPay wallet-recipient identifiers. Customer NUBAN issuance and display are disabled."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }
@@ -892,7 +830,11 @@ const server = createServer(async (req, res) => {
       const { payload } = await verifyFlowPayToken(match[1], jwks, { algorithms: ["EdDSA"], issuer, ...(audience ? { audience } : {}) });
       if (typeof payload.sub !== "string" || !payload.sub) { send(res, 401, { error: "INVALID_SESSION" }); return; }
       const identity = await pool.query(
-        `SELECT app_user.id, auth_user.name, auth_user.email
+        `SELECT app_user.id, auth_user.name, auth_user.email,
+                COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                         to_jsonb(auth_user)->>'phone_number') AS verified_phone,
+                COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                         to_jsonb(auth_user)->>'phone_number_verified') AS phone_verified
            FROM neon_auth."user" AS auth_user
            JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
           WHERE auth_user.id::text = $1 AND auth_user."emailVerified" = true
@@ -917,6 +859,18 @@ const server = createServer(async (req, res) => {
       const phone = typeof input.phoneNumber === "string" ? input.phoneNumber.trim() : "";
       const address = typeof input.residentialAddress === "string" ? input.residentialAddress.trim() : "";
       if (phone.length > 24 || (phone && !/^\+?[0-9][0-9 ()-]{6,22}$/.test(phone))) { send(res, 400, { error: "INVALID_PHONE_NUMBER" }); return; }
+      if (process.env.FLOWPAY_PHONE_REGISTRATION_ENABLED === "true") {
+        const suppliedPhone = normalizeNigerianPhone(phone);
+        const authPhone = normalizeNigerianPhone(identity.rows[0].verified_phone);
+        if (phone && (!suppliedPhone || !authPhone || suppliedPhone.e164 !== authPhone.e164 ||
+            identity.rows[0].phone_verified !== "true")) {
+          send(res, 403, {
+            error: "PHONE_NUMBER_MUST_BE_VERIFIED_WITH_NEON",
+            message: "Verify a new mobile number with Neon Auth before changing your FlowPay recipient alias."
+          });
+          return;
+        }
+      }
       if (address.length > 500) { send(res, 400, { error: "ADDRESS_TOO_LONG" }); return; }
       let photoData: Buffer | null = null;
       let photoMime: string | null = null;
