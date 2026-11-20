@@ -5,7 +5,10 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Pool } from "pg";
 import { createLocalJWKSet, SignJWT, type JWTPayload } from "jose";
 import { test } from "node:test";
-import { createPaystackDedicatedAccountsHandler, processPaystackDedicatedAccountWebhook } from "../src/paystack-dedicated-accounts.js";
+import {
+  createPaystackDedicatedAccountsHandler,
+  processPaystackDedicatedAccountWebhook
+} from "../src/paystack-dedicated-accounts.js";
 
 const originalFetch = globalThis.fetch;
 const originalEnvironment = {
@@ -19,20 +22,18 @@ const originalEnvironment = {
 const userId = "00000000-0000-4000-8000-000000000001";
 const pair = generateKeyPairSync("ed25519");
 const jwk = pair.publicKey.export({ format: "jwk" });
-const jwks = createLocalJWKSet({ keys: [{ ...jwk, kid: "paystack-dva-test", alg: "EdDSA", use: "sig" }] });
+const jwks = createLocalJWKSet({
+  keys: [{ ...jwk, kid: "paystack-dva-test", alg: "EdDSA", use: "sig" }]
+});
 
-async function setup(options: {
-  existingAccount?: boolean;
-  bankSlug?: string | null;
-  lastRequeryAt?: Date | null;
-  requeryClaimed?: boolean;
-} = {}) {
+async function setup() {
   process.env.PAYSTACK_ENVIRONMENT = "test";
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
   process.env.FLOWPAY_RUNTIME_ENV = "development";
   process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = "true";
   process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED = "true";
   process.env.NODE_ENV = "test";
+
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-dva-test" })
     .setIssuer("https://flowpay.test")
@@ -40,61 +41,33 @@ async function setup(options: {
     .setIssuedAt()
     .setExpirationTime("5m")
     .sign(pair.privateKey);
+
   const queries: { sql: string; values?: unknown[] }[] = [];
   const pool = {
     query: async (sql: string, values?: unknown[]) => {
       queries.push({ sql, values });
       if (sql.includes('FROM neon_auth."user"')) {
-        return { rowCount: 1, rows: [{
-          id: userId, role: "customer", name: "Test Customer",
-          email: "test@example.invalid", phone: "08012345678"
-        }] };
-      }
-      if (sql.includes("FROM public.fp_paystack_dedicated_accounts_v2") && sql.includes("LIMIT 1")) {
-        return options.existingAccount
-          ? { rowCount: 1, rows: [{
-              user_id: userId, paystack_customer_code: "CUS_test123",
-              dedicated_account_id: "12345", account_number: "9930000737",
-              bank_name: "Test Bank", account_name: "FlowPay / Test Customer",
-              provider_domain: "test", status: "assigned",
-              bank_slug: options.bankSlug === undefined ? "test-bank" : options.bankSlug,
-              last_requery_at: options.lastRequeryAt ?? null
-            }] }
-          : { rowCount: 0, rows: [] };
-      }
-      if (sql.includes("UPDATE public.fp_paystack_dedicated_accounts_v2") && sql.includes("SET bank_slug = $3")) {
-        return { rowCount: 1, rows: [] };
-      }
-      if (sql.includes("UPDATE public.fp_paystack_dedicated_accounts_v2") && sql.includes("SET last_requery_at = NOW()")) {
-        return options.requeryClaimed === false
-          ? { rowCount: 0, rows: [] }
-          : { rowCount: 1, rows: [{ last_requery_at: new Date() }] };
-      }
-      if (sql.includes("SELECT last_requery_at FROM public.fp_paystack_dedicated_accounts_v2")) {
-        return { rowCount: 1, rows: [{ last_requery_at: options.lastRequeryAt ?? new Date(Date.now() - 120_000) }] };
-      }
-      if (sql.includes("FROM public.fp_paystack_dedicated_accounts")) {
-        return { rowCount: 0, rows: [] };
-      }
-      if (sql.includes("RETURNING user_id, paystack_customer_code")) {
-        return { rowCount: 1, rows: [{
-          user_id: userId, paystack_customer_code: "CUS_test123",
-          dedicated_account_id: "12345", account_number: "9930000737",
-          bank_name: "Test Bank", account_name: "FlowPay / Test Customer", status: "assigned"
-        }] };
+        return {
+          rowCount: 1,
+          rows: [{
+            id: userId, role: "customer", name: "Test Customer",
+            email: "test@example.invalid", phone: "08012345678"
+          }]
+        };
       }
       return { rowCount: 1, rows: [] };
     }
   } as unknown as Pool;
+
   const handler = createPaystackDedicatedAccountsHandler({
     pool,
     jwks: jwks as unknown as ReturnType<typeof import("jose").createRemoteJWKSet>,
-    issuer: "https://flowpay.test",
+    issuer: "https://flowpay.test"
   });
-  const request = (method: string, url: string, payload?: Record<string, unknown>, auth = true) =>
+  const request = (method: string, url: string, payload?: Record<string, unknown>) =>
     Object.assign(Readable.from(payload ? [Buffer.from(JSON.stringify(payload))] : []), {
       method, url,
-      headers: auth ? { authorization: "Bearer " + token } : {}
+      headers: { authorization: "Bearer " + token }
     }) as unknown as IncomingMessage;
   const response = () => {
     let status = 0;
@@ -108,11 +81,13 @@ async function setup(options: {
   return { handler, request, response, queries, pool };
 }
 
-test("blocks customer NUBAN issuance and hides old account data by default", async () => {
+test("customer NUBAN display and issuance stay disabled even if an old Render flag is true", async () => {
   const context = await setup();
-  delete process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED;
-  let calls = 0;
-  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 500 }); };
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response("{}", { status: 500 });
+  };
 
   const getResponse = context.response();
   await context.handler(context.request("GET", "/customer/dedicated-bank-account"), getResponse.res);
@@ -125,131 +100,22 @@ test("blocks customer NUBAN issuance and hides old account data by default", asy
   await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: true }), postResponse.res);
   assert.equal(postResponse.result().status, 410);
   assert.equal(postResponse.result().body.error, "CUSTOMER_NUBAN_DISABLED");
-  assert.equal(calls, 0);
+
+  const requeryResponse = context.response();
+  await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), requeryResponse.res);
+  assert.equal(requeryResponse.result().status, 410);
+  assert.equal(requeryResponse.result().body.error, "CUSTOMER_NUBAN_DISABLED");
+  assert.equal(providerCalls, 0, "a customer NUBAN must never be requested or requeried");
+  assert.equal(
+    context.queries.some(item => item.sql.includes("FROM public.fp_paystack_dedicated_accounts_v2")),
+    false,
+    "customer NUBAN endpoints must not expose historical account records"
+  );
 });
 
-test("requires express consent before any provider request", async () => {
+test("historical provider assignment webhooks remain reconcilable while customer NUBAN issuance is disabled", async () => {
   const context = await setup();
-  let calls = 0;
-  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 500 }); };
-  const response = context.response();
-  await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: false }), response.res);
-  assert.equal(response.result().status, 400);
-  assert.equal(response.result().body.error, "EXPRESS_CONSENT_REQUIRED");
-  assert.equal(calls, 0);
-});
-
-test("blocks the sandbox route when isolated development switches are absent", async () => {
-  const context = await setup();
-  delete process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED;
-  let calls = 0;
-  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 500 }); };
-  const response = context.response();
-  await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: true }), response.res);
-  assert.equal(response.result().status, 503);
-  assert.equal(response.result().body.error, "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED");
-  assert.equal(calls, 0);
-});
-
-test("accepts issuer-verified Neon JWTs without an audience claim and stores only provider-confirmed accounts", async () => {
-  const context = await setup();
-  const calls: { url: string; body: Record<string, unknown> }[] = [];
-  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    const payload = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
-    calls.push({ url, body: payload });
-    if (url === "https://api.paystack.co/customer") {
-      assert.equal(payload.email, "test@example.invalid");
-      assert.equal(payload.first_name, "Test");
-      assert.equal(payload.last_name, "Customer");
-      assert.equal(payload.phone, "+2348012345678");
-      return new Response(JSON.stringify({
-        status: true, data: { customer_code: "CUS_test123", domain: "test" }
-      }), { status: 200 });
-    }
-    if (url === "https://api.paystack.co/dedicated_account") {
-      assert.equal(payload.customer, "CUS_test123");
-      assert.equal(payload.preferred_bank, "test-bank");
-      return new Response(JSON.stringify({
-        status: true,
-        data: {
-          id: 12345, assigned: true, active: true, currency: "NGN",
-          account_number: "9930000737", account_name: "FlowPay / Test Customer",
-          bank: { name: "Test Bank", slug: "test-bank" }
-        }
-      }), { status: 200 });
-    }
-    throw new Error("Unexpected provider request: " + url);
-  };
-  const response = context.response();
-  await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: true }), response.res);
-  const result = response.result();
-  assert.equal(result.status, 201);
-  assert.equal(result.body.virtualBankAccount.assigned, true);
-  assert.equal(result.body.virtualBankAccount.accountNumber, "9930000737");
-  assert.equal(result.body.virtualBankAccount.bankName, "Test Bank");
-  assert.equal(result.body.livePaymentsEnabled, false);
-  assert.equal(calls.length, 2);
-  assert.ok(context.queries.some(item => item.sql.includes("consent_at")));
-  const assignedUpdate = context.queries.find(item => item.sql.includes("account_number = $6") && item.sql.includes("status = 'assigned'"));
-  assert.ok(assignedUpdate, "account data must be stored only in the provider-confirmed assignment update");
-  assert.equal(assignedUpdate.values?.[5], "9930000737");
-});
-
-test("requeries an assigned DVA using a Paystack-confirmed provider slug", async () => {
-  const context = await setup({ existingAccount: true, bankSlug: null });
-  const calls: string[] = [];
-  globalThis.fetch = async (input: string | URL | Request) => {
-    const url = String(input);
-    calls.push(url);
-    if (url === "https://api.paystack.co/customer/CUS_test123") {
-      return new Response(JSON.stringify({
-        status: true,
-        data: {
-          domain: "test",
-          dedicated_account: {
-            account_number: "9930000737", assigned: true, active: true,
-            bank: { slug: "test-bank" }
-          }
-        }
-      }), { status: 200 });
-    }
-    if (url === "https://api.paystack.co/dedicated_account/requery?account_number=9930000737&provider_slug=test-bank") {
-      return new Response(JSON.stringify({ status: true, message: "Requery initiated" }), { status: 200 });
-    }
-    throw new Error("Unexpected Paystack request: " + url);
-  };
-  const response = context.response();
-  await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), response.res);
-  assert.equal(response.result().status, 202);
-  assert.equal(response.result().body.requeryRequested, true);
-  assert.deepEqual(calls, [
-    "https://api.paystack.co/customer/CUS_test123",
-    "https://api.paystack.co/dedicated_account/requery?account_number=9930000737&provider_slug=test-bank"
-  ]);
-  assert.ok(context.queries.some(item => item.sql.includes("SET bank_slug = $3")));
-  assert.ok(context.queries.some(item => item.sql.includes("SET last_requery_at = NOW()")));
-});
-
-test("enforces the Paystack ten-minute DVA requery limit before contacting Paystack", async () => {
-  const context = await setup({
-    existingAccount: true,
-    bankSlug: "test-bank",
-    lastRequeryAt: new Date(Date.now() - 120_000),
-    requeryClaimed: false
-  });
-  let calls = 0;
-  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 200 }); };
-  const response = context.response();
-  await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), response.res);
-  assert.equal(response.result().status, 429);
-  assert.equal(response.result().body.error, "PAYSTACK_DVA_REQUERY_RATE_LIMITED");
-  assert.equal(calls, 0);
-});
-
-test("persists Paystack single-step assignment success even after new DVA assignment is disabled", async () => {
-  const context = await setup();
-  delete process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED;
+  process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = "false";
   const handled = await processPaystackDedicatedAccountWebhook(context.pool, {
     event: "assigndedicatedaccount.success",
     data: {
@@ -268,7 +134,7 @@ test("persists Paystack single-step assignment success even after new DVA assign
   const saved = context.queries.find(item =>
     item.sql.includes("account_number = $5") && item.sql.includes("status = 'assigned'")
   );
-  assert.ok(saved, "the asynchronous provider assignment confirmation must be persisted");
+  assert.ok(saved, "a signed historical provider assignment event must still be recorded for reconciliation");
   assert.equal(saved.values?.[4], "9930000737");
 });
 
