@@ -53,7 +53,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 export function createCustomerPhoneAliasHandler(options: Options) {
   const { pool, jwks, issuer, audience } = options;
   return async function handleCustomerPhoneAlias(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\\/+$/, "") || "/";
+    const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "") || "/";
     if (req.method !== "POST" || path !== "/customer/phone-alias/confirm") return false;
 
     if (!pool || !jwks || !issuer) {
