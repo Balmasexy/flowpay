@@ -15,6 +15,7 @@
     "test:flowpay-transfers": "tsx --test scripts/test-flowpay-transfers.ts",
     "test:customer-notifications": "tsx --test scripts/test-customer-notifications.ts",
     "test:customer-phone-aliases": "tsx --test scripts/test-customer-phone-aliases.ts",
+    "test:neon-auth-otp-webhook": "tsx --test scripts/test-neon-auth-otp-webhook.ts",
     "test:paystack-bank-lookup": "tsx --test scripts/test-paystack-bank-lookup.ts",
     "test:paystack-bank-transfers": "tsx --test scripts/test-paystack-bank-transfers.ts",
     "test:paystack-dedicated-accounts": "tsx --test scripts/test-paystack-dedicated-accounts.ts",
