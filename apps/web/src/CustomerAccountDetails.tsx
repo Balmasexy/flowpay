@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Check, Clock3, Copy, FileText, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
+import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Smartphone, Wallet } from "lucide-react";
 
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
@@ -156,32 +156,13 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
     {loading ? <p className="fp-overview-muted" role="status">Loading your assigned account records…</p> : error ? <div className="fp-preview-warning" role="alert">{error}</div> : <>
       <div className="fp-account-detail-grid">
         <article className="fp-account-type-card fp-account-wallet-card"><span className="fp-account-type-icon"><Wallet size={19}/></span><span className="fp-money-eyebrow">FLOWPAY WALLET</span><h3>To FlowPay</h3><p>Use this unique 10-digit FlowPay number when another FlowPay customer sends you money.</p><div className="fp-account-type-value">{data?.flowpayAccountNumber || "Not yet assigned"}</div><span className="fp-account-live-label"><Check size={14}/> {data?.flowpayAccountNumber ? "Assigned to your customer profile" : "Awaiting assignment"}</span>{data?.flowpayAccountNumber && <button type="button" className="fp-outline" onClick={() => void copyValue("FlowPay account number", data.flowpayAccountNumber)}><Copy size={14}/> Copy number</button>}</article>
-        <article className="fp-account-type-card fp-account-bank-card"><span className="fp-account-type-icon"><Building2 size={19}/></span><span className="fp-money-eyebrow">BANK TRANSFER ACCOUNT</span><h3>Receive from any bank</h3>
-          {data?.virtualBankAccount.assigned ? <><p>Use this Paystack-issued NGN NUBAN to receive transfers from other Nigerian bank apps. Share the bank, account name and number exactly as displayed. FlowPay credits your wallet only after Paystack verifies the incoming transfer.</p><div className="fp-account-type-value">{data.virtualBankAccount.accountNumber}</div><div className="fp-account-bank-details"><span>Bank</span><b>{data.virtualBankAccount.bankName}</b><span>Account name</span><b>{data.virtualBankAccount.accountName}</b></div><span className="fp-account-live-label"><Check size={14}/> Provider assignment confirmed</span><small className="fp-muted">Bank name enquiry uses the exact account name returned by Paystack. FlowPay branding as “FlowPay / your verified name” requires Paystack to enable its custom DVA naming for this business; FlowPay will not substitute an unverified name.</small></> : <><p>Your FlowPay transfer number is for FlowPay-to-FlowPay transfers only. To receive money from another Nigerian bank, you need this separate Paystack-issued NUBAN. It becomes usable only after Paystack confirms the account assignment.</p><div className="fp-account-pending"><Clock3 size={18}/><span><b>{data?.virtualBankAccount.status === "pending" ? "Request awaiting Paystack" : "Bank account not issued"}</b><small>{data?.virtualBankAccount.status === "pending" ? "Your account request is already being processed. FlowPay will display the number only after Paystack confirms assignment." : "Paystack must approve FlowPay's DVA access. This request is sent only after your explicit consent."}</small></span></div><span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> No placeholder bank number displayed</span>
-            {data?.virtualBankAccount.status !== "pending" && <>
-              <label style={{display:"flex",alignItems:"flex-start",gap:8,marginTop:12,fontSize:13}}>
-                <input type="checkbox" checked={virtualConsent} onChange={event=>setVirtualConsent(event.target.checked)} disabled={virtualRequestBusy}/>
-                I expressly consent to FlowPay sending the profile information required by Paystack to request a dedicated bank account. For a live financial-services account, Paystack will also receive my BVN and the bank account details linked to it for validation.
-              </label>
-              {data?.virtualBankAccount.environment === "live" && <>
-                <label htmlFor="customer-dva-bvn">BVN (11 digits)</label>
-                <input id="customer-dva-bvn" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={virtualBvn} onChange={event=>setVirtualBvn(event.target.value.replace(/\\D/g,"").slice(0,11))} placeholder="Enter BVN for Paystack validation" disabled={virtualRequestBusy}/>
-                <label htmlFor="customer-dva-bank">BVN-linked bank</label>
-                <select id="customer-dva-bank" value={linkedBankCode} onChange={event=>setLinkedBankCode(event.target.value)} disabled={virtualRequestBusy || !banks.length}>
-                  {banks.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}
-                </select>
-                <label htmlFor="customer-dva-account">BVN-linked account number</label>
-                <input id="customer-dva-account" inputMode="numeric" autoComplete="off" maxLength={10} value={linkedBankAccount} onChange={event=>setLinkedBankAccount(event.target.value.replace(/\\D/g,"").slice(0,10))} placeholder="10-digit bank account number" disabled={virtualRequestBusy}/>
-                {banksError && <p className="fp-preview-warning" role="alert">{banksError}</p>}
-                <small>The BVN is sent to Paystack for validation and is not saved in FlowPay.</small>
-              </>}
-              {virtualRequestError && <p className="fp-preview-warning" role="alert">{virtualRequestError}</p>}
-              {virtualRequestMessage && <p className="fp-muted" role="status">{virtualRequestMessage}</p>}
-              <button type="button" className="fp-primary" style={{marginTop:12}} onClick={()=>void requestVirtualBankAccount()} disabled={!virtualConsent || virtualRequestBusy || (data?.virtualBankAccount.environment === "live" && (virtualBvn.length !== 11 || linkedBankAccount.length !== 10 || !linkedBankCode))}>
-                {virtualRequestBusy ? "Requesting bank account…" : "Request dedicated bank account"}
-              </button>
-            </>}
-          </>}
+        <article className="fp-account-type-card fp-account-bank-card">
+          <span className="fp-account-type-icon"><Smartphone size={19}/></span>
+          <span className="fp-money-eyebrow">PHONE-BASED RECEIVING</span>
+          <h3>Receive by mobile number</h3>
+          <p>Your Neon-verified Nigerian mobile number is a second way for another FlowPay customer to find this same wallet. The 10-digit FlowPay ID remains permanent.</p>
+          <span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> Neon Auth verification</span>
+          <small className="fp-muted">Phone-based transfers from other Nigerian banks require FlowPay's NIBSS National Payment Stack participant integration and certification. That external-bank route is not shown as active until approval is confirmed. FlowPay does not display or generate a customer NUBAN.</small>
         </article>
       </div>
       <div className="fp-account-wallets"><div className="fp-money-section-heading"><div><span className="fp-money-eyebrow">LEDGER ACCOUNTS</span><h3>Your FlowPay wallets</h3></div><span className="fp-money-count">{data?.walletAccounts.length ?? 0} currencies</span></div>
