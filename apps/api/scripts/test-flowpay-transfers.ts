@@ -209,10 +209,13 @@ test("posts a ₦50,000 transfer with one balanced sender debit and recipient cr
 test("accepts a verified phone alias and posts to the same canonical FlowPay account", async () => {
   const context = await makeContext({ phoneAliasTable: true });
   const response = context.response();
-  const body = transferBody({
-    recipientAccountNumber: undefined,
-    recipientPhoneNumber: "+2348012345678"
-  });
+  const body = {
+    recipientPhoneNumber: "+2348012345678",
+    amountMinor: "5000000",
+    currency: "NGN",
+    idempotencyKey,
+    transactionPin: "123456"
+  };
   await context.handler(context.request(body), response.res);
   assert.equal(response.result().status, 201);
   assert.equal(response.result().body.status, "posted");
