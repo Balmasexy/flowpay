@@ -73,14 +73,14 @@ test("routes Neon phone OTP events to Termii without generating or verifying a s
   const handler = createNeonAuthOtpWebhookHandler({
     jwksUrl: "https://neon-auth.test/.well-known/jwks.json",
     termiiApiKey: "termii-test-key",
-    termiiSenderId: "FLOWPAY",
     termiiBaseUrl: "https://api.ng.termii.com",
     termiiChannel: "dnd"
   });
   const context = makeRequest({
     event_type: "send.otp",
-    user: { phone_number: "+2348012345678" },
+    user: { id: "neon-user-1" },
     event_data: {
+      phone_number: "+2348012345678",
       otp_code: "123456",
       otp_type: "phone-number-verification",
       delivery_preference: "sms"
