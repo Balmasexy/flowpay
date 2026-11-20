@@ -67,11 +67,11 @@ export function sendSignupEmailCode(email: string): Promise<NeonAuthResult> {
 
 /** Normalize Nigerian mobile numbers before Neon Auth receives them. */
 export function normalizeFlowPayPhone(value: string): string | null {
-  const compact = value.trim().replace(/[\\s().-]/g, "");
+  const compact = value.trim().replace(/[\s().-]/g, "");
   const digits = compact.startsWith("+") ? compact.slice(1) : compact;
-  if (/^0[789]\\d{9}$/.test(digits)) return "+234" + digits.slice(1);
-  if (/^234[789]\\d{9}$/.test(digits)) return "+" + digits;
-  if (/^[789]\\d{9}$/.test(digits)) return "+234" + digits;
+  if (/^0[789]\d{9}$/.test(digits)) return "+234" + digits.slice(1);
+  if (/^234[789]\d{9}$/.test(digits)) return "+" + digits;
+  if (/^[789]\d{9}$/.test(digits)) return "+234" + digits;
   return null;
 }
 
