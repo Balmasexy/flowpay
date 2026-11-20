@@ -262,6 +262,7 @@ export function createCustomerBootstrapHandler(options: Options) {
         customerId: customer.id,
         email: customer.email,
         flowpayAccountNumber: customer.flowpayAccountNumber,
+        phoneAliasVerified: authUser.phoneVerified,
         wallet: { currency: "NGN", status: "active" },
         virtualCard: {
           status: customer.cardStatus,
