@@ -113,7 +113,7 @@ export default function SignupPage() {
       setError("Enter the numeric verification code from your email.");
       return;
     }
-    if (!phoneNumber) {
+    if (phoneRegistrationEnabled && !phoneNumber) {
       setError("Your registration phone number is missing. Return to sign-up and enter it again.");
       return;
     }
