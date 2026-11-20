@@ -132,7 +132,8 @@ async function deliverSmsOtp(
 export function createNeonAuthOtpWebhookHandler(options: Options) {
   const jwksUrl = options.jwksUrl?.trim() ?? "";
   const termiiApiKey = options.termiiApiKey?.trim() ?? "";
-  const termiiSenderId = options.termiiSenderId?.trim() ?? "";
+  // FLOWPAY must be registered/approved with Termii before production SMS.
+  const termiiSenderId = options.termiiSenderId?.trim() || "FLOWPAY";
   const termiiBaseUrl = (options.termiiBaseUrl?.trim() || "https://api.ng.termii.com").replace(/\/+$/, "");
   const termiiChannel = options.termiiChannel?.trim() || "dnd";
   const resendApiKey = options.resendApiKey?.trim() ?? "";
@@ -203,8 +204,15 @@ export function createNeonAuthOtpWebhookHandler(options: Options) {
 
     try {
       if (preference === "sms") {
-        const phone = typeof user.phone_number === "string" ? user.phone_number
-          : typeof user.phoneNumber === "string" ? user.phoneNumber : "";
+        const phoneCandidates = [
+          eventData.phone_number,
+          eventData.phoneNumber,
+          user.phone_number,
+          user.phoneNumber,
+          payload.phone_number,
+          payload.phoneNumber
+        ];
+        const phone = phoneCandidates.find(value => typeof value === "string" && value.trim()) as string | undefined ?? "";
         if (!termiiApiKey || !termiiSenderId || !phone) {
           send(res, 503, { error: "PHONE_OTP_DELIVERY_NOT_CONFIGURED" });
           return true;
