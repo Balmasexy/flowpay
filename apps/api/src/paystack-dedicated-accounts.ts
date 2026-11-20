@@ -231,10 +231,11 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
-    // Customer NUBAN issuance and display are opt-in. The default FlowPay
-    // receiving model uses the permanent FlowPay ID and Neon-verified phone alias.
-    // Existing provider rows and their signed settlement webhook are retained.
-    if (identity.role === "customer" && process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED !== "true") {
+    // Customer-facing NUBAN issuance, display, and requery are not part of
+    // FlowPay's receiving model. The permanent FlowPay ID and Neon-verified
+    // phone alias are the customer identifiers. Historical provider rows and
+    // signed settlement webhooks are retained for reconciliation.
+    if (identity.role === "customer") {
       if (post) {
         send(res, 410, {
           error: "CUSTOMER_NUBAN_DISABLED",
