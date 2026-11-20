@@ -166,6 +166,14 @@ export function createCustomerPhoneAliasHandler(options: Options) {
                verified_at = EXCLUDED.verified_at`,
         [identity.user_id, normalized.e164]
       );
+      await client.query(
+        `INSERT INTO public.fp_customer_profiles (user_id, phone_number, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (user_id) DO UPDATE
+           SET phone_number = EXCLUDED.phone_number,
+               updated_at = NOW()`,
+        [identity.user_id, normalized.e164]
+      );
       await client.query("COMMIT");
       send(res, 200, {
         verified: true,
