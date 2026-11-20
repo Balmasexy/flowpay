@@ -231,6 +231,37 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
+    // Customer NUBAN issuance and display are opt-in. The default FlowPay
+    // receiving model uses the permanent FlowPay ID and Neon-verified phone alias.
+    // Existing provider rows and their signed settlement webhook are retained.
+    if (identity.role === "customer" && process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED !== "true") {
+      if (post) {
+        send(res, 410, {
+          error: "CUSTOMER_NUBAN_DISABLED",
+          message: "FlowPay customer NUBAN issuance is disabled. Use the permanent FlowPay ID or verified phone alias for FlowPay-to-FlowPay transfers. External-bank phone routing remains subject to NIBSS NPS approval."
+        });
+      } else if (get) {
+        send(res, 200, {
+          provider: "Paystack",
+          customerNubanEnabled: false,
+          virtualBankAccount: {
+            assigned: false,
+            status: "disabled",
+            accountNumber: null,
+            bankName: null,
+            accountName: null
+          },
+          message: "Customer-facing NUBAN issuance and display are disabled. Historical provider account records are retained for settlement reconciliation."
+        });
+      } else {
+        send(res, 410, {
+          error: "CUSTOMER_NUBAN_DISABLED",
+          message: "Customer NUBAN requery is disabled in FlowPay's phone-based receiving model. Historical provider settlement webhooks remain active."
+        });
+      }
+      return true;
+    }
+
     const runtime = getPaystackBankRuntime();
     if (!runtime) {
       send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
