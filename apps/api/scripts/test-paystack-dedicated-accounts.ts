@@ -13,6 +13,7 @@ const originalEnvironment = {
   secret: process.env.PAYSTACK_SECRET_KEY,
   runtime: process.env.FLOWPAY_RUNTIME_ENV,
   enabled: process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED,
+  customerNubanEnabled: process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED,
   nodeEnv: process.env.NODE_ENV
 };
 const userId = "00000000-0000-4000-8000-000000000001";
@@ -30,6 +31,7 @@ async function setup(options: {
   process.env.PAYSTACK_SECRET_KEY = "sk_test_unit_test_secret";
   process.env.FLOWPAY_RUNTIME_ENV = "development";
   process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = "true";
+  process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED = "true";
   process.env.NODE_ENV = "test";
   const token = await new SignJWT({} satisfies JWTPayload)
     .setProtectedHeader({ alg: "EdDSA", kid: "paystack-dva-test" })
@@ -105,6 +107,26 @@ async function setup(options: {
   };
   return { handler, request, response, queries, pool };
 }
+
+test("blocks customer NUBAN issuance and hides old account data by default", async () => {
+  const context = await setup();
+  delete process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return new Response("{}", { status: 500 }); };
+
+  const getResponse = context.response();
+  await context.handler(context.request("GET", "/customer/dedicated-bank-account"), getResponse.res);
+  assert.equal(getResponse.result().status, 200);
+  assert.equal(getResponse.result().body.customerNubanEnabled, false);
+  assert.equal(getResponse.result().body.virtualBankAccount.assigned, false);
+  assert.equal(getResponse.result().body.virtualBankAccount.accountNumber, null);
+
+  const postResponse = context.response();
+  await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: true }), postResponse.res);
+  assert.equal(postResponse.result().status, 410);
+  assert.equal(postResponse.result().body.error, "CUSTOMER_NUBAN_DISABLED");
+  assert.equal(calls, 0);
+});
 
 test("requires express consent before any provider request", async () => {
   const context = await setup();
@@ -260,6 +282,8 @@ process.on("exit", () => {
   else process.env.FLOWPAY_RUNTIME_ENV = originalEnvironment.runtime;
   if (originalEnvironment.enabled === undefined) delete process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED;
   else process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = originalEnvironment.enabled;
+  if (originalEnvironment.customerNubanEnabled === undefined) delete process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED;
+  else process.env.FLOWPAY_CUSTOMER_NUBAN_ENABLED = originalEnvironment.customerNubanEnabled;
   if (originalEnvironment.nodeEnv === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = originalEnvironment.nodeEnv;
 });
