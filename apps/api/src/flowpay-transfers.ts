@@ -5,6 +5,7 @@ import { enqueueTransferNotification, formatNgnMinor } from "./customer-notifica
 import { productionFaceVerificationAllowed } from "./customer-security.js";
 import { createRemoteJWKSet } from "jose";
 import { verifyFlowPayToken } from "./auth-tokens.js";
+import { normalizeNigerianPhone } from "./customer-phone-alias.js";
 
 type Options = {
   pool: Pool | null;
@@ -49,6 +50,24 @@ function derivePin(pin: string, salt: Buffer): Promise<Buffer> {
 
 function validAccountNumber(value: unknown): value is string {
   return typeof value === "string" && /^[1-9]\d{9}$/.test(value);
+}
+
+function parseRecipientIdentifier(
+  input: Record<string, unknown>,
+  accountField: string,
+  phoneField: string
+): { value: string; kind: "flowpay_id" | "phone" } | null {
+  const hasAccountNumber = Object.prototype.hasOwnProperty.call(input, accountField);
+  const hasPhoneNumber = Object.prototype.hasOwnProperty.call(input, phoneField);
+  if (hasAccountNumber === hasPhoneNumber) return null;
+  if (hasAccountNumber && validAccountNumber(input[accountField])) {
+    return { value: input[accountField] as string, kind: "flowpay_id" };
+  }
+  if (hasPhoneNumber) {
+    const phone = normalizeNigerianPhone(input[phoneField]);
+    if (phone) return { value: phone.e164, kind: "phone" };
+  }
+  return null;
 }
 
 function validUuid(value: unknown): value is string {
@@ -213,27 +232,59 @@ export function createFlowPayTransfersHandler(options: Options) {
     }
 
     if (path === "/customer/flowpay/recipients/lookup") {
-      if (Object.keys(input).some(key => key !== "accountNumber") || !validAccountNumber(input.accountNumber)) {
-        send(res, 400, { error: "INVALID_FLOWPAY_ACCOUNT_NUMBER" });
+      if (Object.keys(input).some(key => !["accountNumber", "phoneNumber"].includes(key))) {
+        send(res, 400, { error: "UNSUPPORTED_FLOWPAY_RECIPIENT_FIELD" });
+        return true;
+      }
+      const recipientIdentifier = parseRecipientIdentifier(input, "accountNumber", "phoneNumber");
+      if (!recipientIdentifier) {
+        send(res, 400, { error: "INVALID_FLOWPAY_RECIPIENT_IDENTIFIER" });
         return true;
       }
       try {
-        const result = await pool.query<{
-          id: string; recipient_name: string; account_number: string;
-        }>(
-          `SELECT customer.id,
-                  COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name,
-                  account_number.account_number
-             FROM public.fp_customer_account_numbers AS account_number
-             JOIN public.fp_users AS customer ON customer.id = account_number.user_id
-             JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
-            WHERE account_number.account_number = $1
-              AND customer.status = 'active'
-              AND customer.role IN ('customer', 'super_admin')
-              AND auth_user."emailVerified" = true
-            LIMIT 1`,
-          [input.accountNumber]
+        const table = await pool.query<{ available: boolean }>(
+          "SELECT to_regclass('public.fp_customer_phone_aliases') IS NOT NULL AS available"
         );
+        const aliasTableAvailable = table.rows[0]?.available === true;
+        if (recipientIdentifier.kind === "phone" && !aliasTableAvailable) {
+          send(res, 503, { error: "PHONE_ALIAS_MIGRATION_REQUIRED" });
+          return true;
+        }
+        const result = aliasTableAvailable
+          ? await pool.query<{
+              id: string; recipient_name: string; account_number: string;
+            }>(
+              `SELECT customer.id,
+                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name,
+                      account_number.account_number
+                 FROM public.fp_customer_account_numbers AS account_number
+                 JOIN public.fp_users AS customer ON customer.id = account_number.user_id
+                 JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
+                 LEFT JOIN public.fp_customer_phone_aliases AS phone_alias
+                   ON phone_alias.user_id = customer.id
+                WHERE (account_number.account_number = $1 OR phone_alias.phone_e164 = $1)
+                  AND customer.status = 'active'
+                  AND customer.role IN ('customer', 'super_admin')
+                  AND auth_user."emailVerified" = true
+                LIMIT 1`,
+              [recipientIdentifier.value]
+            )
+          : await pool.query<{
+              id: string; recipient_name: string; account_number: string;
+            }>(
+              `SELECT customer.id,
+                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name,
+                      account_number.account_number
+                 FROM public.fp_customer_account_numbers AS account_number
+                 JOIN public.fp_users AS customer ON customer.id = account_number.user_id
+                 JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
+                WHERE account_number.account_number = $1
+                  AND customer.status = 'active'
+                  AND customer.role IN ('customer', 'super_admin')
+                  AND auth_user."emailVerified" = true
+                LIMIT 1`,
+              [recipientIdentifier.value]
+            );
         if (result.rowCount !== 1) {
           send(res, 404, { error: "FLOWPAY_RECIPIENT_NOT_FOUND" });
           return true;
@@ -241,6 +292,7 @@ export function createFlowPayTransfersHandler(options: Options) {
         const recipient = result.rows[0];
         send(res, 200, {
           verified: true,
+          lookupType: recipientIdentifier.kind,
           recipientName: recipient.recipient_name,
           accountNumber: recipient.account_number.trim(),
           currency: "NGN",
@@ -262,16 +314,17 @@ export function createFlowPayTransfersHandler(options: Options) {
         return true;
       }
       if (Object.keys(input).some(key => ![
-        "recipientAccountNumber", "amountMinor", "currency", "idempotencyKey", "transactionPin"
+        "recipientAccountNumber", "recipientPhoneNumber", "amountMinor", "currency", "idempotencyKey", "transactionPin"
       ].includes(key))) {
         send(res, 400, { error: "UNSUPPORTED_TRANSFER_FIELD" });
         return true;
       }
-      if (!validAccountNumber(input.recipientAccountNumber) ||
-          typeof input.amountMinor !== "string" || !/^\d{1,15}$/.test(input.amountMinor) ||
+      const recipientIdentifier = parseRecipientIdentifier(input, "recipientAccountNumber", "recipientPhoneNumber");
+      if (!recipientIdentifier ||
+          typeof input.amountMinor !== "string" || !/^\\d{1,15}$/.test(input.amountMinor) ||
           !Number.isSafeInteger(Number(input.amountMinor)) || BigInt(input.amountMinor) <= 0n ||
           input.currency !== "NGN" || !validUuid(input.idempotencyKey) ||
-          typeof input.transactionPin !== "string" || !/^\d{6}$/.test(input.transactionPin)) {
+          typeof input.transactionPin !== "string" || !/^\\d{6}$/.test(input.transactionPin)) {
         send(res, 400, { error: "INVALID_FLOWPAY_TRANSFER_DETAILS" });
         return true;
       }
@@ -285,21 +338,47 @@ export function createFlowPayTransfersHandler(options: Options) {
       try {
         await client.query("BEGIN");
 
-        const recipientResult = await client.query<{
-          id: string; account_number: string; recipient_name: string;
-        }>(
-          `SELECT customer.id, account_number.account_number,
-                  COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name
-             FROM public.fp_customer_account_numbers AS account_number
-             JOIN public.fp_users AS customer ON customer.id = account_number.user_id
-             JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
-            WHERE account_number.account_number = $1
-              AND customer.status = 'active'
-              AND customer.role IN ('customer', 'super_admin')
-              AND auth_user."emailVerified" = true
-            LIMIT 1`,
-          [input.recipientAccountNumber]
+        const phoneAliasTable = await client.query<{ available: boolean }>(
+          "SELECT to_regclass('public.fp_customer_phone_aliases') IS NOT NULL AS available"
         );
+        if (recipientIdentifier.kind === "phone" && phoneAliasTable.rows[0]?.available !== true) {
+          await client.query("ROLLBACK");
+          send(res, 503, { error: "PHONE_ALIAS_MIGRATION_REQUIRED" });
+          return true;
+        }
+        const recipientResult = phoneAliasTable.rows[0]?.available === true
+          ? await client.query<{
+              id: string; account_number: string; recipient_name: string;
+            }>(
+              `SELECT customer.id, account_number.account_number,
+                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name
+                 FROM public.fp_customer_account_numbers AS account_number
+                 JOIN public.fp_users AS customer ON customer.id = account_number.user_id
+                 JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
+                 LEFT JOIN public.fp_customer_phone_aliases AS phone_alias
+                   ON phone_alias.user_id = customer.id
+                WHERE (account_number.account_number = $1 OR phone_alias.phone_e164 = $1)
+                  AND customer.status = 'active'
+                  AND customer.role IN ('customer', 'super_admin')
+                  AND auth_user."emailVerified" = true
+                LIMIT 1`,
+              [recipientIdentifier.value]
+            )
+          : await client.query<{
+              id: string; account_number: string; recipient_name: string;
+            }>(
+              `SELECT customer.id, account_number.account_number,
+                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name
+                 FROM public.fp_customer_account_numbers AS account_number
+                 JOIN public.fp_users AS customer ON customer.id = account_number.user_id
+                 JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
+                WHERE account_number.account_number = $1
+                  AND customer.status = 'active'
+                  AND customer.role IN ('customer', 'super_admin')
+                  AND auth_user."emailVerified" = true
+                LIMIT 1`,
+              [recipientIdentifier.value]
+            );
         if (recipientResult.rowCount !== 1) {
           await client.query("ROLLBACK");
           send(res, 404, { error: "FLOWPAY_RECIPIENT_NOT_FOUND" });
@@ -343,7 +422,7 @@ export function createFlowPayTransfersHandler(options: Options) {
           const saved = prior.rows[0];
           const matches = saved.sender_user_id === identity.id &&
             saved.recipient_user_id === recipient.id &&
-            saved.recipient_account_number.trim() === input.recipientAccountNumber &&
+            saved.recipient_account_number.trim() === recipient.account_number.trim() &&
             saved.amount_minor === input.amountMinor && saved.currency.trim() === "NGN";
           await client.query("COMMIT");
           if (!matches) {
@@ -447,7 +526,7 @@ export function createFlowPayTransfersHandler(options: Options) {
              (transaction_id, sender_user_id, recipient_user_id, recipient_account_number,
               reference, amount_minor, currency)
            VALUES ($1, $2, $3, $4, $5, $6, 'NGN')`,
-          [transactionId, identity.id, recipient.id, input.recipientAccountNumber, reference, input.amountMinor]
+          [transactionId, identity.id, recipient.id, recipient.account_number.trim(), reference, input.amountMinor]
         );
         await client.query(
           `INSERT INTO public.fp_ledger_entries (transaction_id, account_id, amount_minor, currency)
