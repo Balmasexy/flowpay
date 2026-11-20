@@ -17,8 +17,8 @@ type RecipientLookupInput =
   | { kind: "phone"; payload: { phoneNumber: string } };
 
 function recipientLookupInput(value: string): RecipientLookupInput | null {
-  const compact = value.trim().replace(/[\\s().-]/g, "");
-  if (/^[1-9]\\d{9}$/.test(compact)) return { kind: "flowpay_id", payload: { accountNumber: compact } };
+  const compact = value.trim().replace(/[\s().-]/g, "");
+  if (/^[1-9]\d{9}$/.test(compact)) return { kind: "flowpay_id", payload: { accountNumber: compact } };
   const phoneNumber = normalizeFlowPayPhone(value);
   return phoneNumber ? { kind: "phone", payload: { phoneNumber } } : null;
 }
