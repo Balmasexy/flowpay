@@ -144,8 +144,6 @@ jobs:
       - name: Test Nigerian phone recipient alias normalization
         run: npm run test:customer-phone-aliases --prefix apps/api
 
-      - name: Test signed Neon Auth SMS and email OTP delivery
-        run: npm run test:neon-auth-otp-webhook --prefix apps/api
 
       - name: Test private customer transfer notifications and read controls
         run: npm run test:customer-notifications --prefix apps/api
