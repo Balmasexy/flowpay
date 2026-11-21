@@ -46,6 +46,7 @@ const issuer = process.env.NEON_AUTH_ISSUER;
 const audience = process.env.NEON_AUTH_AUDIENCE;
 const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
+const passkeysHandler = createPasskeysHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });
 const flutterwaveCheckoutHandler = createFlutterwaveCheckoutHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const flutterwaveWebhookHandler = createFlutterwaveWebhookHandler({ pool });
