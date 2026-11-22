@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { Camera, FileText, ImagePlus, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { Activity, Camera, ChevronRight, CircleHelp, CreditCard, FileText, Gift, ImagePlus, ShieldCheck, Trash2, UserRound, Wallet, X } from "lucide-react";
 import { getApiJwt } from "./auth-client";
 
 type Profile = {
@@ -151,7 +151,12 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
   const initials=displayName.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join("")||"F";
   const visiblePhoto=photoChanged?photoDataUrl:(profile.photoUrl??user.image??null);
   return <section className="fp-panel fp-detail-panel fp-profile-panel">
-    <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Customer profile</h2><p className="fp-muted">Update your contact details and profile photo securely.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
+    <div className="fp-profile-heading"><div><span className="fp-profile-kicker">YOUR ACCOUNT</span><h2>Me</h2><p className="fp-muted">Your profile, account tools and security settings.</p></div><span className="fp-profile-status"><span/> Signed in</span></div>
+    <div className="fp-me-shortcuts" aria-label="Account shortcuts">
+      <button type="button" onClick={()=>go("/activity")}><span><Activity size={19}/></span><b>Transactions</b></button>
+      <button type="button" onClick={()=>go("/account-number")}><span><Wallet size={19}/></span><b>Account details</b></button>
+      <button type="button" onClick={()=>go("/security")}><span><ShieldCheck size={19}/></span><b>Security centre</b></button>
+    </div>
     <article className="fp-profile-card" aria-label="FlowPay customer profile card">
       <div className="fp-profile-card-top"><span className="fp-profile-card-brand"><span>F</span> flowpay</span></div>
       <div className="fp-profile-card-person"><div className="fp-profile-card-avatar">{visiblePhoto?<img src={visiblePhoto} alt="Customer profile" referrerPolicy="no-referrer"/>:<span>{initials}</span>}</div><div className="fp-profile-card-identity"><strong>{displayName}</strong><span>{profile.email||user.email||"Email address not provided"}</span></div></div>
@@ -184,9 +189,17 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
       <label htmlFor="fp-profile-address">Residential address</label><textarea id="fp-profile-address" rows={3} maxLength={500} autoComplete="street-address" value={profile.residentialAddress} onChange={event=>setProfile(current=>({...current,residentialAddress:event.target.value}))} placeholder="Enter your residential address"/>
       <button className="fp-primary" type="submit" disabled={saving||loading||photoBusy}>{saving?"Saving…":"Save profile"}</button>
     </form>
-    <div className="fp-profile-section-title"><h3>Account information</h3><span>Assigned by FlowPay</span></div>
-    <div className="fp-detail-list fp-profile-details"><div><span>Account holder name</span><b>{displayName}</b></div><div><span>FlowPay account number</span><b>Not yet assigned</b></div><div><span>Account tier</span><b>Not yet assigned</b></div><div><span>Account status</span><b>Signed in</b></div></div>
+    <div className="fp-profile-section-title"><h3>Account information</h3><span>Managed by FlowPay</span></div>
+    <div className="fp-detail-list fp-profile-details"><div><span>Account holder name</span><b>{displayName}</b></div><div><span>Account status</span><b>Signed in</b></div></div>
+    <button type="button" className="fp-outline fp-me-account-details-link" onClick={()=>go("/account-number")}>View account numbers and receiving options <ChevronRight size={16}/></button>
     <div className="fp-profile-actions"><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button><button className="fp-outline" onClick={()=>go("/security")}><ShieldCheck size={16}/> Security settings</button></div>
+    <div className="fp-me-account-menu" aria-label="More account services">
+      <h3>Account services</h3>
+      <button type="button" onClick={()=>go("/cards")}><CreditCard size={18}/><span>Bank Card / Account</span><ChevronRight size={17}/></button>
+      <button type="button" onClick={()=>go("/documents")}><FileText size={18}/><span>Documents</span><ChevronRight size={17}/></button>
+      <button type="button" onClick={()=>go("/invitations")}><Gift size={18}/><span>Invitations & rewards</span><ChevronRight size={17}/></button>
+      <button type="button" onClick={()=>go("/support")}><CircleHelp size={18}/><span>Help & support</span><ChevronRight size={17}/></button>
+    </div>
     <div className="fp-preview-warning"><UserRound size={17}/> Only your own authenticated profile photo and contact details can be changed.</div>
   </section>;
 }

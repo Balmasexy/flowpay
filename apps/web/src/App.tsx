@@ -65,6 +65,15 @@ const routes: Route[] = [
 ];
 
 
+
+const mobileNavItems = [
+  { path: "/dashboard", label: "Home", icon: Home },
+  { path: "/invitations", label: "Rewards", icon: Gift },
+  { path: "/savings", label: "Wealth", icon: Wallet },
+  { path: "/cards", label: "Cards", icon: CreditCard },
+  { path: "/profile", label: "Me", icon: UserRound },
+];
+
 function routeFor(path: string) {
   return routes.find((r) => r.path === path) ?? routes[0];
 }
@@ -199,6 +208,7 @@ export default function App() {
         </button>
         <div className="fp-header-actions">
           <CustomerNotifications token={apiJwt} go={go}/>
+          <button className="fp-header-link fp-mobile-menu-trigger" onClick={() => setMobileMenuOpen(value => !value)} aria-expanded={mobileMenuOpen} aria-controls="fp-mobile-all-menu"><Ellipsis size={19}/> All services</button>
           <button className="fp-header-link" onClick={() => go("/support")}><CircleHelp size={18}/> Help</button>
           <button className="fp-avatar" onClick={() => go("/profile")} aria-label="Open profile" style={{width:36,height:36,minWidth:36,minHeight:36,padding:0,borderRadius:"50%",overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"0 0 36px",position:"relative"}}>{profilePhoto || activeUser?.image ? <img src={profilePhoto || activeUser?.image || ""} alt="" referrerPolicy="no-referrer" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",borderRadius:"50%",position:"absolute",inset:0}}/> : <UserRound size={19}/>}</button>
           <button className="fp-header-link" onClick={async () => { clearFlowPayPasskeySession(); setPasskeySession(null); await authClient.signOut(); window.location.assign("/login"); }}>Sign out</button>
@@ -249,14 +259,11 @@ export default function App() {
         </main>
       </div>
 
-      <nav className="fp-bottom-nav" aria-label="Main navigation">
-        {[routes[0], routes[4], routes[7], routes[8]].map(({path: target,label,icon: Icon}) =>
-          <button key={target} className={active.path === target ? "active" : ""} title={label} onClick={() => go(target)}>
-            <Icon size={19}/><span>{label}</span>
+      <nav className="fp-bottom-nav" aria-label="Primary navigation">
+        {mobileNavItems.map(({path: target,label,icon: Icon}) =>
+          <button key={target} className={path === target ? "active" : ""} title={label} aria-current={path === target ? "page" : undefined} onClick={() => go(target)}>
+            <Icon size={20}/><span>{label}</span>
           </button>)}
-        <button className={mobileMenuOpen ? "active" : ""} aria-expanded={mobileMenuOpen} aria-controls="fp-mobile-all-menu" onClick={() => setMobileMenuOpen(v => !v)}>
-          <ChevronRight size={19}/><span>All services</span>
-        </button>
       </nav>
       {mobileMenuOpen && <div className="fp-mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)}>
         <section id="fp-mobile-all-menu" className="fp-mobile-menu" aria-label="All FlowPay navigation" onClick={e => e.stopPropagation()}>
