@@ -4,6 +4,8 @@ import { Building2, Check, Copy, FileText, RefreshCw, ShieldCheck, Smartphone, W
 type WalletAccount = { currency: string; status: string; createdAt: string };
 type AccountDetails = {
   flowpayAccountNumber: string | null;
+  phoneNumber: string | null;
+  phoneAliasVerified: boolean;
   walletAccounts: WalletAccount[];
   message: string;
 };
@@ -30,8 +32,12 @@ function parseAccountDetails(value: unknown): AccountDetails | null {
   }
   const flowpayAccountNumber = typeof body.flowpayAccountNumber === "string" &&
     /^[1-9][0-9]{9}$/.test(body.flowpayAccountNumber) ? body.flowpayAccountNumber : null;
+  const phoneNumber = body.phoneAliasVerified === true && typeof body.phoneNumber === "string" &&
+    /^\+234[789][0-9]{9}$/.test(body.phoneNumber) ? body.phoneNumber : null;
   return {
     flowpayAccountNumber,
+    phoneNumber,
+    phoneAliasVerified: phoneNumber !== null,
     walletAccounts: wallets,
     message: typeof body.message === "string" ? body.message.slice(0, 300) : "Account information is read-only."
   };
@@ -53,6 +59,16 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
     try {
       await navigator.clipboard.writeText(data.flowpayAccountNumber);
       setCopied("FlowPay ID copied");
+    } catch {
+      setCopied("Clipboard unavailable");
+    }
+  };
+
+  const copyPhoneNumber = async () => {
+    if (!data?.phoneNumber) return;
+    try {
+      await navigator.clipboard.writeText(data.phoneNumber);
+      setCopied("Verified FlowPay phone number copied");
     } catch {
       setCopied("Clipboard unavailable");
     }
@@ -138,9 +154,15 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
             <span className="fp-account-type-icon"><Smartphone size={19}/></span>
             <span className="fp-money-eyebrow">PHONE-BASED RECEIVING</span>
             <h3>Receive by mobile number</h3>
-            <p>Your Neon-verified Nigerian mobile number is a second way for another FlowPay customer to find this same wallet.</p>
-            <span className="fp-account-live-label is-pending"><ShieldCheck size={14}/> Neon Auth verification</span>
-            <small className="fp-muted">Phone-number transfers from other Nigerian banks require FlowPay's NIBSS National Payment Stack participant integration and certification. That external-bank route is not active until approval is confirmed. FlowPay does not display or generate a customer NUBAN.</small>
+            <p>Your verified registration phone number is a second way for another FlowPay customer to find the same wallet.</p>
+            <div className="fp-account-type-value">{data?.phoneAliasVerified ? data.phoneNumber : "Phone verification required"}</div>
+            <span className={data?.phoneAliasVerified ? "fp-account-live-label" : "fp-account-live-label is-pending"}>
+              <ShieldCheck size={14}/> {data?.phoneAliasVerified ? "Neon-verified FlowPay phone alias" : "Not yet verified by Neon Auth"}
+            </span>
+            {data?.phoneAliasVerified && <button type="button" className="fp-outline" onClick={() => void copyPhoneNumber()}>
+              <Copy size={14}/> Copy verified phone number
+            </button>}
+            <small className="fp-muted">This phone number resolves to the same FlowPay wallet inside FlowPay. Appearing in every Nigerian bank's transfer lookup requires NIBSS/partner approval and a supported phone-proxy service; it is not yet active.</small>
           </article>
         </div>
 
