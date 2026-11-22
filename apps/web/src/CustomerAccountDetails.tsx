@@ -109,7 +109,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       setLoading(false);
       return;
     }
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/[/]+$/, "");
     if (!apiBase) {
       setData(null);
       setError("FlowPay API address is not configured.");
@@ -146,7 +146,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
 
   useEffect(() => {
     let active = true;
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/[/]+$/, "");
     if (!token || !apiBase) {
       setPaystackDva(null);
       setPaystackDvaError("The Paystack receiving-account service is not configured.");
