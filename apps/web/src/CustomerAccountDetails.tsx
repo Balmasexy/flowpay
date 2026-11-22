@@ -146,7 +146,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
 
   useEffect(() => {
     let active = true;
-    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!token || !apiBase) {
       setPaystackDva(null);
       setPaystackDvaError("The Paystack receiving-account service is not configured.");
@@ -170,7 +170,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
           typeof account.assigned !== "boolean" || typeof account.status !== "string") {
         throw new Error("Paystack returned incomplete receiving-account status.");
       }
-      const accountNumber = typeof account.accountNumber === "string" && /^\\d{10}$/.test(account.accountNumber)
+      const accountNumber = typeof account.accountNumber === "string" && /^\d{10}$/.test(account.accountNumber)
         ? account.accountNumber : null;
       const bankName = typeof account.bankName === "string" ? account.bankName : null;
       const accountName = typeof account.accountName === "string" ? account.accountName : null;
