@@ -1380,3 +1380,41 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media (max-width: 560px) {
   .fp-profile-heading-actions { width: 100%; justify-content: flex-start; }
 }
+
+
+/* OPay-inspired mobile customer navigation and account shortcuts (FlowPay identity) */
+.fp-mobile-menu-trigger{display:none}
+.fp-home-services .fp-service-tile{min-height:112px}
+.fp-me-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 4px}
+.fp-me-shortcuts>button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;min-height:96px;padding:13px 8px;border:1px solid var(--border);border-radius:13px;background:#fff;color:#30312c}
+.fp-me-shortcuts>button>span{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#fff1e6;color:var(--orange)}
+.fp-me-shortcuts>button b{font-size:11px;text-align:center}
+.fp-me-account-menu{border:1px solid var(--border);border-radius:13px;background:#fff;padding:16px 17px}
+.fp-me-account-menu h3{font:800 14px Manrope,sans-serif;margin:0 0 7px;color:#282923}
+.fp-me-account-menu>button{display:flex;align-items:center;gap:12px;width:100%;padding:15px 1px;border:0;border-bottom:1px solid #efefec;background:transparent;text-align:left;color:#55564f;font-size:12px}
+.fp-me-account-menu>button:last-child{border-bottom:0}
+.fp-me-account-menu>button svg:first-child{color:var(--orange);flex-shrink:0}
+.fp-me-account-menu>button span{flex:1}
+.fp-me-account-menu>button svg:last-child{color:#a2a39d}
+@media(max-width:760px){
+  .fp-mobile-menu-trigger{display:inline-flex}
+  .fp-home-services .fp-service-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  .fp-home-services .fp-service-tile{align-items:center;justify-content:center;text-align:center;min-height:88px;padding:9px 3px;gap:7px;border-radius:12px}
+  .fp-home-services .fp-service-icon{width:38px;height:38px}
+  .fp-home-services .fp-service-tile b{font-size:10px;line-height:1.2}
+  .fp-home-services .fp-service-tile small{display:none}
+  .fp-balance-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:6px}
+  .fp-balance-actions button{min-width:0;justify-content:center;gap:5px;padding:9px 4px;font-size:9px;white-space:nowrap}
+  .fp-balance-actions button svg{width:14px;height:14px;flex-shrink:0}
+  .fp-me-shortcuts{gap:7px}
+  .fp-me-shortcuts>button{min-height:88px;padding:10px 4px}
+  .fp-me-shortcuts>button b{font-size:9px}
+  .fp-me-account-menu{padding:14px}
+}
+@media(max-width:360px){
+  .fp-home-services .fp-service-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fp-home-services .fp-service-tile{min-height:82px;flex-direction:row;justify-content:flex-start;padding:10px;text-align:left}
+  .fp-home-services .fp-service-tile small{display:block}
+  .fp-balance-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .fp-balance-actions button{font-size:10px}
+}
