@@ -79,12 +79,12 @@ function readCachedBalance(token: string): CachedBalance | null {
 
 function saveCachedBalance(token: string, overview: Overview): CachedBalance | null {
   const subject = readTokenSubject(token);
-  if (!subject || !visibleOverview.balance.available || visibleOverview.balance.balances.length === 0 ||
-      !Number.isFinite(Date.parse(visibleOverview.generatedAt)) || typeof window === "undefined") return null;
+  if (!subject || !overview.balance.available || overview.balance.balances.length === 0 ||
+      !Number.isFinite(Date.parse(overview.generatedAt)) || typeof window === "undefined") return null;
   const snapshot: CachedBalance = {
     subject,
-    balances: visibleOverview.balance.balances,
-    generatedAt: visibleOverview.generatedAt
+    balances: overview.balance.balances,
+    generatedAt: overview.generatedAt
   };
   try {
     window.sessionStorage.setItem(BALANCE_CACHE_KEY, JSON.stringify(snapshot));
