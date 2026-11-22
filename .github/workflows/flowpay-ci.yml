@@ -138,6 +138,9 @@ jobs:
       - name: Test FlowPay internal wallet transfers and ledger safeguards
         run: npm run test:flowpay-transfers --prefix apps/api
 
+      - name: Test FlowPay phone recipient lookup and registered-name matching
+        run: npm run test:flowpay-recipient-lookup --prefix apps/api
+
       - name: Test Neon-verified phone onboarding and permanent FlowPay ID assignment
         run: npm run test:customer-bootstrap-phone --prefix apps/api
 
