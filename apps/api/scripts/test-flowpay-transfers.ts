@@ -28,6 +28,7 @@ type SetupOptions = {
   held?: string;
   flutterwaveTable?: boolean;
   phoneAliasTable?: boolean;
+  phoneAliasVerified?: boolean;
   savedPin?: string;
   recipientId?: string;
   prior?: boolean;
@@ -56,6 +57,10 @@ async function makeContext(options: SetupOptions = {}) {
         return { rowCount: 1, rows: [{ available: options.phoneAliasTable ?? false }] };
       }
       if (sql.includes("FROM public.fp_customer_account_numbers AS account_number")) {
+        const isPhoneLookup = values?.[1] === "phone";
+        if (isPhoneLookup && options.phoneAliasVerified === false) {
+          return { rowCount: 0, rows: [] };
+        }
         return {
           rowCount: 1,
           rows: [{
@@ -229,7 +234,9 @@ test("accepts a verified phone alias and posts to the same canonical FlowPay acc
     item.sql.includes("phone_alias.phone_e164 = $1")
   );
   assert.ok(phoneLookup, "resolves the verified phone alias through the alias table");
-  assert.deepEqual(phoneLookup?.values, ["+2348012345678"]);
+  assert.deepEqual(phoneLookup?.values, ["+2348012345678", "phone"]);
+  assert.ok(phoneLookup?.sql.includes("phone_alias.verified_at IS NOT NULL"));
+  assert.ok(phoneLookup?.sql.includes("phoneNumberVerified"));
   const internalTransfer = context.statements.find(item =>
     item.sql.includes("INSERT INTO public.fp_internal_transfer_details")
   );
@@ -237,6 +244,23 @@ test("accepts a verified phone alias and posts to the same canonical FlowPay acc
   assert.equal(internalTransfer?.values?.[3], recipientAccountNumber,
     "ledger history stores the recipient's permanent FlowPay ID, not the phone number");
 });
+
+test("rejects a phone alias that is no longer the customer's verified Neon phone", async () => {
+  const context = await makeContext({ phoneAliasTable: true, phoneAliasVerified: false });
+  const response = context.response();
+  await context.handler(context.request({
+    recipientPhoneNumber: "+2348012345678",
+    amountMinor: "5000000",
+    currency: "NGN",
+    idempotencyKey,
+    transactionPin: "123456"
+  }), response.res);
+  assert.equal(response.result().status, 404);
+  assert.equal(response.result().body.error, "FLOWPAY_RECIPIENT_NOT_FOUND");
+  assert.equal(context.ledgerValues.length, 0);
+  assert.equal(context.statements.some(item => item.sql.includes("INSERT INTO public.fp_ledger_transactions")), false);
+});
+
 
 test("rejects a request that supplies both FlowPay ID and phone alias", async () => {
   const context = await makeContext({ phoneAliasTable: true });
