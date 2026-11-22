@@ -207,7 +207,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
       <span className="fp-account-hero-icon"><Building2 size={22}/></span>
       <span className="fp-money-eyebrow">FLOWPAY · ACCOUNT CENTRE</span>
       <h2>Your FlowPay identity</h2>
-      <p>Your permanent 10-digit FlowPay ID and your Neon-verified mobile number identify the same FlowPay wallet. No customer NUBAN is created or displayed here.</p>
+      <p>Your permanent 10-digit FlowPay ID and Neon-verified mobile number identify the same wallet inside FlowPay. A separate Paystack bank account number appears here only after Paystack confirms a dedicated virtual account assignment.</p>
       <div className="fp-account-number-highlight">
         <div>
           <small>YOUR PERMANENT FLOWPAY ID</small>
@@ -275,7 +275,7 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
                   <div><span>Bank account name</span><b>{paystackDva.account.accountName}</b></div>
                   <div><span>Receiving provider</span><b>Paystack</b></div>
                 </div>
-                <p className="fp-muted">Share this Paystack-issued account number from any Nigerian bank app. The account name is shown exactly as Paystack supplied it; FlowPay does not rename or fabricate bank-side account details.</p>
+                <p className="fp-muted">Use this Paystack-issued NUBAN as the destination account number in a Nigerian bank transfer. The bank account name is shown exactly as Paystack supplied it; FlowPay does not rename or fabricate bank-side details.</p>
               </> : <>
                 <div className="fp-preview-warning">
                   <ShieldCheck size={17}/>
