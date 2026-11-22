@@ -10,6 +10,7 @@ type AccountDetails = {
   message: string;
 };
 
+// Paystack's bank-issued NUBAN is distinct from the FlowPay-only verified phone alias.
 type PaystackDva = {
   environment: "test" | "live";
   assignmentEnabled: boolean;
