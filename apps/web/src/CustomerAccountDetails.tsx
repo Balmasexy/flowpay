@@ -10,6 +10,20 @@ type AccountDetails = {
   message: string;
 };
 
+type PaystackDva = {
+  environment: "test" | "live";
+  assignmentEnabled: boolean;
+  livePaymentsEnabled: boolean;
+  account: {
+    assigned: boolean;
+    status: string;
+    accountNumber: string | null;
+    bankName: string | null;
+    accountName: string | null;
+  };
+  message: string;
+};
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown> : null;
@@ -53,6 +67,9 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
   const [data, setData] = useState<AccountDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [paystackDva, setPaystackDva] = useState<PaystackDva | null>(null);
+  const [paystackDvaLoading, setPaystackDvaLoading] = useState(true);
+  const [paystackDvaError, setPaystackDvaError] = useState("");
 
   const copyFlowPayId = async () => {
     if (!data?.flowpayAccountNumber) return;
@@ -69,6 +86,17 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
     try {
       await navigator.clipboard.writeText(data.phoneNumber);
       setCopied("Verified FlowPay phone number copied");
+    } catch {
+      setCopied("Clipboard unavailable");
+    }
+  };
+
+  const copyPaystackAccount = async () => {
+    const number = paystackDva?.account.accountNumber;
+    if (!number) return;
+    try {
+      await navigator.clipboard.writeText(number);
+      setCopied("Paystack receiving account number copied");
     } catch {
       setCopied("Clipboard unavailable");
     }
@@ -115,6 +143,64 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\\/+$/, "");
+    if (!token || !apiBase) {
+      setPaystackDva(null);
+      setPaystackDvaError("The Paystack receiving-account service is not configured.");
+      setPaystackDvaLoading(false);
+      return () => { active = false; };
+    }
+    setPaystackDvaLoading(true);
+    setPaystackDvaError("");
+    fetch(apiBase + "/customer/dedicated-bank-account", {
+      method: "GET",
+      credentials: "omit",
+      headers: { Authorization: "Bearer " + token }
+    }).then(async response => {
+      const body = asRecord(await response.json().catch(() => null));
+      if (!response.ok) throw new Error(typeof body?.message === "string"
+        ? body.message
+        : typeof body?.error === "string" ? body.error : "Paystack account status is unavailable.");
+      const account = asRecord(body?.virtualBankAccount);
+      if ((body?.environment !== "test" && body?.environment !== "live") ||
+          typeof body?.assignmentEnabled !== "boolean" || !account ||
+          typeof account.assigned !== "boolean" || typeof account.status !== "string") {
+        throw new Error("Paystack returned incomplete receiving-account status.");
+      }
+      const accountNumber = typeof account.accountNumber === "string" && /^\\d{10}$/.test(account.accountNumber)
+        ? account.accountNumber : null;
+      const bankName = typeof account.bankName === "string" ? account.bankName : null;
+      const accountName = typeof account.accountName === "string" ? account.accountName : null;
+      if (account.assigned && (!accountNumber || !bankName || !accountName)) {
+        throw new Error("Paystack marked this account assigned but did not return complete bank details.");
+      }
+      return {
+        environment: body.environment,
+        assignmentEnabled: body.assignmentEnabled,
+        livePaymentsEnabled: body.livePaymentsEnabled === true,
+        account: {
+          assigned: account.assigned,
+          status: account.status.slice(0, 40),
+          accountNumber,
+          bankName,
+          accountName
+        },
+        message: typeof body.message === "string" ? body.message.slice(0, 300) : "Paystack account status loaded."
+      } satisfies PaystackDva;
+    }).then(value => {
+      if (active) setPaystackDva(value);
+    }).catch(cause => {
+      if (!active) return;
+      setPaystackDva(null);
+      setPaystackDvaError(cause instanceof Error ? cause.message : "Unable to load Paystack receiving-account status.");
+    }).finally(() => {
+      if (active) setPaystackDvaLoading(false);
+    });
+    return () => { active = false; };
+  }, [token]);
 
   return <section className="fp-panel fp-detail-panel fp-account-page">
     <div className="fp-account-hero">
@@ -165,6 +251,42 @@ export default function CustomerAccountDetails({ token, go }: { token: string; g
             <small className="fp-muted">This phone number resolves to the same FlowPay wallet inside FlowPay. Appearing in every Nigerian bank's transfer lookup requires NIBSS/partner approval and a supported phone-proxy service; it is not yet active.</small>
           </article>
         </div>
+
+        <section className="fp-account-wallets fp-paystack-receiving-account" aria-label="Paystack receiving bank account">
+          <div className="fp-money-section-heading">
+            <div><span className="fp-money-eyebrow">PAYSTACK · BANK RECEIVING</span><h3>Your dedicated virtual bank account</h3></div>
+            <span className="fp-money-count">{paystackDva?.environment === "live" ? "LIVE" : paystackDva?.environment === "test" ? "TEST" : "STATUS"}</span>
+          </div>
+          {paystackDvaLoading ? <p className="fp-muted">Checking Paystack account assignment…</p>
+            : paystackDvaError ? <div className="fp-preview-warning" role="alert">{paystackDvaError}</div>
+            : paystackDva?.account.assigned ? <>
+                <div className="fp-account-wallet-list">
+                  <div>
+                    <span className="fp-account-currency"><Building2 size={18}/></span>
+                    <span><b>{paystackDva.account.bankName}</b><small>Bank shown by Paystack</small></span>
+                    <strong>Assigned</strong>
+                  </div>
+                </div>
+                <div className="fp-account-number-highlight">
+                  <div><small>PAYSTACK NUBAN</small><strong>{paystackDva.account.accountNumber}</strong></div>
+                  <button type="button" onClick={() => void copyPaystackAccount()}><Copy size={16}/> Copy</button>
+                </div>
+                <div className="fp-detail-list">
+                  <div><span>Bank account name</span><b>{paystackDva.account.accountName}</b></div>
+                  <div><span>Receiving provider</span><b>Paystack</b></div>
+                </div>
+                <p className="fp-muted">Share this Paystack-issued account number from any Nigerian bank app. The account name is shown exactly as Paystack supplied it; FlowPay does not rename or fabricate bank-side account details.</p>
+              </> : <>
+                <div className="fp-preview-warning">
+                  <ShieldCheck size={17}/>
+                  {paystackDva?.assignmentEnabled
+                    ? "Paystack account assignment is enabled for this environment, but no dedicated account has been assigned to this customer yet."
+                    : "Paystack has not enabled dedicated-account assignment for this environment. Your bank receiving account number will appear only after Paystack approves and confirms assignment."}
+                </div>
+                <p className="fp-muted">Your FlowPay ID and verified phone number remain FlowPay wallet identifiers. They are not bank account numbers.</p>
+              </>}
+          {paystackDva && <p className="fp-muted">{paystackDva.message}</p>}
+        </section>
 
         <div className="fp-account-wallets">
           <div className="fp-money-section-heading">
