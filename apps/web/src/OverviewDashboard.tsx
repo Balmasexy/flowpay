@@ -27,7 +27,7 @@ const services = [
   { label: "Electricity", path: "/bills", icon: Zap, detail: "Verify meter and pay through provider" },
   { label: "Cable TV", path: "/cable-tv", icon: Cable, detail: "Provider activation is still required" },
   { label: "Savings", path: "/savings", icon: Wallet, detail: "Review savings tools and goals" },
-  { label: "History", path: "/activity", icon: Clock3, detail: "Review posted and reversed ledger activity" },
+  { label: "More", path: "/more", icon: ChevronRight, detail: "Explore the rest of FlowPay" },
 ];
 
 const providers = ["MTN", "Airtel", "Glo", "9mobile"];
@@ -163,9 +163,11 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       <div className="fp-balance-top"><span>Wallet balance</span><div className="fp-balance-top-actions"><button type="button" className="fp-balance-history" onClick={() => go("/activity")}><Activity size={15}/> Transaction history <ChevronRight size={14}/></button><button type="button" className="fp-balance-refresh" style={{background:"transparent",border:0,color:"inherit",padding:6,cursor:loading?"wait":"pointer",display:"inline-flex",alignItems:"center"}} onClick={() => void loadOverview()} disabled={loading} aria-label="Refresh dashboard balance and activity" title="Refresh dashboard"><RefreshCw size={17}/></button></div></div>
       {overview?.balance.available && overview.balance.balances.length > 0 ? <div className="fp-balance-values" role="status" aria-live="polite">{overview.balance.balances.map(item => <strong key={item.currency}>{formatBalance(item.currency, item.amountMinor)}</strong>)}</div> : loading ? <strong className="fp-balance-unavailable" role="status" aria-live="polite">Loading verified balance…</strong> : <strong className="fp-balance-unavailable" role="status" aria-live="polite">Balance not yet verified</strong>}
       <small>{overview?.balance.available && overview.balance.balances.length > 0 ? (error ? "Showing the last verified ledger balance. Refresh failed; this value is retained and is not a live update." : isVerifiedZeroBalance(overview.balance.balances) ? "Verified zero balance: no posted ledger entries are recorded for these active customer accounts." : "Balance values are returned by the authenticated FlowPay ledger service.") : error ? "We could not verify a balance yet. No estimated or sample amount is displayed." : "Balance appears after the authenticated ledger service verifies your account."}</small>
-      <div className="fp-balance-actions">
+      <div className="fp-balance-actions" aria-label="Quick money actions">
         <button onClick={() => go("/transfers?mode=flowpay")}><ArrowDownLeft size={17}/> To FlowPay</button>
         <button onClick={() => go("/transfers?mode=bank")}><ArrowUpRight size={17}/> To Bank</button>
+        <button onClick={() => go("/money-received")}><ArrowDownLeft size={17}/> Add Money</button>
+        <button onClick={() => go("/savings")}><Wallet size={17}/> Save</button>
       </div>
       {overview?.generatedAt && <small className="fp-overview-updated">{error ? "Last verified " : "Last updated "}{dateLabel(overview.generatedAt)}</small>}
     </section>
@@ -205,7 +207,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       </article>
     </section>
 
-    <section className="fp-section">
+    <section className="fp-section fp-home-services">
       <div className="fp-section-title"><h2>Quick services</h2><span>Open a FlowPay service</span></div>
       <div className="fp-service-grid">
         {services.map(({label,path,icon:Icon,detail}) => <button className="fp-service-tile" key={path} onClick={() => go(path)}>
