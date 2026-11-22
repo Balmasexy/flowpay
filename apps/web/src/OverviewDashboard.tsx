@@ -67,7 +67,7 @@ function readCachedBalance(token: string): CachedBalance | null {
     for (const rawBalance of saved.balances) {
       const item = asRecord(rawBalance);
       if (!item || typeof item.currency !== "string" || !/^[A-Z]{3}$/.test(item.currency) ||
-          typeof item.amountMinor !== "string" || !/^-?\\d+$/.test(item.amountMinor) ||
+          typeof item.amountMinor !== "string" || !/^-?\d+$/.test(item.amountMinor) ||
           !Number.isSafeInteger(Number(item.amountMinor))) return null;
       balances.push({ currency: item.currency, amountMinor: item.amountMinor });
     }
