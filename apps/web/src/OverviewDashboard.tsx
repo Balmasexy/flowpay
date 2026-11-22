@@ -287,7 +287,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       </article>
       <article className="fp-overview-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><CreditCard size={19}/></span><span>Your virtual card</span></div>
-        <strong className="fp-overview-service-status">{visibleOnboarding?.cardStatus === "pending" ? "Awaiting issuer" : visibleOnboarding?.cardStatus ? titleCase(onboarding.cardStatus) : loading ? "Preparing…" : "Not linked"}</strong>
+        <strong className="fp-overview-service-status">{visibleOnboarding?.cardStatus === "pending" ? "Awaiting issuer" : visibleOnboarding?.cardStatus ? titleCase(visibleOnboarding.cardStatus) : loading ? "Preparing…" : "Not linked"}</strong>
         <p className="fp-overview-muted">A card preview appears now. A working card number, CVV and expiry are shown only after an approved issuer creates the card.</p>
         <button className="fp-overview-link" onClick={() => go("/cards")}>Open virtual card <ChevronRight size={15}/></button>
       </article>
