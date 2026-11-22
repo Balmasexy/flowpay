@@ -189,8 +189,9 @@ export default function CustomerProfile({go,user,onPhotoChange}:{go:(path:string
       <label htmlFor="fp-profile-address">Residential address</label><textarea id="fp-profile-address" rows={3} maxLength={500} autoComplete="street-address" value={profile.residentialAddress} onChange={event=>setProfile(current=>({...current,residentialAddress:event.target.value}))} placeholder="Enter your residential address"/>
       <button className="fp-primary" type="submit" disabled={saving||loading||photoBusy}>{saving?"Saving…":"Save profile"}</button>
     </form>
-    <div className="fp-profile-section-title"><h3>Account information</h3><span>Assigned by FlowPay</span></div>
-    <div className="fp-detail-list fp-profile-details"><div><span>Account holder name</span><b>{displayName}</b></div><div><span>FlowPay account number</span><b>Not yet assigned</b></div><div><span>Account tier</span><b>Not yet assigned</b></div><div><span>Account status</span><b>Signed in</b></div></div>
+    <div className="fp-profile-section-title"><h3>Account information</h3><span>Managed by FlowPay</span></div>
+    <div className="fp-detail-list fp-profile-details"><div><span>Account holder name</span><b>{displayName}</b></div><div><span>Account status</span><b>Signed in</b></div></div>
+    <button type="button" className="fp-outline fp-me-account-details-link" onClick={()=>go("/account-number")}>View account numbers and receiving options <ChevronRight size={16}/></button>
     <div className="fp-profile-actions"><button className="fp-outline" onClick={()=>go("/documents")}><FileText size={16}/> View verification documents</button><button className="fp-outline" onClick={()=>go("/security")}><ShieldCheck size={16}/> Security settings</button></div>
     <div className="fp-me-account-menu" aria-label="More account services">
       <h3>Account services</h3>
