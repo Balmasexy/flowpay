@@ -255,25 +255,37 @@ export function createFlowPayTransfersHandler(options: Options) {
               id: string; recipient_name: string; account_number: string;
             }>(
               `SELECT customer.id,
-                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name,
+                      BTRIM(auth_user.name) AS recipient_name,
                       account_number.account_number
                  FROM public.fp_customer_account_numbers AS account_number
                  JOIN public.fp_users AS customer ON customer.id = account_number.user_id
                  JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
                  LEFT JOIN public.fp_customer_phone_aliases AS phone_alias
                    ON phone_alias.user_id = customer.id
-                WHERE (account_number.account_number = $1 OR phone_alias.phone_e164 = $1)
+                WHERE (
+                    ($2 = 'flowpay_id' AND account_number.account_number = $1)
+                    OR
+                    ($2 = 'phone'
+                      AND phone_alias.phone_e164 = $1
+                      AND phone_alias.verified_at IS NOT NULL
+                      AND phone_alias.phone_e164 =
+                        COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                                 to_jsonb(auth_user)->>'phone_number')
+                      AND LOWER(COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                                         to_jsonb(auth_user)->>'phone_number_verified', 'false')) = 'true')
+                  )
                   AND customer.status = 'active'
                   AND customer.role IN ('customer', 'super_admin')
                   AND auth_user."emailVerified" = true
+                  AND NULLIF(BTRIM(auth_user.name), '') IS NOT NULL
                 LIMIT 1`,
-              [recipientIdentifier.value]
+              [recipientIdentifier.value, recipientIdentifier.kind]
             )
           : await pool.query<{
               id: string; recipient_name: string; account_number: string;
             }>(
               `SELECT customer.id,
-                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name,
+                      BTRIM(auth_user.name) AS recipient_name,
                       account_number.account_number
                  FROM public.fp_customer_account_numbers AS account_number
                  JOIN public.fp_users AS customer ON customer.id = account_number.user_id
@@ -282,6 +294,7 @@ export function createFlowPayTransfersHandler(options: Options) {
                   AND customer.status = 'active'
                   AND customer.role IN ('customer', 'super_admin')
                   AND auth_user."emailVerified" = true
+                  AND NULLIF(BTRIM(auth_user.name), '') IS NOT NULL
                 LIMIT 1`,
               [recipientIdentifier.value]
             );
@@ -292,14 +305,18 @@ export function createFlowPayTransfersHandler(options: Options) {
         const recipient = result.rows[0];
         send(res, 200, {
           verified: true,
+          institutionName: "FlowPay",
           lookupType: recipientIdentifier.kind,
           recipientName: recipient.recipient_name,
+          registeredName: recipient.recipient_name,
+          phoneAliasVerified: recipientIdentifier.kind === "phone",
+          nameSource: "FlowPay registration",
           accountNumber: recipient.account_number.trim(),
           currency: "NGN",
           canTransfer: recipient.id !== identity.id,
           message: recipient.id === identity.id
             ? "This is your own FlowPay account. Select another recipient."
-            : "Recipient identity matched an active, email-verified FlowPay customer."
+            : "FlowPay matched an active customer and returned the name saved at account registration."
         });
       } catch (error) {
         console.error("FlowPay recipient lookup failed:", error instanceof Error ? error.message : "database error");
@@ -351,18 +368,30 @@ export function createFlowPayTransfersHandler(options: Options) {
               id: string; account_number: string; recipient_name: string;
             }>(
               `SELECT customer.id, account_number.account_number,
-                      COALESCE(NULLIF(BTRIM(auth_user.name), ''), 'FlowPay Customer') AS recipient_name
+                      BTRIM(auth_user.name) AS recipient_name
                  FROM public.fp_customer_account_numbers AS account_number
                  JOIN public.fp_users AS customer ON customer.id = account_number.user_id
                  JOIN neon_auth."user" AS auth_user ON auth_user.id::text = customer.auth_subject
                  LEFT JOIN public.fp_customer_phone_aliases AS phone_alias
                    ON phone_alias.user_id = customer.id
-                WHERE (account_number.account_number = $1 OR phone_alias.phone_e164 = $1)
+                WHERE (
+                    ($2 = 'flowpay_id' AND account_number.account_number = $1)
+                    OR
+                    ($2 = 'phone'
+                      AND phone_alias.phone_e164 = $1
+                      AND phone_alias.verified_at IS NOT NULL
+                      AND phone_alias.phone_e164 =
+                        COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                                 to_jsonb(auth_user)->>'phone_number')
+                      AND LOWER(COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                                         to_jsonb(auth_user)->>'phone_number_verified', 'false')) = 'true')
+                  )
                   AND customer.status = 'active'
                   AND customer.role IN ('customer', 'super_admin')
                   AND auth_user."emailVerified" = true
+                  AND NULLIF(BTRIM(auth_user.name), '') IS NOT NULL
                 LIMIT 1`,
-              [recipientIdentifier.value]
+              [recipientIdentifier.value, recipientIdentifier.kind]
             )
           : await client.query<{
               id: string; account_number: string; recipient_name: string;

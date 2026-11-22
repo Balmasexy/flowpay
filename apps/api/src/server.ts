@@ -728,7 +728,7 @@ const server = createServer(async (req, res) => {
         if (assigned.rowCount === 1) break;
       }
 
-      const [accounts, flowpayAccount] = await Promise.all([
+      const [accounts, flowpayAccount, verifiedPhone] = await Promise.all([
         pool.query(
           `SELECT currency, status, created_at
              FROM public.fp_accounts
@@ -736,7 +736,22 @@ const server = createServer(async (req, res) => {
             ORDER BY currency, created_at`, [identity.rows[0].id]),
         pool.query(
           `SELECT account_number FROM public.fp_customer_account_numbers
-            WHERE user_id = $1 LIMIT 1`, [identity.rows[0].id])
+            WHERE user_id = $1 LIMIT 1`, [identity.rows[0].id]),
+        pool.query<{ phone_number: string }>(
+          `SELECT phone_alias.phone_e164 AS phone_number
+             FROM neon_auth."user" AS auth_user
+             JOIN public.fp_customer_phone_aliases AS phone_alias
+               ON phone_alias.user_id = $2
+            WHERE auth_user.id::text = $1
+              AND auth_user."emailVerified" = true
+              AND phone_alias.verified_at IS NOT NULL
+              AND phone_alias.phone_e164 =
+                COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                         to_jsonb(auth_user)->>'phone_number')
+              AND LOWER(COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                                 to_jsonb(auth_user)->>'phone_number_verified', 'false')) = 'true'
+            LIMIT 1`,
+          [payload.sub, identity.rows[0].id])
       ]);
       if (flowpayAccount.rowCount !== 1 || !/^[1-9][0-9]{9}$/.test(String(flowpayAccount.rows[0].account_number))) {
         throw new Error("FLOWPAY_ACCOUNT_NUMBER_ASSIGNMENT_FAILED");
@@ -747,8 +762,10 @@ const server = createServer(async (req, res) => {
           currency: String(row.currency).trim(), status: row.status, createdAt: row.created_at
         })),
         flowpayAccountNumber: String(flowpayAccount.rows[0].account_number).trim(),
+        phoneNumber: verifiedPhone.rowCount === 1 ? String(verifiedPhone.rows[0].phone_number).trim() : null,
+        phoneAliasVerified: verifiedPhone.rowCount === 1,
         profileRole: identity.rows[0].role,
-        message: "Your 10-digit FlowPay ID and Neon-verified phone number are the two FlowPay wallet-recipient identifiers. Customer NUBAN issuance and display are disabled."
+        message: "Your permanent 10-digit FlowPay ID and, when verified by Neon Auth, your mobile number resolve to the same FlowPay wallet. Neither is a bank-issued NUBAN."
       });
     } catch (error) {
       if (error instanceof Error && ["JWTExpired","JWSSignatureVerificationFailed","JWTClaimValidationFailed","JWSInvalid","JWTInvalid"].includes(error.name)) { send(res, 401, { error: "INVALID_SESSION" }); return; }

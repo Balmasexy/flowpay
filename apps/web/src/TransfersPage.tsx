@@ -500,7 +500,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
       <div className="fp-transfer-form-card" style={{border:"1px solid var(--fp-border, #e5e7eb)",borderRadius:18,padding:18,background:"var(--fp-surface, #fff)",marginTop:16}}>
       {mode === "flowpay" ? <>
         <h3 className="fp-account-section-title"><Wallet size={17}/> To another FlowPay wallet</h3>
-        <p className="fp-muted" style={{marginTop:-4}}>Find the recipient with their permanent 10-digit FlowPay ID or Neon-verified Nigerian mobile number. Both resolve to the same FlowPay wallet.</p>
+        <p className="fp-muted" style={{marginTop:-4}}>Find the recipient with their permanent 10-digit FlowPay ID or Neon-verified Nigerian mobile number. Both identify the same FlowPay wallet.</p>
         {flowpayAccountNumber && <p className="fp-muted">Your FlowPay account number: <b>{flowpayAccountNumber}</b></p>}
         <label htmlFor="fp-flowpay-recipient">Recipient FlowPay ID or verified phone number</label>
         <input id="fp-flowpay-recipient" type="tel" inputMode="tel" autoComplete="off" value={recipientNumber}
@@ -508,7 +508,8 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           placeholder="10-digit FlowPay ID or 08012345678" maxLength={24}/>
         {recipientLookup === "loading" && <p className="fp-overview-muted" role="status">Verifying FlowPay recipient…</p>}
         {recipientLookup === "verified" && <div className="fp-detail-list" role="status">
-          <div><span>Verified recipient name</span><b>{recipientName}</b></div>
+          <div><span>Receiving institution</span><b>FlowPay</b></div>
+          <div><span>FlowPay registered name</span><b>{recipientName}</b></div>
           <div><span>Permanent FlowPay ID</span><b>{recipientResolvedAccountNumber}</b></div>
           {!recipientCanTransfer && <div><span>Transfer status</span><b>Cannot transfer to your own account</b></div>}
         </div>}

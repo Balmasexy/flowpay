@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { createRemoteJWKSet } from "jose";
 import { verifyFlowPayToken } from "./auth-tokens.js";
 import { getPaystackBankRuntime } from "./paystack-mode.js";
+import { normalizeNigerianPhone } from "./customer-phone-alias.js";
 
 type Options = {
   pool: Pool | null;
@@ -85,11 +86,18 @@ async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKS
   // It does not require an API audience claim, so verify the signature and issuer only.
   const { payload } = await verifyFlowPayToken(bearer[1], jwks, { algorithms: ["EdDSA"], issuer });
   if (typeof payload.sub !== "string" || !payload.sub) return null;
-  const result = await pool.query<Identity>(
+  const result = await pool.query<{
+    id: string; role: string; name: string; email: string;
+    profile_phone: string | null; auth_phone: string | null; auth_phone_verified: string | null;
+  }>(
     `SELECT app_user.id, app_user.role,
             COALESCE(NULLIF(BTRIM(auth_user.name), ''), '') AS name,
             COALESCE(NULLIF(BTRIM(auth_user.email), ''), '') AS email,
-            COALESCE(NULLIF(BTRIM(profile.phone_number), ''), '') AS phone
+            NULLIF(BTRIM(profile.phone_number), '') AS profile_phone,
+            COALESCE(to_jsonb(auth_user)->>'phoneNumber',
+                     to_jsonb(auth_user)->>'phone_number') AS auth_phone,
+            COALESCE(to_jsonb(auth_user)->>'phoneNumberVerified',
+                     to_jsonb(auth_user)->>'phone_number_verified', 'false') AS auth_phone_verified
        FROM neon_auth."user" AS auth_user
        JOIN public.fp_users AS app_user ON app_user.auth_subject = auth_user.id::text
        LEFT JOIN public.fp_customer_profiles AS profile ON profile.user_id = app_user.id
@@ -100,7 +108,16 @@ async function authenticate(pool: Pool, jwks: ReturnType<typeof createRemoteJWKS
       LIMIT 1`,
     [payload.sub]
   );
-  return result.rowCount === 1 ? result.rows[0] : null;
+  if (result.rowCount !== 1) return null;
+  const row = result.rows[0];
+  const profilePhone = normalizeNigerianPhone(row.profile_phone);
+  const authPhone = normalizeNigerianPhone(row.auth_phone);
+  const phoneVerified = String(row.auth_phone_verified).toLowerCase() === "true" &&
+    Boolean(profilePhone && authPhone && profilePhone.e164 === authPhone.e164);
+  return {
+    id: row.id, role: row.role, name: row.name, email: row.email,
+    phone: phoneVerified && authPhone ? authPhone.e164 : ""
+  };
 }
 type DedicatedAccountRow = {
   user_id: string;
@@ -231,38 +248,6 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
       return true;
     }
 
-    // Customer-facing NUBAN issuance, display, and requery are not part of
-    // FlowPay's receiving model. The permanent FlowPay ID and Neon-verified
-    // phone alias are the customer identifiers. Historical provider rows and
-    // signed settlement webhooks are retained for reconciliation.
-    if (identity.role === "customer") {
-      if (post) {
-        send(res, 410, {
-          error: "CUSTOMER_NUBAN_DISABLED",
-          message: "FlowPay customer NUBAN issuance is disabled. Use the permanent FlowPay ID or verified phone alias for FlowPay-to-FlowPay transfers. External-bank phone routing remains subject to NIBSS NPS approval."
-        });
-      } else if (get) {
-        send(res, 200, {
-          provider: "Paystack",
-          customerNubanEnabled: false,
-          virtualBankAccount: {
-            assigned: false,
-            status: "disabled",
-            accountNumber: null,
-            bankName: null,
-            accountName: null
-          },
-          message: "Customer-facing NUBAN issuance and display are disabled. Historical provider account records are retained for settlement reconciliation."
-        });
-      } else {
-        send(res, 410, {
-          error: "CUSTOMER_NUBAN_DISABLED",
-          message: "Customer NUBAN requery is disabled in FlowPay's phone-based receiving model. Historical provider settlement webhooks remain active."
-        });
-      }
-      return true;
-    }
-
     const runtime = getPaystackBankRuntime();
     if (!runtime) {
       send(res, 503, { error: "PAYSTACK_CONFIGURATION_REQUIRED", message: "A matching Paystack API key and environment must be configured." });
@@ -360,7 +345,18 @@ export function createPaystackDedicatedAccountsHandler(options: Options) {
         return true;
       }
       if (get) {
-        send(res, 200, { provider: "Paystack", environment, virtualBankAccount: view(current), livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true" });
+        const assignmentEnabled = dedicatedAccountsEnabled(environment);
+        send(res, 200, {
+          provider: "Paystack",
+          environment,
+          customerNubanEnabled: assignmentEnabled,
+          assignmentEnabled,
+          virtualBankAccount: view(current),
+          livePaymentsEnabled: environment === "live" && process.env.PAYSTACK_LIVE_PAYMENTS_ENABLED === "true",
+          message: assignmentEnabled
+            ? "Paystack dedicated-account assignment is enabled for this environment. An account appears only after Paystack confirms it."
+            : "Paystack has not enabled dedicated-account assignment for this environment. No account number is reserved or shown."
+        });
         return true;
       }
 

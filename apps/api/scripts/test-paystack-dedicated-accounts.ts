@@ -51,7 +51,8 @@ async function setup() {
           rowCount: 1,
           rows: [{
             id: userId, role: "customer", name: "Test Customer",
-            email: "test@example.invalid", phone: "08012345678"
+            email: "test@example.invalid", profile_phone: "08012345678",
+            auth_phone: "+2348012345678", auth_phone_verified: "true"
           }]
         };
       }
@@ -81,7 +82,7 @@ async function setup() {
   return { handler, request, response, queries, pool };
 }
 
-test("customer NUBAN display and issuance stay disabled even if an old Render flag is true", async () => {
+test("customer can view Paystack DVA readiness while assignment stays behind its environment gate", async () => {
   const context = await setup();
   let providerCalls = 0;
   globalThis.fetch = async () => {
@@ -92,28 +93,31 @@ test("customer NUBAN display and issuance stay disabled even if an old Render fl
   const getResponse = context.response();
   await context.handler(context.request("GET", "/customer/dedicated-bank-account"), getResponse.res);
   assert.equal(getResponse.result().status, 200);
-  assert.equal(getResponse.result().body.customerNubanEnabled, false);
+  assert.equal(getResponse.result().body.provider, "Paystack");
+  assert.equal(getResponse.result().body.customerNubanEnabled, true);
+  assert.equal(getResponse.result().body.assignmentEnabled, true);
   assert.equal(getResponse.result().body.virtualBankAccount.assigned, false);
+  assert.equal(getResponse.result().body.virtualBankAccount.status, "not_requested");
   assert.equal(getResponse.result().body.virtualBankAccount.accountNumber, null);
 
+  process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = "false";
   const postResponse = context.response();
   await context.handler(context.request("POST", "/customer/dedicated-bank-account", { consent: true }), postResponse.res);
-  assert.equal(postResponse.result().status, 410);
-  assert.equal(postResponse.result().body.error, "CUSTOMER_NUBAN_DISABLED");
+  assert.equal(postResponse.result().status, 503);
+  assert.equal(postResponse.result().body.error, "PAYSTACK_DEDICATED_ACCOUNTS_NOT_ENABLED");
 
   const requeryResponse = context.response();
   await context.handler(context.request("POST", "/customer/dedicated-bank-account/requery"), requeryResponse.res);
-  assert.equal(requeryResponse.result().status, 410);
-  assert.equal(requeryResponse.result().body.error, "CUSTOMER_NUBAN_DISABLED");
-  assert.equal(providerCalls, 0, "a customer NUBAN must never be requested or requeried");
-  assert.equal(
+  assert.equal(requeryResponse.result().status, 409);
+  assert.equal(requeryResponse.result().body.error, "PAYSTACK_DEDICATED_ACCOUNT_NOT_ASSIGNED");
+  assert.equal(providerCalls, 0, "no provider assignment or requery is made while disabled");
+  assert.ok(
     context.queries.some(item => item.sql.includes("FROM public.fp_paystack_dedicated_accounts_v2")),
-    false,
-    "customer NUBAN endpoints must not expose historical account records"
+    "the customer endpoint can read only the customer's own saved Paystack assignment"
   );
 });
 
-test("historical provider assignment webhooks remain reconcilable while customer NUBAN issuance is disabled", async () => {
+test("Paystack assignment webhooks remain reconcilable when new DVA requests are disabled", async () => {
   const context = await setup();
   process.env.PAYSTACK_DEDICATED_ACCOUNTS_ENABLED = "false";
   const handled = await processPaystackDedicatedAccountWebhook(context.pool, {
