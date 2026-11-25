@@ -246,6 +246,7 @@ export default function App() {
           {path === "/dashboard" ? (
             <OverviewDashboard
               token={apiJwt}
+              userId={signedInUser.id}
               go={go}
               network={network}
               onNetworkChange={setNetwork}
