@@ -189,7 +189,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const [cachedBalance, setCachedBalance] = useState<CachedBalance | null>(() => readCachedBalance(token));
   const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
   const [onboardingSubject, setOnboardingSubject] = useState<string | null>(null);
-  const currentSubject = readTokenSubject(token);
+  const [resolvedSubject, setResolvedSubject] = useState<string | null>(() => readTokenSubject(token));
+  const currentSubject = readTokenSubject(token) ?? resolvedSubject;
   const visibleOverview = overviewSubject === currentSubject ? overview : null;
   const visibleCachedBalance = cachedBalance?.subject === currentSubject ? cachedBalance : null;
   const visibleOnboarding = onboardingSubject === currentSubject ? onboarding : null;
@@ -197,18 +198,26 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const [error, setError] = useState("");
 
   const loadOverview = useCallback(async () => {
-    if (!token || token.split(".").length !== 3 || !readTokenSubject(token)) {
-      setOverview(null); setOverviewSubject(null); setOnboarding(null); setOnboardingSubject(null);
-      setCachedBalance(null);
-      setError("Your secure session is not ready. Refresh after signing in again."); setLoading(false); return;
-    }
+    // A token passed down from the app may still be initialising. Recover a fresh
+    // Neon API JWT here instead of treating a short-lived parent-state race as
+    // a permanent "balance not verified" result.
     // Keep the last verified ledger snapshot visible while refreshing.
     // A transient network/auth failure must not erase a previously confirmed balance.
     setLoading(true); setError("");
     const apiBase = String(import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
     if (!apiBase) { setCachedBalance(readCachedBalance(token)); setError("FlowPay API address is not configured."); setLoading(false); return; }
     try {
-      const jwt = await getApiJwt();
+      let jwt = "";
+      try {
+        jwt = await getApiJwt();
+      } catch (cause) {
+        // The parent may already hold a still-valid JWT; use it only as a safe fallback.
+        if (readTokenSubject(token)) jwt = token;
+        else throw cause;
+      }
+      const authSubject = readTokenSubject(jwt);
+      if (!authSubject) throw new Error("Your secure session has expired. Please sign in again.");
+      setResolvedSubject(authSubject);
       // Bootstrap is onboarding work, not a prerequisite for reading the wallet ledger.
       // Run it independently so a card/account-number provisioning issue cannot hide a valid balance.
       const bootstrapTask = (async () => {
@@ -219,17 +228,13 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
         if (!bootstrapResponse.ok || bootstrapData?.provisioned !== true ||
             typeof bootstrapData?.flowpayAccountNumber !== "string" ||
             !/^[1-9][0-9]{9}$/.test(bootstrapData.flowpayAccountNumber)) {
-          if (bootstrapResponse.status === 401 || bootstrapResponse.status === 403) {
-            clearCachedBalance(token);
-            setCachedBalance(null);
-          }
           throw new Error(bootstrapData?.message || bootstrapData?.error || "Your FlowPay account is still being set up.");
         }
         setOnboarding({
           flowpayAccountNumber: bootstrapData.flowpayAccountNumber,
           cardStatus: typeof bootstrapData?.virtualCard?.status === "string" ? bootstrapData.virtualCard.status : "pending"
         });
-        setOnboardingSubject(currentSubject);
+        setOnboardingSubject(authSubject);
       })().catch(cause => {
         // Keep onboarding failure isolated from the independent ledger request.
         setOnboarding(null);
@@ -243,7 +248,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          clearCachedBalance(token);
+          clearCachedBalance(jwt);
           setCachedBalance(null);
         }
         throw new Error(response.status === 401 ? "Your session has expired. Please sign in again." : data.error || "Unable to load your account overview.");
@@ -251,15 +256,18 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       const parsed = parseOverview(data);
       if (!parsed) throw new Error("The account overview service returned an invalid response.");
       setOverview(parsed);
-      setOverviewSubject(currentSubject);
-      const cached = saveCachedBalance(token, parsed);
+      setOverviewSubject(authSubject);
+      const cached = saveCachedBalance(jwt, parsed);
       if (cached) setCachedBalance(cached);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to refresh your account overview.");
     } finally { setLoading(false); }
   }, [token]);
 
-  useEffect(() => { setCachedBalance(readCachedBalance(token)); }, [token]);
+  useEffect(() => {
+    setResolvedSubject(readTokenSubject(token));
+    setCachedBalance(readCachedBalance(token));
+  }, [token]);
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
   const postedCount = visibleOverview?.transactionSummary?.postedCount ?? 0;
