@@ -25,7 +25,7 @@ test("allows only configured VTpass airtime, data, electricity and cable TV serv
 
 test("generates a 24-digit Africa/Lagos VTpass request identifier", () => {
   const id = requestId();
-  assert.match(id, /^\\d{24}$/);
+  assert.match(id, /^\d{24}$/);
   assert.ok(Number(id.slice(0, 4)) >= 2026);
 });
 
