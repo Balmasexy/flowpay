@@ -10,18 +10,22 @@ test("normalizes Nigerian phone numbers without accepting malformed values", () 
   assert.equal(normalizePhone(""), "");
 });
 
-test("allows only the configured VTpass airtime, data and electricity services", () => {
+test("allows only configured VTpass airtime, data, electricity and cable TV services", () => {
   assert.equal(serviceAllowed("airtime", "mtn"), true);
   assert.equal(serviceAllowed("data", "airtel-data"), true);
   assert.equal(serviceAllowed("electricity", "ikeja-electric"), true);
   assert.equal(serviceAllowed("electricity", "unknown-provider"), false);
+  assert.equal(serviceAllowed("cabletv", "dstv"), true);
+  assert.equal(serviceAllowed("cabletv", "gotv"), true);
+  assert.equal(serviceAllowed("cabletv", "startimes"), true);
+  assert.equal(serviceAllowed("cabletv", "unknown-tv-provider"), false);
   assert.equal(serviceAllowed("cable", "dstv"), false);
   assert.equal(serviceAllowed("__proto__", "toString"), false);
 });
 
 test("generates a 24-digit Africa/Lagos VTpass request identifier", () => {
   const id = requestId();
-  assert.match(id, /^\d{24}$/);
+  assert.match(id, /^\\d{24}$/);
   assert.ok(Number(id.slice(0, 4)) >= 2026);
 });
 
