@@ -189,9 +189,10 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
   const [cachedBalance, setCachedBalance] = useState<CachedBalance | null>(() => readCachedBalance(token));
   const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
   const [onboardingSubject, setOnboardingSubject] = useState<string | null>(null);
-  const [resolvedSubject, setResolvedSubject] = useState<string | null>(() => readTokenSubject(token));
+  const [resolvedSubject, setResolvedSubject] = useState<string | null>(() => readTokenSubject(token) === userId ? userId : null);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(userId);
-  const currentSubject = readTokenSubject(token) ?? (resolvedUserId === userId ? resolvedSubject : null);
+  const tokenSubject = readTokenSubject(token);
+  const currentSubject = tokenSubject === userId ? tokenSubject : resolvedUserId === userId ? resolvedSubject : null;
   const visibleOverview = overviewSubject === currentSubject ? overview : null;
   const visibleCachedBalance = cachedBalance?.subject === currentSubject ? cachedBalance : null;
   const visibleOnboarding = onboardingSubject === currentSubject ? onboarding : null;
@@ -217,7 +218,7 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
         else throw cause;
       }
       const authSubject = readTokenSubject(jwt);
-      if (!authSubject) throw new Error("Your secure session has expired. Please sign in again.");
+      if (!authSubject || authSubject !== userId) throw new Error("Your secure session changed. Refresh the dashboard after sign-in completes.");
       setResolvedSubject(authSubject);
       setResolvedUserId(userId);
       // Bootstrap is onboarding work, not a prerequisite for reading the wallet ledger.
@@ -267,9 +268,10 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
   }, [token, userId]);
 
   useEffect(() => {
+    const subject = readTokenSubject(token);
     setResolvedUserId(userId);
-    setResolvedSubject(readTokenSubject(token));
-    setCachedBalance(readCachedBalance(token));
+    setResolvedSubject(subject === userId ? subject : null);
+    setCachedBalance(subject === userId ? readCachedBalance(token) : null);
   }, [token, userId]);
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
