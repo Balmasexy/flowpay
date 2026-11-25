@@ -181,8 +181,8 @@ function isVerifiedZeroBalance(balances: { currency: string; amountMinor: string
   return balances.length > 0 && balances.every(item => item.amountMinor === "0");
 }
 
-export default function OverviewDashboard({ token, go, network, onNetworkChange }: {
-  token: string; go: (path: string) => void; network: string; onNetworkChange: (network: string) => void;
+export default function OverviewDashboard({ token, userId, go, network, onNetworkChange }: {
+  token: string; userId: string; go: (path: string) => void; network: string; onNetworkChange: (network: string) => void;
 }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [overviewSubject, setOverviewSubject] = useState<string | null>(null);
@@ -190,7 +190,8 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
   const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
   const [onboardingSubject, setOnboardingSubject] = useState<string | null>(null);
   const [resolvedSubject, setResolvedSubject] = useState<string | null>(() => readTokenSubject(token));
-  const currentSubject = readTokenSubject(token) ?? resolvedSubject;
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(userId);
+  const currentSubject = readTokenSubject(token) ?? (resolvedUserId === userId ? resolvedSubject : null);
   const visibleOverview = overviewSubject === currentSubject ? overview : null;
   const visibleCachedBalance = cachedBalance?.subject === currentSubject ? cachedBalance : null;
   const visibleOnboarding = onboardingSubject === currentSubject ? onboarding : null;
@@ -218,6 +219,7 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
       const authSubject = readTokenSubject(jwt);
       if (!authSubject) throw new Error("Your secure session has expired. Please sign in again.");
       setResolvedSubject(authSubject);
+      setResolvedUserId(userId);
       // Bootstrap is onboarding work, not a prerequisite for reading the wallet ledger.
       // Run it independently so a card/account-number provisioning issue cannot hide a valid balance.
       const bootstrapTask = (async () => {
@@ -262,12 +264,13 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to refresh your account overview.");
     } finally { setLoading(false); }
-  }, [token]);
+  }, [token, userId]);
 
   useEffect(() => {
+    setResolvedUserId(userId);
     setResolvedSubject(readTokenSubject(token));
     setCachedBalance(readCachedBalance(token));
-  }, [token]);
+  }, [token, userId]);
   useEffect(() => { void loadOverview(); }, [loadOverview]);
 
   const postedCount = visibleOverview?.transactionSummary?.postedCount ?? 0;
