@@ -184,7 +184,7 @@ export default function ServicePreview({ path, token }: { path: string; token: s
           {variations.map(item => <option key={item.code} value={item.code}>{item.name}{Number(item.amount) > 0 ? " – ₦" + Number(item.amount).toLocaleString("en-NG") : ""}</option>)}
         </select>
       </>}
-    </> : <>
+    </> : isElectricity ? <>
       <label htmlFor="service-provider">Electricity provider</label>
       <select id="service-provider" value={provider} onChange={event => { setProvider(event.target.value); setMeterVerified(false); resetOutcome(); }}>
         {electricityProviders.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -199,13 +199,31 @@ export default function ServicePreview({ path, token }: { path: string; token: s
         {verificationBusy ? "Verifying meter…" : "Verify meter with VTpass"}
       </button>
       {meterVerified && <div className="fp-bulk-notice"><CheckCircle2 size={17}/><span>Verified: {verifiedName}{verifiedAddress ? " · " + verifiedAddress : ""}</span></div>}
+    </> : <>
+      <label htmlFor="service-provider">TV provider</label>
+      <select id="service-provider" value={provider} onChange={event => { setProvider(event.target.value); setMeterVerified(false); setVerifiedName(""); setVerifiedAddress(""); resetOutcome(); }}>
+        {cableProviders.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+      </select>
+      <label htmlFor="service-customer-ref">Smartcard / IUC number</label>
+      <input id="service-customer-ref" value={customerRef} onChange={event => { setCustomerRef(event.target.value.replace(/\D/g, "").slice(0, 20)); setMeterVerified(false); resetOutcome(); }} inputMode="numeric" autoComplete="off" placeholder="Enter decoder smartcard number"/>
+      <label htmlFor="service-phone">Contact phone number</label>
+      <input id="service-phone" value={phone} onChange={event => { setPhone(event.target.value); resetOutcome(); }} inputMode="tel" placeholder="080 0000 0000" maxLength={16}/>
+      <button type="button" className="fp-outline" onClick={() => void verifyMeter()} disabled={verificationBusy || !/^\d{6,20}$/.test(customerRef.trim()) || !phoneValid}>
+        {verificationBusy ? "Verifying smartcard…" : "Verify smartcard with VTpass"}
+      </button>
+      {meterVerified && <div className="fp-bulk-notice"><CheckCircle2 size={17}/><span>Verified: {verifiedName}{verifiedAddress ? " · Current: " + verifiedAddress : ""}{verifiedDueDate ? " · Due " + verifiedDueDate : ""}</span></div>}
+      <label htmlFor="service-tv-bouquet">TV bouquet</label>
+      <select id="service-tv-bouquet" value={variationCode} onChange={event => { setVariationCode(event.target.value); resetOutcome(); }} disabled={catalogLoading || variations.length === 0}>
+        <option value="">{catalogLoading ? "Loading bouquets…" : "Select TV bouquet"}</option>
+        {variations.map(item => <option key={item.code} value={item.code}>{item.name} — ₦{Number(item.amount).toLocaleString("en-NG")}</option>)}
+      </select>
     </>}
 
-    {!isData && <>
+    {!isData && !isTelevision && <>
       <label htmlFor="service-amount">Amount (NGN)</label>
       <input id="service-amount" value={amount} onChange={event => { const raw = event.target.value.replace(/[^0-9.]/g, ""); const [whole, ...decimals] = raw.split("."); setAmount(decimals.length ? whole + "." + decimals.join("").slice(0, 2) : whole); resetOutcome(); }} inputMode="decimal" maxLength={12} placeholder="₦ 0.00"/>
     </>}
-    {isData && selectedVariation && <p className="fp-muted">Provider price: ₦{Number(selectedVariation.amount).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
+    {(isData || isTelevision) && selectedVariation && <p className="fp-muted">{isTelevision ? "VTpass bouquet price" : "Provider price"}: ₦{Number(selectedVariation.amount).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>}
     {catalogLoading && <p className="fp-muted">Loading provider catalogue…</p>}
     {catalogError && <div className="fp-preview-warning"><AlertCircle size={17}/>{catalogError}</div>}
     <label htmlFor="service-pin">Transaction PIN</label>
@@ -223,6 +241,6 @@ export default function ServicePreview({ path, token }: { path: string; token: s
         <RefreshCw size={15}/> {statusBusy ? "Checking VTpass…" : "Requery payment status"}
       </button>}
     </div>}
-    <div className="fp-preview-warning"><ShieldCheck size={17}/> {isAirtime ? "Airtime" : isData ? "Data" : "Electricity"} payments require VTPASS credentials in the API environment. Live processing also requires the separate VTPASS_LIVE_ENABLED approval switch. Never share provider secrets in the app.</div>
+    <div className="fp-preview-warning"><ShieldCheck size={17}/> {isAirtime ? "Airtime" : isData ? "Data" : isTelevision ? "Cable TV" : "Electricity"} payments require VTPASS credentials in the API environment. Live processing also requires the separate VTPASS_LIVE_ENABLED approval switch. Never share provider secrets in the app.</div>
   </section>;
 }
