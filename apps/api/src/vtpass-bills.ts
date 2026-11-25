@@ -614,7 +614,9 @@ export function createVtpassBillsHandler(options: Options) {
       } else if (category === "cabletv") {
         payload.variation_code = bill.variation_code;
         payload.billersCode = bill.customer_reference;
-        payload.subscription_type = "change";
+        // DStv and GOtv require an explicit change/renew type; StarTimes
+        // uses the variation code and smartcard only.
+        if (bill.service_id !== "startimes") payload.subscription_type = "change";
       }
       try {
         const response = await providerRequest(cfg, "POST", "/pay", payload);
