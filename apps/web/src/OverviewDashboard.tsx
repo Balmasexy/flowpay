@@ -209,24 +209,34 @@ export default function OverviewDashboard({ token, go, network, onNetworkChange 
     if (!apiBase) { setCachedBalance(readCachedBalance(token)); setError("FlowPay API address is not configured."); setLoading(false); return; }
     try {
       const jwt = await getApiJwt();
-      const bootstrapResponse = await fetch(apiBase + "/customer/bootstrap", {
-        method: "POST", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
-      });
-      const bootstrapData = await bootstrapResponse.json().catch(() => ({}));
-      if (!bootstrapResponse.ok || bootstrapData?.provisioned !== true ||
-          typeof bootstrapData?.flowpayAccountNumber !== "string" ||
-          !/^[1-9][0-9]{9}$/.test(bootstrapData.flowpayAccountNumber)) {
-        if (bootstrapResponse.status === 401 || bootstrapResponse.status === 403) {
-          clearCachedBalance(token);
-          setCachedBalance(null);
+      // Bootstrap is onboarding work, not a prerequisite for reading the wallet ledger.
+      // Run it independently so a card/account-number provisioning issue cannot hide a valid balance.
+      const bootstrapTask = (async () => {
+        const bootstrapResponse = await fetch(apiBase + "/customer/bootstrap", {
+          method: "POST", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
+        });
+        const bootstrapData = await bootstrapResponse.json().catch(() => ({}));
+        if (!bootstrapResponse.ok || bootstrapData?.provisioned !== true ||
+            typeof bootstrapData?.flowpayAccountNumber !== "string" ||
+            !/^[1-9][0-9]{9}$/.test(bootstrapData.flowpayAccountNumber)) {
+          if (bootstrapResponse.status === 401 || bootstrapResponse.status === 403) {
+            clearCachedBalance(token);
+            setCachedBalance(null);
+          }
+          throw new Error(bootstrapData?.message || bootstrapData?.error || "Your FlowPay account is still being set up.");
         }
-        throw new Error(bootstrapData?.message || bootstrapData?.error || "Your FlowPay account is still being set up.");
-      }
-      setOnboarding({
-        flowpayAccountNumber: bootstrapData.flowpayAccountNumber,
-        cardStatus: typeof bootstrapData?.virtualCard?.status === "string" ? bootstrapData.virtualCard.status : "pending"
+        setOnboarding({
+          flowpayAccountNumber: bootstrapData.flowpayAccountNumber,
+          cardStatus: typeof bootstrapData?.virtualCard?.status === "string" ? bootstrapData.virtualCard.status : "pending"
+        });
+        setOnboardingSubject(currentSubject);
+      })().catch(cause => {
+        // Keep onboarding failure isolated from the independent ledger request.
+        setOnboarding(null);
+        setOnboardingSubject(currentSubject);
+        return cause;
       });
-      setOnboardingSubject(currentSubject);
+      void bootstrapTask;
       const response = await fetch(apiBase + "/customer/overview", {
         method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
       });
