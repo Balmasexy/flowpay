@@ -68,6 +68,21 @@ export default function ServicePreview({ path, token }: { path: string; token: s
   const selectedNetwork = networks.find(item => item.label === network) ?? networks[0];
   const serviceId = isAirtime ? selectedNetwork.airtime : isData ? selectedNetwork.data : provider;
   const selectedVariation = variations.find(item => item.code === variationCode) ?? null;
+  useEffect(() => {
+    setProvider(isTelevision ? "dstv" : "ikeja-electric");
+    setCustomerRef("");
+    setVerifiedName("");
+    setVerifiedAddress("");
+    setVerifiedDueDate("");
+    setMeterVerified(false);
+    setTransactionPin("");
+    setVariations([]);
+    setVariationCode("");
+    setRequestId("");
+    setPaymentStatus("");
+    setError("");
+    setMessage("");
+  }, [isTelevision]);
   const phoneValid = /^(?:0\d{10}|\+?234\d{10})$/.test(phone.replace(/[\s-]/g, ""));
   const amountValid = isData || isTelevision ? Boolean(selectedVariation) : Boolean(toMinor(amount));
   const readyToPurchase = token.split(".").length === 3 && Boolean(apiBase) && phoneValid && amountValid &&
