@@ -91,19 +91,26 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    // A browser may retain a short-lived FlowPay passkey token after a Neon
+    // password/Google session is established. Never combine one user's Neon
+    // identity with a different (or older) passkey bearer token.
+    if (authSession.data?.user) {
+      if (passkeySession) {
+        clearFlowPayPasskeySession();
+        setPasskeySession(null);
+      }
+      void getApiJwt().then(token => {
+        if (active) setApiJwt(token);
+      }).catch(() => {
+        if (active) setApiJwt("");
+      });
+      return () => { active = false; };
+    }
     if (passkeySession) {
       setApiJwt(passkeySession.token);
       return () => { active = false; };
     }
-    if (!authSession.data?.user) {
-      setApiJwt("");
-      return () => { active = false; };
-    }
-    void getApiJwt().then(token => {
-      if (active) setApiJwt(token);
-    }).catch(() => {
-      if (active) setApiJwt("");
-    });
+    setApiJwt("");
     return () => { active = false; };
   }, [authSession.data?.user?.id, authSession.data?.session?.token, passkeySession?.token]);
   const [network, setNetwork] = useState("Airtel");
