@@ -198,12 +198,16 @@ export function readNeonApiJwt(value: unknown): string | null {
  */
 export async function getApiJwt(): Promise<string> {
   const passkeySession = readFlowPayPasskeySession();
-  if (passkeySession) return passkeySession.token;
 
   if (!authUrl) {
+    if (passkeySession) return passkeySession.token;
     throw new Error("Neon Auth is not configured on this deployment.");
   }
 
+  // Prefer the live Neon browser session when it exists. A previous passkey
+  // session can remain in sessionStorage while a customer signs in with
+  // password/Google; returning it first would pair the wrong bearer token
+  // with the currently displayed Neon user.
   let endpointError = "";
   try {
     const response = await fetch(authUrl + "/token", {
@@ -234,22 +238,25 @@ export async function getApiJwt(): Promise<string> {
     },
   });
 
+  if (session.data?.user) {
+    // Neon Auth's React adapter injects set-auth-jwt into session data. Prefer
+    // the typed session token, then fall back to the response header.
+    const sessionJwt = readNeonApiJwt(session.data);
+    if (sessionJwt) return sessionJwt;
+    if (isJwt(headerJwt)) return headerJwt;
+    throw new Error(
+      "Neon Auth confirmed your session but did not return an API access token. " + endpointError
+    );
+  }
+
+  // A passkey-only login has no Neon cookie session by design. Use its short-
+  // lived token only after confirming that no Neon user session is active.
+  if (passkeySession) return passkeySession.token;
   if (session.error) {
     const detail = typeof session.error.message === "string"
       ? session.error.message
       : "Neon Auth could not verify this session.";
     throw new Error("Neon Auth session check failed: " + detail);
   }
-  if (!session.data?.user) {
-    throw new Error("Your Neon Auth sign-in session is no longer active. Please sign in again.");
-  }
-  // Neon Auth's React adapter injects set-auth-jwt into session data. Prefer
-  // the typed session token, then fall back to the response header.
-  const sessionJwt = readNeonApiJwt(session.data);
-  if (sessionJwt) return sessionJwt;
-  if (isJwt(headerJwt)) return headerJwt;
-
-  throw new Error(
-    "Neon Auth confirmed your session but did not return an API access token. " + endpointError
-  );
+  throw new Error("Your Neon Auth sign-in session is no longer active. Please sign in again.");
 }
