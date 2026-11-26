@@ -291,7 +291,7 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
         });
         const body = asRecord(await response.json().catch(() => ({})));
         if (!response.ok || body.verified !== true || body.lookupType !== "phone" ||
-            typeof body.accountNumber !== "string" || !/^[1-9]\\d{9}$/.test(body.accountNumber) ||
+            typeof body.accountNumber !== "string" || !/^[1-9]\d{9}$/.test(body.accountNumber) ||
             typeof body.recipientName !== "string") {
           throw new Error(typeof body.error === "string" ? body.error : "FLOWPAY_RECIPIENT_NOT_FOUND");
         }
