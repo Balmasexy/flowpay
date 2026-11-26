@@ -42,7 +42,7 @@ export default function SavingsPage({ mode }: Props) {
           </div>
           {fixed ? <LockKeyhole size={25}/> : <PiggyBank size={25}/>}
         </div>
-        <div className="fp-preview-warning"><ShieldCheck size={17}/> Savings products are not connected to a verified FlowPay savings provider. This page is a planning preview only; it does not open an account or move money.</div>
+        <div className="fp-preview-warning"><ShieldCheck size={17}/> Savings products are not connected to a verified FlowPay savings provider. This page is a planning preview only; your entered goals are not saved, and no account is opened or money moved.</div>
         <div className="fp-form-grid">
           <label className="fp-field">
             <span>{fixed ? "Planned principal (NGN)" : "Savings target (NGN)"}</span>
