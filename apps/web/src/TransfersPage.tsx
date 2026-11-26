@@ -83,6 +83,11 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
   const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [bankAccountName, setBankAccountName] = useState("");
   const [bankLookup, setBankLookup] = useState<LookupState>("idle");
+  const [bankPhoneNumber, setBankPhoneNumber] = useState("");
+  const [bankPhoneLookup, setBankPhoneLookup] = useState<LookupState>("idle");
+  const [bankPhoneRecipient, setBankPhoneRecipient] = useState<{
+    name: string; accountNumber: string; canTransfer: boolean;
+  } | null>(null);
 
   const [amount, setAmount] = useState("");
   const [transactionPin, setTransactionPin] = useState("");
@@ -266,6 +271,45 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
     }, 400);
     return () => { window.clearTimeout(timer); controller.abort(); };
   }, [mode, bankAccountNumber, bankCode, token]);
+
+  // A phone entered from the To Bank screen is checked against FlowPay's
+  // verified phone-alias directory first. This is an internal wallet route;
+  // it does not resolve arbitrary third-party bank accounts by phone.
+  useEffect(() => {
+    if (mode !== "bank") { setBankPhoneLookup("idle"); setBankPhoneRecipient(null); return; }
+    const phoneNumber = normalizeFlowPayPhone(bankPhoneNumber);
+    if (!phoneNumber) { setBankPhoneLookup("idle"); setBankPhoneRecipient(null); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setBankPhoneLookup("loading");
+      setBankPhoneRecipient(null);
+      try {
+        const response = await fetch(apiAddress() + "/customer/flowpay/recipients/lookup", {
+          method: "POST", credentials: "omit", signal: controller.signal,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + await getApiJwt() },
+          body: JSON.stringify({ phoneNumber })
+        });
+        const body = asRecord(await response.json().catch(() => ({})));
+        if (!response.ok || body.verified !== true || body.lookupType !== "phone" ||
+            typeof body.accountNumber !== "string" || !/^[1-9]\d{9}$/.test(body.accountNumber) ||
+            typeof body.recipientName !== "string") {
+          throw new Error(typeof body.error === "string" ? body.error : "FLOWPAY_RECIPIENT_NOT_FOUND");
+        }
+        setBankPhoneRecipient({
+          name: body.recipientName,
+          accountNumber: body.accountNumber,
+          canTransfer: body.canTransfer === true
+        });
+        setBankPhoneLookup("verified");
+      } catch {
+        if (!controller.signal.aborted) {
+          setBankPhoneRecipient(null);
+          setBankPhoneLookup("failed");
+        }
+      }
+    }, 400);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [mode, bankPhoneNumber, token]);
 
   const filteredBanks = useMemo(() => {
     const term = bankSearch.trim().toLowerCase();
@@ -547,6 +591,38 @@ export default function TransfersPage({ token, initialMode = "flowpay" }: { toke
           <span style={{fontSize:11,fontWeight:800,color:"#c2410c",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:999,padding:"6px 10px"}}>
             {bankPayoutEnvironment ? `PAYSTACK · ${bankPayoutEnvironment.toUpperCase()} MODE` : "PAYSTACK · NOT CONFIGURED"}
           </span>
+        </div>
+        <p className="fp-muted" style={{marginTop:0}}>Enter a phone number first to check whether the recipient is already on FlowPay. FlowPay recipients can receive internally without a bank account number. Otherwise, continue with a verified bank account below.</p>
+        <label htmlFor="fp-bank-flowpay-phone">Recipient phone number · Check FlowPay first</label>
+        <input id="fp-bank-flowpay-phone" type="tel" inputMode="tel" autoComplete="off"
+          value={bankPhoneNumber}
+          onChange={event => {
+            setBankPhoneNumber(event.target.value.replace(/[^0-9+ ().-]/g, "").slice(0, 24));
+            setBankPhoneRecipient(null);
+            setBankPhoneLookup("idle");
+            setBankPreview(null);
+            setTransferError("");
+          }}
+          placeholder="08012345678 or +2348012345678" maxLength={24}/>
+        {bankPhoneLookup === "loading" && <p className="fp-overview-muted" role="status">Checking whether this phone number belongs to a verified FlowPay customer…</p>}
+        {bankPhoneLookup === "verified" && bankPhoneRecipient && <div className="fp-preview-warning" role="status">
+          <b><CheckCircle2 size={17} style={{verticalAlign:"middle"}}/> FlowPay recipient found</b>
+          <div>Receiving institution: FlowPay</div>
+          <div>Registered recipient: {bankPhoneRecipient.name}</div>
+          <div>FlowPay ID: {bankPhoneRecipient.accountNumber}</div>
+          {bankPhoneRecipient.canTransfer
+            ? <button type="button" className="fp-primary" onClick={() => {
+                const phone = bankPhoneNumber;
+                changeMode("flowpay");
+                setRecipientNumber(phone);
+              }}>Continue with this FlowPay recipient</button>
+            : <div>This is your own FlowPay wallet. Choose a different recipient.</div>}
+          <small className="fp-muted">This route transfers between FlowPay wallets; no NIBSS or external bank-account lookup is used.</small>
+        </div>}
+        {bankPhoneLookup === "failed" && <p className="fp-muted" role="status">No verified FlowPay account matched that phone number. To send to a different bank, continue with the bank name and 10-digit account number below.</p>}
+        <div className="fp-profile-section-title" style={{margin:"18px 0 8px"}}>
+          <h3 style={{margin:0}}>Or send to another bank</h3>
+          <span>Use the recipient's bank account details</span>
         </div>
         <p className="fp-muted" style={{marginTop:0}}>Verify the recipient's account name before reviewing the bank transfer.</p>
         {bankPayoutEnvironment === "live" && !bankPayoutsEnabled && <div className="fp-preview-warning" role="status">
