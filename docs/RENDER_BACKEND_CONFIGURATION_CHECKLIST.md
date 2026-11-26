@@ -11,8 +11,8 @@ The customer web service is separate. It only needs the public Auth URL and back
 | `NODE_ENV=production` | Production runtime |
 | `DATABASE_URL` | PostgreSQL connection to the **currently active FlowPay Development main branch** until a reviewed data/auth migration is completed |
 | `NEON_AUTH_JWKS_URL` | JWKS endpoint for the same Neon Auth project as `DATABASE_URL` |
-| `NEON_AUTH_ISSUER` | Neon Auth issuer origin (not the full `/flowpay/auth` path) |
-| `NEON_AUTH_AUDIENCE` | Matching Neon Auth audience origin |
+| `NEON_AUTH_ISSUER` | Exact Neon Auth **base URL**, including its path (for example, `https://…neonauth…/flowpay/auth`), not just the hostname/origin |
+| `NEON_AUTH_AUDIENCE` | Exact same base URL when using Neon Managed Auth's default Better Auth JWT settings; the backend now derives issuer and audience from `NEON_AUTH_JWKS_URL` to prevent origin/path mismatches |
 | `WEB_ORIGIN=https://flowpay-web-jx7i.onrender.com` | Allowed customer web origin |
 | `FLOWPAY_REQUIRE_FACE_VERIFICATION=true` | Keeps production money movement behind the production face-verification gate |
 
@@ -26,7 +26,7 @@ The customer web service is separate. It only needs the public Auth URL and back
 | `FLOWPAY_WEBAUTHN_ORIGIN=https://flowpay-web-jx7i.onrender.com` | Exact browser origin allowed for WebAuthn |
 | `FLOWPAY_WEBAUTHN_RP_ID=flowpay-web-jx7i.onrender.com` | WebAuthn relying-party ID |
 
-Neon Managed Auth's email sender, Google provider and recovery OTP delivery are configured in Neon Auth, not by putting SMTP or OAuth secrets in Vite. Complete sender-domain and redirect-origin verification in the Neon Auth project.
+Neon Managed Auth's JWKS URL has the form `<baseURL>/.well-known/jwks.json`. The FlowPay backend derives the default JWT issuer and audience by removing that suffix, so the result retains the complete `/flowpay/auth` base path. This matches Better Auth's default issuer and audience. Neon Managed Auth's email sender, Google provider and recovery OTP delivery are configured in Neon Auth, not by putting SMTP or OAuth secrets in Vite. Complete sender-domain and redirect-origin verification in the Neon Auth project.
 
 ## 3. Paystack — keep product switches separate
 

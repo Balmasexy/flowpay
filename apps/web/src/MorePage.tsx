@@ -4,13 +4,13 @@ type Props = { go: (path: string) => void };
 
 const items = [
   { title: "Customer profile", description: "Review your personal details and profile photo.", path: "/profile", icon: Smartphone },
-  { title: "Account number", description: "Check your virtual bank-account assignment status.", path: "/account-number", icon: Wallet },
+  { title: "Account number", description: "View your permanent FlowPay ID, verified phone alias and any separately assigned bank account.", path: "/account-number", icon: Wallet },
   { title: "Documents & statements", description: "Review available document and statement options.", path: "/documents", icon: FileText },
   { title: "Security centre", description: "Review available sign-in and account-security information.", path: "/security", icon: LockKeyhole },
   { title: "Face & liveness verification", description: "Smile ID sandbox verification requires configured API credentials and callback setup.", path: "/face-verification", icon: ShieldCheck },
   { title: "Bulk payments", description: "Submit reviewed bank-payment rows individually. Paystack transfer approval and configuration are required.", path: "/bulk-payments", icon: Zap },
   { title: "Bulk verification", description: "Verify Nigerian bank account numbers and compare provider-returned account names. This is not KYC.", path: "/bulk-verification", icon: ShieldCheck },
-  { title: "Invitations", description: "Referral invitations are not yet connected to an active referral service.", path: "/invitations", icon: Gift },
+  { title: "Invitations", description: "Share the official FlowPay site. Personal referral tracking and rewards are not enabled yet.", path: "/invitations", icon: Gift },
   { title: "Help & support", description: "Search help topics and prepare a support-request draft.", path: "/support", icon: HelpCircle }
 ];
 

@@ -41,10 +41,24 @@ const allowedOrigins = new Set(
   )
 );
 
-const jwksUrl = process.env.NEON_AUTH_JWKS_URL;
-const issuer = process.env.NEON_AUTH_ISSUER;
-const audience = process.env.NEON_AUTH_AUDIENCE;
-const jwks = jwksUrl ? createRemoteJWKSet(new URL(jwksUrl)) : null;
+const configuredJwksUrl = process.env.NEON_AUTH_JWKS_URL?.trim().replace(/\/+$/, "");
+const jwksUrl = configuredJwksUrl; // Retain the existing readiness checks and diagnostics.
+// Neon Managed Auth's JWKS URL is based on its Better Auth baseURL:
+// <baseURL>/.well-known/jwks.json. Better Auth uses that baseURL for both
+// the default JWT issuer and audience. Derive them from the same source so
+// an origin-only NEON_AUTH_ISSUER/AUDIENCE cannot invalidate every customer JWT.
+const neonAuthBaseUrl = configuredJwksUrl?.replace(/\/\.well-known\/jwks\.json$/i, "");
+const configuredIssuer = process.env.NEON_AUTH_ISSUER?.trim().replace(/\/+$/, "");
+const configuredAudience = process.env.NEON_AUTH_AUDIENCE?.trim().replace(/\/+$/, "");
+const issuer = neonAuthBaseUrl || configuredIssuer;
+const audience = neonAuthBaseUrl || configuredAudience;
+if (neonAuthBaseUrl && configuredIssuer && configuredIssuer !== neonAuthBaseUrl) {
+  console.warn("NEON_AUTH_ISSUER differs from the base URL derived from NEON_AUTH_JWKS_URL; using the derived Neon Auth issuer.");
+}
+if (neonAuthBaseUrl && configuredAudience && configuredAudience !== neonAuthBaseUrl) {
+  console.warn("NEON_AUTH_AUDIENCE differs from the base URL derived from NEON_AUTH_JWKS_URL; using the derived Neon Auth audience.");
+}
+const jwks = configuredJwksUrl ? createRemoteJWKSet(new URL(configuredJwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const passkeysHandler = createPasskeysHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
 const faceVerificationHandler = createFaceVerificationHandler({ pool, jwks, issuer, audience });

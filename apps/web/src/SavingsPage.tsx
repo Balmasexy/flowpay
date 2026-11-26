@@ -42,7 +42,7 @@ export default function SavingsPage({ mode }: Props) {
           </div>
           {fixed ? <LockKeyhole size={25}/> : <PiggyBank size={25}/>}
         </div>
-        <div className="fp-preview-warning"><ShieldCheck size={17}/> Savings products are not connected to a verified FlowPay savings provider. This page is a planning preview only; it does not open an account or move money.</div>
+        <div className="fp-preview-warning"><ShieldCheck size={17}/> Savings products are not connected to a verified FlowPay savings provider. This page is a planning preview only; your entered goals are not saved, and no account is opened or money moved.</div>
         <div className="fp-form-grid">
           <label className="fp-field">
             <span>{fixed ? "Planned principal (NGN)" : "Savings target (NGN)"}</span>
@@ -61,7 +61,7 @@ export default function SavingsPage({ mode }: Props) {
             </select>
           </label>}
         </div>
-        <div className="fp-savings-preview">
+        <div className="fp-savings-preview" role="status" aria-live="polite">
           <div className="fp-savings-preview-icon">{fixed ? <CalendarDays size={21}/> : <Target size={21}/>}</div>
           <div>
             <b>{fixed ? "Your fixed-savings plan preview" : "Your savings goal preview"}</b>
@@ -79,8 +79,8 @@ export default function SavingsPage({ mode }: Props) {
         </div>
         <div className="fp-feature-list">
           {(fixed
-            ? ["No fixed-savings product is currently configured","No confirmed rate, lock period or maturity terms","Early withdrawal and funding are unavailable"]
-            : ["No active savings goals are recorded","Recurring debit instructions are not enabled","Savings statements and withdrawals are not available"]
+            ? ["No approved savings provider is connected","No confirmed rate, lock period or maturity terms","Early withdrawal and funding are unavailable"]
+            : ["Savings goals are not saved to your account yet","Recurring debit instructions are not enabled","Savings statements and withdrawals are not available"]
           ).map(item => <div key={item}><ShieldCheck size={17}/>{item}<span>Unavailable</span></div>)}
         </div>
       </section>

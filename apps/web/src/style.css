@@ -1418,3 +1418,92 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .fp-balance-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
   .fp-balance-actions button{font-size:10px}
 }
+
+
+/* FlowPay customer UI completion — consistent fields, cards and mobile layouts. */
+.flowpay-app {
+  --fp-surface:#ffffff; --fp-canvas:#f4f3f0; --fp-ink:#252821;
+  --fp-muted:#7f847b; --fp-line:#e8e7e1; --fp-accent:#ff7a18;
+  --fp-accent-soft:#fff3e8;
+}
+.flowpay-app button,.flowpay-app input,.flowpay-app select,.flowpay-app textarea{-webkit-tap-highlight-color:transparent}
+.flowpay-app button:focus-visible,.flowpay-app a:focus-visible,.flowpay-app input:focus-visible,.flowpay-app select:focus-visible,.flowpay-app textarea:focus-visible{outline:3px solid #ff7a1840;outline-offset:2px}
+.flowpay-app button:disabled{cursor:not-allowed}
+.fp-main,.fp-page-heading,.fp-page-heading>div{min-width:0}
+.fp-page-heading p{max-width:62ch;margin:7px 0 0}
+.fp-detail-stack{display:grid;gap:18px;min-width:0}
+.fp-panel{width:100%;min-width:0}
+.fp-detail-panel{gap:18px}
+.fp-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;min-width:0}
+.fp-panel-heading>div{display:grid;gap:7px;min-width:0}
+.fp-panel-heading h2{font:800 20px/1.2 Manrope,sans-serif;letter-spacing:-.45px;color:var(--fp-ink)}
+.fp-panel-heading p{max-width:58ch;margin:0}
+.fp-panel-heading>svg{flex:0 0 auto;width:44px;height:44px;padding:11px;border-radius:13px;background:var(--fp-accent-soft);color:#cb671d}
+.fp-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;width:100%;min-width:0}
+.fp-field{display:grid;align-content:start;gap:7px;min-width:0;margin:0;color:#4e534b;font-size:11px;font-weight:700}
+.fp-field>span{color:#52564f;font-size:11px;line-height:1.45}
+.fp-field input,.fp-field select,.fp-field textarea{display:block;width:100%;min-width:0;min-height:45px;padding:11px 12px;border:1px solid #dedfd8;border-radius:10px;background:#fff;color:#252821;font:500 12px "DM Sans",sans-serif;box-shadow:0 1px 2px #171a1406}
+.fp-field input::placeholder,.fp-field textarea::placeholder{color:#a0a39c}
+.fp-field input:focus,.fp-field select:focus,.fp-field textarea:focus{outline:0;border-color:#ff9b56;box-shadow:0 0 0 3px #ff7a1818}
+.fp-field small,.fp-error{font-size:10px;line-height:1.5;color:#b94f3e}
+.fp-savings-preview{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:start;gap:13px;padding:17px;border:1px solid #eee2d6;border-radius:14px;background:linear-gradient(145deg,#fffaf5 0%,#fff 76%);min-width:0}
+.fp-savings-preview-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#fff0e3;color:#cf681b}
+.fp-savings-preview>div:last-child{min-width:0}
+.fp-savings-preview b{display:block;color:#30342d;font:800 13px/1.45 Manrope,sans-serif}
+.fp-savings-preview p{margin:8px 0 0;color:#646a60;font-size:11px;line-height:1.55}
+.fp-savings-preview p strong{color:#282d26;font-weight:800;font-variant-numeric:tabular-nums}
+.fp-savings-preview small{display:block;margin-top:10px;color:#858a80;font-size:9px;line-height:1.6}
+.fp-feature-list{min-width:0}
+.fp-feature-list>div{min-width:0;line-height:1.5}
+.fp-feature-list>div>span{flex:0 0 auto}
+.fp-preview-warning{min-width:0}
+.fp-form-panel>p{max-width:64ch}
+.fp-form-panel input,.fp-form-panel select,.fp-form-panel textarea{min-height:45px;border-radius:10px}
+.fp-form-panel label{line-height:1.45}
+.fp-primary,.fp-outline,.fp-balance-actions button,.fp-network-select button,.fp-service-tile,.fp-mobile-menu-group>button,.fp-more-item{transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.fp-primary:not(:disabled):hover{background:#ed6c0b;box-shadow:0 7px 16px #ff7a1829}
+.fp-outline:hover:not(:disabled){border-color:#ffc08e;background:#fffaf6}
+.fp-more-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+.fp-more-item{display:flex;align-items:center;gap:12px;width:100%;min-width:0;min-height:82px;padding:13px;border:1px solid var(--fp-line);border-radius:13px;background:#fff;color:var(--fp-ink);text-align:left}
+.fp-more-item:hover{border-color:#ffc08e;background:#fffaf6}
+.fp-more-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:11px;background:#fff1e5;color:#d56b1b}
+.fp-more-copy{display:grid;gap:5px;flex:1;min-width:0}
+.fp-more-copy b{color:#30342d;font-size:11px;line-height:1.4}
+.fp-more-copy small{color:#81867d;font-size:9px;line-height:1.5}
+.fp-more-arrow{flex:0 0 auto;color:#a7aaa2}
+.fp-empty{border:1px dashed #e5e5de;border-radius:13px;background:#fbfbf9}
+.fp-balance>small{max-width:70ch;line-height:1.55}
+.fp-overview-service-status{max-width:100%;overflow-wrap:anywhere}
+.fp-overview-card{min-width:0}
+.fp-overview-muted{overflow-wrap:anywhere}
+.fp-money-page,.fp-account-page,.fp-transfer-page{min-width:0}
+.fp-mobile-menu-group>button{min-height:46px}
+.fp-mobile-menu-group>button.active{background:#fff4eb;color:#b6530a}
+.fp-footer{gap:12px;flex-wrap:wrap}
+@media(max-width:760px){
+  .fp-detail-stack{gap:13px}
+  .fp-panel-heading h2{font-size:18px}
+  .fp-form-grid{grid-template-columns:1fr;gap:13px}
+  .fp-field input,.fp-field select,.fp-field textarea,.fp-form-panel input,.fp-form-panel select,.fp-form-panel textarea{min-height:48px;font-size:16px}
+  .fp-savings-preview{padding:14px;gap:10px}
+  .fp-more-grid{grid-template-columns:1fr;gap:8px}
+  .fp-more-item{min-height:76px}
+  .fp-feature-list>div{align-items:flex-start}
+  .fp-feature-list>div>span{white-space:normal;text-align:right}
+  .fp-balance-top{align-items:flex-start;gap:8px}
+  .fp-balance-top-actions{flex:0 0 auto}
+  .fp-page-heading{align-items:center}
+  .fp-page-heading>div{flex:1}
+  .fp-footer{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+}
+@media(max-width:420px){
+  .fp-panel-heading>svg{width:38px;height:38px;padding:9px}
+  .fp-savings-preview{grid-template-columns:34px minmax(0,1fr)}
+  .fp-savings-preview-icon{width:34px;height:34px}
+  .fp-balance-history{font-size:8px}
+  .fp-balance-history svg{width:13px;height:13px}
+  .fp-balance-actions button{min-height:40px}
+}
+@media(prefers-reduced-motion:reduce){
+  .fp-primary,.fp-outline,.fp-balance-actions button,.fp-network-select button,.fp-service-tile,.fp-mobile-menu-group>button,.fp-more-item{transition:none}
+}

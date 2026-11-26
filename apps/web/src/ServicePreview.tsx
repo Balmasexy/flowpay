@@ -40,7 +40,7 @@ export default function ServicePreview({ path, token }: { path: string; token: s
   const isTelevision = isCable || isTv;
   const isElectricity = path === "/bills";
   const category = isAirtime ? "airtime" : isData ? "data" : isElectricity ? "electricity" : "cabletv";
-  const title = isAirtime ? "Airtime" : isData ? "Data bundles" : isElectricity ? "Electricity / NEPA" : isCable ? "Cable TV" : "TV subscriptions";
+  const title = isAirtime ? "Airtime" : isData ? "Data bundles" : isElectricity ? "Electricity / NEPA" : (isCable || isTv) ? "Cable TV" : "TV subscriptions";
   const [network, setNetwork] = useState("MTN");
   const [provider, setProvider] = useState(path === "/cable-tv" || path === "/tv" ? "dstv" : "ikeja-electric");
   const [phone, setPhone] = useState("");
