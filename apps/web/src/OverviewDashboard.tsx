@@ -248,8 +248,8 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
           typeof value === "string" && /^[1-9][0-9]{9}$/.test(value)
         );
         const cards = Array.isArray(cardDetails.body.cards) ? cardDetails.body.cards : [];
-        const virtualCard = cards.map(asRecord).find(card => card.type === "virtual");
-        const bootstrapCardStatus = asRecord(bootstrap.body.virtualCard).status;
+        const virtualCard = cards.map(asRecord).find(card => card?.type === "virtual");
+        const bootstrapCardStatus = asRecord(bootstrap.body.virtualCard)?.status;
         const cardStatus = typeof bootstrapCardStatus === "string"
           ? bootstrapCardStatus
           : typeof virtualCard?.status === "string" ? virtualCard.status : "issuer_not_linked";
