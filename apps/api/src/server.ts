@@ -41,14 +41,14 @@ const allowedOrigins = new Set(
   )
 );
 
-const configuredJwksUrl = process.env.NEON_AUTH_JWKS_URL?.trim().replace(/\\/+$/, "");
+const configuredJwksUrl = process.env.NEON_AUTH_JWKS_URL?.trim().replace(/\/+$/, "");
 // Neon Managed Auth's JWKS URL is based on its Better Auth baseURL:
 // <baseURL>/.well-known/jwks.json. Better Auth uses that baseURL for both
 // the default JWT issuer and audience. Derive them from the same source so
 // an origin-only NEON_AUTH_ISSUER/AUDIENCE cannot invalidate every customer JWT.
-const neonAuthBaseUrl = configuredJwksUrl?.replace(/\\/\\.well-known\\/jwks\\.json$/i, "");
-const configuredIssuer = process.env.NEON_AUTH_ISSUER?.trim().replace(/\\/+$/, "");
-const configuredAudience = process.env.NEON_AUTH_AUDIENCE?.trim().replace(/\\/+$/, "");
+const neonAuthBaseUrl = configuredJwksUrl?.replace(/\/\.well-known\/jwks\.json$/i, "");
+const configuredIssuer = process.env.NEON_AUTH_ISSUER?.trim().replace(/\/+$/, "");
+const configuredAudience = process.env.NEON_AUTH_AUDIENCE?.trim().replace(/\/+$/, "");
 const issuer = neonAuthBaseUrl || configuredIssuer;
 const audience = neonAuthBaseUrl || configuredAudience;
 if (neonAuthBaseUrl && configuredIssuer && configuredIssuer !== neonAuthBaseUrl) {
