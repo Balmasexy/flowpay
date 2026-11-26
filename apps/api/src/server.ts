@@ -47,16 +47,22 @@ const jwksUrl = configuredJwksUrl; // Retain the existing readiness checks and d
 // <baseURL>/.well-known/jwks.json. Better Auth uses that baseURL for both
 // the default JWT issuer and audience. Derive them from the same source so
 // an origin-only NEON_AUTH_ISSUER/AUDIENCE cannot invalidate every customer JWT.
-const neonAuthBaseUrl = configuredJwksUrl?.replace(/\/\.well-known\/jwks\.json$/i, "");
+// Neon Managed Better Auth documents the JWT issuer as the origin of
+// NEON_AUTH_BASE_URL (not the path-bearing Auth base URL). The JWKS URL
+// includes the database/auth path, so derive only its origin for issuer
+// validation. Neon-managed JWT verification examples validate issuer but
+// do not require an audience claim; do not reject valid sessions using a
+// guessed audience copied from the JWKS URL.
 const configuredIssuer = process.env.NEON_AUTH_ISSUER?.trim().replace(/\/+$/, "");
-const configuredAudience = process.env.NEON_AUTH_AUDIENCE?.trim().replace(/\/+$/, "");
-const issuer = neonAuthBaseUrl || configuredIssuer;
-const audience = neonAuthBaseUrl || configuredAudience;
-if (neonAuthBaseUrl && configuredIssuer && configuredIssuer !== neonAuthBaseUrl) {
-  console.warn("NEON_AUTH_ISSUER differs from the base URL derived from NEON_AUTH_JWKS_URL; using the derived Neon Auth issuer.");
+let issuer = configuredIssuer;
+try {
+  issuer = configuredJwksUrl ? new URL(configuredJwksUrl).origin : configuredIssuer;
+} catch {
+  issuer = configuredIssuer;
 }
-if (neonAuthBaseUrl && configuredAudience && configuredAudience !== neonAuthBaseUrl) {
-  console.warn("NEON_AUTH_AUDIENCE differs from the base URL derived from NEON_AUTH_JWKS_URL; using the derived Neon Auth audience.");
+const audience = undefined;
+if (configuredJwksUrl && configuredIssuer && issuer && configuredIssuer !== issuer) {
+  console.warn("NEON_AUTH_ISSUER differs from the Neon Managed Auth origin derived from NEON_AUTH_JWKS_URL; using the derived origin.");
 }
 const jwks = configuredJwksUrl ? createRemoteJWKSet(new URL(configuredJwksUrl)) : null;
 const customerBootstrapHandler = createCustomerBootstrapHandler({ pool, jwks, issuer, ...(audience ? { audience } : {}) });
