@@ -79,8 +79,8 @@ export default function SavingsPage({ mode }: Props) {
         </div>
         <div className="fp-feature-list">
           {(fixed
-            ? ["No fixed-savings product is currently configured","No confirmed rate, lock period or maturity terms","Early withdrawal and funding are unavailable"]
-            : ["No active savings goals are recorded","Recurring debit instructions are not enabled","Savings statements and withdrawals are not available"]
+            ? ["No approved savings provider is connected","No confirmed rate, lock period or maturity terms","Early withdrawal and funding are unavailable"]
+            : ["Savings goals are not saved to your account yet","Recurring debit instructions are not enabled","Savings statements and withdrawals are not available"]
           ).map(item => <div key={item}><ShieldCheck size={17}/>{item}<span>Unavailable</span></div>)}
         </div>
       </section>
