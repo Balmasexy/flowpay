@@ -19,14 +19,14 @@ VITE_API_BASE_URL=https://flowpay-backend-qz79.onrender.com
 
 # Backend
 NEON_AUTH_JWKS_URL=https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth/.well-known/jwks.json
-NEON_AUTH_ISSUER=https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech
-NEON_AUTH_AUDIENCE=https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech
+NEON_AUTH_ISSUER=https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth
+NEON_AUTH_AUDIENCE=https://ep-quiet-grass-zabt9514.neonauth.c-2.eu-west-2.aws.neon.tech/flowpay/auth
 WEB_ORIGIN=https://flowpay-web-jx7i.onrender.com
 FLOWPAY_WEBAUTHN_ORIGIN=https://flowpay-web-jx7i.onrender.com
 FLOWPAY_WEBAUTHN_RP_ID=flowpay-web-jx7i.onrender.com
 ```
 
-**Critical invariant:** the frontend Auth URL, backend JWKS URL, backend issuer/audience, and backend `DATABASE_URL` must all refer to the same Neon project and branch. Neon Managed Better Auth signs JWTs with EdDSA; the API must verify EdDSA against that branch's JWKS and check both `iss` and `aud` against the Auth URL origin. Never point a working frontend at a newly provisioned, empty Auth project while leaving the API/database on another project.
+**Critical invariant:** the frontend Auth URL, backend JWKS URL, backend issuer/audience, and backend `DATABASE_URL` must all refer to the same Neon project and branch. Neon Managed Auth's base URL is the full URL shown in `VITE_NEON_AUTH_URL`, including `/flowpay/auth`. Better Auth's default JWT `iss` and `aud` use that full base URL, not only the hostname/origin. Neon Managed Better Auth signs JWTs with EdDSA; the API must verify EdDSA against that branch's JWKS and check both claims against the full Auth base URL. The backend now derives these defaults from `NEON_AUTH_JWKS_URL`. Never point a working frontend at a newly provisioned, empty Auth project while leaving the API/database on another project.
 
 The separate Neon project named **FlowPay Production** was provisioned as a target database, but its customer/Auth data was empty during the November 17, 2026 repair. Do not switch the Render runtime to that empty project until a reviewed migration preserves the existing Auth identities, verified customer rows, FlowPay account numbers, wallets, provider records and any ledger history. Do not copy passwords, customer records or money data ad hoc.
 
