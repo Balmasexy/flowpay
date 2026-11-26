@@ -10,7 +10,7 @@ type ActivityItem = {
   id: string; type: string; description: string; status: "posted" | "reversed";
   createdAt: string; postedAt: string | null;
 };
-type OnboardingSummary = { flowpayAccountNumber: string; cardStatus: string };
+type OnboardingSummary = { flowpayAccountNumber: string | null; cardStatus: string };
 type Overview = {
   accounts: AccountSummary[];
   recentActivity: ActivityItem[];
@@ -189,6 +189,7 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
   const [cachedBalance, setCachedBalance] = useState<CachedBalance | null>(() => readCachedBalance(token));
   const [onboarding, setOnboarding] = useState<OnboardingSummary | null>(null);
   const [onboardingSubject, setOnboardingSubject] = useState<string | null>(null);
+  const [onboardingError, setOnboardingError] = useState("");
   const [resolvedSubject, setResolvedSubject] = useState<string | null>(() => readTokenSubject(token) === userId ? userId : null);
   const [resolvedUserId, setResolvedUserId] = useState<string | null>(userId);
   const tokenSubject = readTokenSubject(token);
@@ -221,30 +222,58 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
       if (!authSubject || authSubject !== userId) throw new Error("Your secure session changed. Refresh the dashboard after sign-in completes.");
       setResolvedSubject(authSubject);
       setResolvedUserId(userId);
-      // Bootstrap is onboarding work, not a prerequisite for reading the wallet ledger.
-      // Run it independently so a card/account-number provisioning issue cannot hide a valid balance.
-      const bootstrapTask = (async () => {
-        const bootstrapResponse = await fetch(apiBase + "/customer/bootstrap", {
-          method: "POST", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
-        });
-        const bootstrapData = await bootstrapResponse.json().catch(() => ({}));
-        if (!bootstrapResponse.ok || bootstrapData?.provisioned !== true ||
-            typeof bootstrapData?.flowpayAccountNumber !== "string" ||
-            !/^[1-9][0-9]{9}$/.test(bootstrapData.flowpayAccountNumber)) {
-          throw new Error(bootstrapData?.message || bootstrapData?.error || "Your FlowPay account is still being set up.");
+      // Load onboarding and existing customer records independently of the ledger.
+      const readJson = async (path: string, method: "GET" | "POST") => {
+        try {
+          const response = await fetch(apiBase + path, {
+            method, credentials: "omit", headers: { Authorization: "Bearer " + jwt }
+          });
+          const body = await response.json().catch(() => ({}));
+          return { ok: response.ok, status: response.status, body: asRecord(body) ?? {} };
+        } catch {
+          return { ok: false, status: 0, body: {} as Record<string, unknown> };
         }
+      };
+      const onboardingTask = (async () => {
+        const [bootstrap, accountDetails, cardDetails] = await Promise.all([
+          readJson("/customer/bootstrap", "POST"),
+          readJson("/customer/account-details", "GET"),
+          readJson("/customer/cards", "GET")
+        ]);
+        const candidates = [
+          bootstrap.ok && bootstrap.body.provisioned === true ? bootstrap.body.flowpayAccountNumber : null,
+          accountDetails.ok ? accountDetails.body.flowpayAccountNumber : null
+        ];
+        const flowpayAccountNumber = candidates.find(value =>
+          typeof value === "string" && /^[1-9][0-9]{9}$/.test(value)
+        );
+        const cards = Array.isArray(cardDetails.body.cards) ? cardDetails.body.cards : [];
+        const virtualCard = cards.map(asRecord).find(card => card.type === "virtual");
+        const bootstrapCardStatus = asRecord(bootstrap.body.virtualCard).status;
+        const cardStatus = typeof bootstrapCardStatus === "string"
+          ? bootstrapCardStatus
+          : typeof virtualCard?.status === "string" ? virtualCard.status : "issuer_not_linked";
         setOnboarding({
-          flowpayAccountNumber: bootstrapData.flowpayAccountNumber,
-          cardStatus: typeof bootstrapData?.virtualCard?.status === "string" ? bootstrapData.virtualCard.status : "pending"
+          flowpayAccountNumber: typeof flowpayAccountNumber === "string" ? flowpayAccountNumber : null,
+          cardStatus
         });
         setOnboardingSubject(authSubject);
+        if (typeof flowpayAccountNumber === "string") {
+          setOnboardingError("");
+        } else {
+          const errors = [bootstrap, accountDetails, cardDetails]
+            .filter(result => !result.ok)
+            .map(result => typeof result.body.error === "string" ? result.body.error : "HTTP_" + result.status);
+          setOnboardingError(errors.length
+            ? "Account details could not be loaded (" + errors.join(", ") + ")."
+            : "The account service did not return your permanent FlowPay ID.");
+        }
       })().catch(cause => {
-        // Keep onboarding failure isolated from the independent ledger request.
-        setOnboarding(null);
-        setOnboardingSubject(currentSubject);
-        return cause;
+        setOnboarding({ flowpayAccountNumber: null, cardStatus: "issuer_not_linked" });
+        setOnboardingSubject(authSubject);
+        setOnboardingError(cause instanceof Error ? cause.message : "Your FlowPay account details could not be loaded.");
       });
-      void bootstrapTask;
+      void onboardingTask;
       const response = await fetch(apiBase + "/customer/overview", {
         method: "GET", credentials: "omit", headers: { Authorization: "Bearer " + jwt }
       });
@@ -291,7 +320,7 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
         ? (isVerifiedZeroBalance(freshBalances) ? "Verified zero balance from your current posted ledger entries." : "Current balance returned by the authenticated FlowPay ledger.")
         : isCachedBalance && visibleCachedBalance
           ? "Last loaded ledger balance from " + dateLabel(visibleCachedBalance.generatedAt) + ". This snapshot is for display only and is not live; every transfer checks the current server ledger."
-          : error ? "We could not verify a balance yet. No estimated or sample amount is displayed." : "Balance appears after the authenticated ledger service verifies your account."}</small>
+          : error ? "Balance verification failed: " + error : "Balance appears after the authenticated ledger service verifies your account."}</small>
       <div className="fp-balance-actions" aria-label="Quick money actions">
         <button onClick={() => go("/transfers?mode=flowpay")}><ArrowDownLeft size={17}/> To FlowPay</button>
         <button onClick={() => go("/transfers?mode=bank")}><ArrowUpRight size={17}/> To Bank</button>
@@ -304,8 +333,9 @@ export default function OverviewDashboard({ token, userId, go, network, onNetwor
     <section className="fp-overview-grid" aria-label="Your FlowPay account">
       <article className="fp-overview-card">
         <div className="fp-overview-card-heading"><span className="fp-overview-icon"><Wallet size={19}/></span><span>Your FlowPay account number</span></div>
-        <strong className="fp-overview-service-status" style={{fontVariantNumeric:"tabular-nums",letterSpacing:".08em"}}>{visibleOnboarding?.flowpayAccountNumber ?? (loading ? "Assigning…" : "Not available")}</strong>
+        <strong className="fp-overview-service-status" style={{fontVariantNumeric:"tabular-nums",letterSpacing:".08em"}}>{visibleOnboarding?.flowpayAccountNumber ?? (loading ? "Loading…" : "Not available")}</strong>
         <p className="fp-overview-muted">Your unique 10-digit number for receiving transfers from other FlowPay customers.</p>
+        {!loading && visibleOnboarding && !visibleOnboarding.flowpayAccountNumber && onboardingError && <p className="fp-overview-muted" role="alert">{onboardingError}</p>}
         <button className="fp-overview-link" onClick={() => go("/account-number")}>Account details <ChevronRight size={15}/></button>
       </article>
       <article className="fp-overview-card">
