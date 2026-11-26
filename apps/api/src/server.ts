@@ -42,6 +42,7 @@ const allowedOrigins = new Set(
 );
 
 const configuredJwksUrl = process.env.NEON_AUTH_JWKS_URL?.trim().replace(/\/+$/, "");
+const jwksUrl = configuredJwksUrl; // Retain the existing readiness checks and diagnostics.
 // Neon Managed Auth's JWKS URL is based on its Better Auth baseURL:
 // <baseURL>/.well-known/jwks.json. Better Auth uses that baseURL for both
 // the default JWT issuer and audience. Derive them from the same source so
