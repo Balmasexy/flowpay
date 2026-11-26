@@ -12,7 +12,7 @@ const suggestions = [
 ];
 
 const assistantStyles = [
-  ".fp-balmz-launcher{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom));z-index:76;display:flex;align-items:center;gap:9px;border:0;border-radius:999px;padding:11px 16px 11px 12px;background:#171717;color:#fff;font-weight:800;font-size:13px;box-shadow:0 10px 28px rgba(0,0,0,.22);cursor:pointer}",
+  ".fp-balmz-launcher{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:calc(88px + env(safe-area-inset-bottom));z-index:76;display:flex;align-items:center;gap:9px;max-width:calc(100vw - 24px);white-space:nowrap;box-sizing:border-box;border:0;border-radius:999px;padding:11px 16px 11px 12px;background:#171717;color:#fff;font-weight:800;font-size:13px;box-shadow:0 10px 28px rgba(0,0,0,.22);cursor:pointer}",
   ".fp-balmz-launcher-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#ff7a18;color:#fff}",
   ".fp-balmz-overlay{position:fixed;inset:0;z-index:90;background:rgba(12,15,20,.38);backdrop-filter:blur(2px)}",
   ".fp-balmz-panel{position:absolute;right:14px;bottom:calc(88px + env(safe-area-inset-bottom));display:flex;flex-direction:column;width:min(420px,calc(100vw - 28px));height:min(660px,calc(100dvh - 180px));min-height:390px;overflow:hidden;border:1px solid #e5e7eb;border-radius:22px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.25)}",
@@ -39,7 +39,7 @@ const assistantStyles = [
   ".fp-balmz-send:disabled{opacity:.45;cursor:not-allowed}",
   ".fp-balmz-safety{display:flex;align-items:center;justify-content:center;gap:5px;margin:9px 0 0;color:#8a8a85;font-size:9px}",
   "@media(min-width:800px){.fp-balmz-launcher{bottom:22px}.fp-balmz-panel{bottom:22px}}",
-  "@media(max-width:480px){.fp-balmz-panel{right:8px;bottom:calc(84px + env(safe-area-inset-bottom));width:calc(100vw - 16px);height:min(620px,calc(100dvh - 165px));min-height:350px;border-radius:19px}.fp-balmz-launcher{right:12px}}"
+  "@media(max-width:480px){.fp-balmz-panel{left:8px;right:8px;bottom:calc(84px + env(safe-area-inset-bottom));width:auto;height:min(620px,calc(100dvh - 165px));min-height:350px;border-radius:19px}.fp-balmz-launcher{left:auto;right:max(12px,env(safe-area-inset-right));max-width:calc(100vw - 24px);font-size:12px;padding:9px 13px 9px 10px}.fp-balmz-launcher-mark{width:28px;height:28px;flex:0 0 28px}}"
 ].join("\n");
 
 function apiBase() {
