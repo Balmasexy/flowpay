@@ -61,7 +61,7 @@ export default function SavingsPage({ mode }: Props) {
             </select>
           </label>}
         </div>
-        <div className="fp-savings-preview">
+        <div className="fp-savings-preview" role="status" aria-live="polite">
           <div className="fp-savings-preview-icon">{fixed ? <CalendarDays size={21}/> : <Target size={21}/>}</div>
           <div>
             <b>{fixed ? "Your fixed-savings plan preview" : "Your savings goal preview"}</b>
