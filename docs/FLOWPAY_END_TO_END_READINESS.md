@@ -64,3 +64,15 @@ Automated tests prove the covered code paths against their test fixtures; they d
 
 FlowPay must continue to show unsupported features as unavailable. Do not replace provider gates with simulated successes, fake balances, placeholder NUBANs, or invented card details.
 
+
+
+## Customer UI completion pass
+
+- Shared customer UI now defines the previously missing savings-planner form grid, stacked field labels, inputs, preview cards, and mobile single-column layout. This fixes the unstyled/horizontally compressed savings form on narrow screens.
+- Shared customer panels, headings, field focus states, validation text, empty states, and compact service cards use consistent FlowPay orange/charcoal styling.
+- The More services hub uses responsive cards and its descriptions distinguish the internal FlowPay ID from an externally assigned bank account.
+- The legacy TV route is labelled Cable TV and carries the same VTpass DStv/GOtv/StarTimes flow and readiness message as the current Cable TV route.
+- Savings and Spend & Save clearly state that the calculations are not persisted and do not move money. Their preview updates are announced to assistive technology.
+- The BALMZ AI launcher and chat panel are constrained to the mobile viewport and respect phone safe areas.
+- Customer navigation retains the desktop sidebar, mobile All services sheet, and bottom navigation. Reduced-motion and keyboard-focus styles are included.
+- Provider-dependent pages remain visibly gated; UI styling does not imply an issuer/provider is connected or a payment is live.
