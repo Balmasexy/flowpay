@@ -50,7 +50,7 @@ export default function SpendSavePage() {
         <label className="fp-field"><span>Planned monthly savings (NGN)</span><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Enter savings target" value={saving} onChange={e => setSaving(e.target.value)}/>
           {saving.trim() !== "" && !validAmount(saving, true) && <small className="fp-error">Enter zero or a positive amount with no more than 2 decimal places.</small>}</label>
       </div>
-      <div className="fp-savings-preview">
+      <div className="fp-savings-preview" role="status" aria-live="polite">
         <div className="fp-savings-preview-icon"><PiggyBank size={21}/></div>
         <div>
           <b>Your monthly allocation preview</b>
