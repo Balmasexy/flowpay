@@ -38,6 +38,11 @@ const CATALOG = {
     { id: "portharcourt-electric", label: "Port Harcourt Electric (PHED)" },
     { id: "jos-electric", label: "Jos Electric" },
     { id: "kaduna-electric", label: "Kaduna Electric" }
+  ],
+  cabletv: [
+    { id: "dstv", label: "DStv" },
+    { id: "gotv", label: "GOtv" },
+    { id: "startimes", label: "StarTimes" }
   ]
 } as const;
 
@@ -187,6 +192,25 @@ async function verifyElectricity(cfg: Config, serviceId: string, reference: stri
     (name.length > 0 || Object.keys(details).length > 0);
   return { valid, name: name.slice(0, 160), address: address.slice(0, 240), body: response.body };
 }
+async function verifyCableTv(cfg: Config, serviceId: string, reference: string): Promise<{
+  valid: boolean; name: string; status: string; currentBouquet: string; dueDate: string; body: ProviderBody
+}> {
+  const response = await providerRequest(cfg, "POST", "/merchant-verify", {
+    billersCode: reference, serviceID: serviceId
+  });
+  const content = record(response.body.content);
+  const details = record(content.transactions ?? content);
+  const code = String(response.body.code ?? "");
+  const name = String(details.Customer_Name ?? details.customer_name ?? details.name ?? "").trim();
+  return {
+    valid: response.ok && code === "000" && name.length > 0,
+    name: name.slice(0, 160),
+    status: String(details.Status ?? details.status ?? "").slice(0, 40),
+    currentBouquet: String(details.Current_Bouquet ?? details.current_bouquet ?? details.Bouquet ?? "").slice(0, 120),
+    dueDate: String(details.Due_Date ?? details.due_date ?? "").slice(0, 40),
+    body: response.body
+  };
+}
 async function reconcile(pool: Pool, bill: BillRow, state: BillStatus, body: ProviderBody): Promise<BillStatus> {
   const txData = providerTransaction(body);
   const providerId = providerTransactionId(body);
@@ -313,7 +337,7 @@ export function createVtpassBillsHandler(options: Options) {
         send(res, 400, { error: "UNSUPPORTED_BILL_SERVICE" }); return true;
       }
       let variations: unknown[] = [];
-      if (serviceId && (category === "data" || category === "electricity")) {
+      if (serviceId && (category === "data" || category === "cabletv")) {
         try {
           const response = await providerRequest(cfg, "GET", "/service-variations?serviceID=" + encodeURIComponent(serviceId));
           const content = record(response.body.content);
@@ -346,25 +370,49 @@ export function createVtpassBillsHandler(options: Options) {
       const serviceId = typeof input.serviceID === "string" ? input.serviceID : "";
       const reference = typeof input.customerReference === "string" ? input.customerReference.trim() : "";
       const meterType = typeof input.meterType === "string" ? input.meterType.toLowerCase() : "";
-      if (!serviceAllowed("electricity", serviceId) || !/^[0-9A-Za-z-]{5,30}$/.test(reference) || !["prepaid","postpaid"].includes(meterType)) {
-        send(res, 400, { error: "INVALID_ELECTRICITY_METER_DETAILS" }); return true;
-      }
-      try {
-        const result = await verifyElectricity(cfg, serviceId, reference, meterType);
-        if (!result.valid) {
-          send(res, 422, { verified: false, error: "ELECTRICITY_METER_NOT_VERIFIED", providerCode: String(result.body.code ?? "") });
-          return true;
+      if (serviceAllowed("electricity", serviceId)) {
+        if (!/^[0-9A-Za-z-]{5,30}$/.test(reference) || !["prepaid","postpaid"].includes(meterType)) {
+          send(res, 400, { error: "INVALID_ELECTRICITY_METER_DETAILS" }); return true;
         }
-        const details = record(record(result.body.content).transactions ?? result.body.content);
-        send(res, 200, {
-          verified: true, customerReference: reference, serviceID: serviceId, meterType,
-          customerName: result.name || String(details.Customer_Name ?? details.customer_name ?? "Verified customer").slice(0, 160),
-          address: result.address, environment: cfg.environment
-        });
-        return true;
-      } catch {
-        send(res, 503, { error: "VTPASS_METER_VERIFICATION_UNAVAILABLE" }); return true;
+        try {
+          const result = await verifyElectricity(cfg, serviceId, reference, meterType);
+          if (!result.valid) {
+            send(res, 422, { verified: false, error: "ELECTRICITY_METER_NOT_VERIFIED", providerCode: String(result.body.code ?? "") });
+            return true;
+          }
+          const details = record(record(result.body.content).transactions ?? result.body.content);
+          send(res, 200, {
+            verified: true, customerReference: reference, serviceID: serviceId, meterType,
+            customerName: result.name || String(details.Customer_Name ?? details.customer_name ?? "Verified customer").slice(0, 160),
+            address: result.address, environment: cfg.environment
+          });
+          return true;
+        } catch {
+          send(res, 503, { error: "VTPASS_METER_VERIFICATION_UNAVAILABLE" }); return true;
+        }
       }
+      if (serviceAllowed("cabletv", serviceId)) {
+        if (!/^\d{6,20}$/.test(reference)) {
+          send(res, 400, { error: "INVALID_TV_SMARTCARD_DETAILS" }); return true;
+        }
+        try {
+          const result = await verifyCableTv(cfg, serviceId, reference);
+          if (!result.valid) {
+            send(res, 422, { verified: false, error: "TV_SMARTCARD_NOT_VERIFIED", providerCode: String(result.body.code ?? "") });
+            return true;
+          }
+          send(res, 200, {
+            verified: true, customerReference: reference, serviceID: serviceId,
+            customerName: result.name, subscriptionStatus: result.status,
+            currentBouquet: result.currentBouquet, dueDate: result.dueDate,
+            environment: cfg.environment
+          });
+          return true;
+        } catch {
+          send(res, 503, { error: "VTPASS_TV_VERIFICATION_UNAVAILABLE" }); return true;
+        }
+      }
+      send(res, 400, { error: "UNSUPPORTED_BILL_SERVICE" }); return true;
     }
 
     if (req.method === "GET" && path === "/customer/bills/status") {
@@ -420,15 +468,18 @@ export function createVtpassBillsHandler(options: Options) {
       if (category === "electricity" && (!/^[0-9A-Za-z-]{5,30}$/.test(customerReference) || !["prepaid","postpaid"].includes(meterType))) {
         send(res, 400, { error: "INVALID_ELECTRICITY_METER_DETAILS" }); return true;
       }
-      if (category === "data" && !/^[A-Za-z0-9_-]{1,80}$/.test(variationCode)) {
-        send(res, 400, { error: "DATA_BUNDLE_REQUIRED" }); return true;
+      if (category === "cabletv" && !/^\d{6,20}$/.test(customerReference)) {
+        send(res, 400, { error: "INVALID_TV_SMARTCARD_DETAILS" }); return true;
+      }
+      if ((category === "data" || category === "cabletv") && !/^[A-Za-z0-9_-]{1,80}$/.test(variationCode)) {
+        send(res, 400, { error: category === "data" ? "DATA_BUNDLE_REQUIRED" : "TV_BOUQUET_REQUIRED" }); return true;
       }
       if (category === "airtime" && !amountMinor(input.amountMinor)) {
         send(res, 400, { error: "VALID_AIRTIME_AMOUNT_REQUIRED" }); return true;
       }
 
       let amount = typeof input.amountMinor === "string" ? input.amountMinor : "";
-      if (category === "data") {
+      if (category === "data" || category === "cabletv") {
         try {
           const catalog = await providerRequest(cfg, "GET", "/service-variations?serviceID=" + encodeURIComponent(serviceId));
           const content = record(catalog.body.content);
@@ -437,11 +488,11 @@ export function createVtpassBillsHandler(options: Options) {
           const selected = list.find(item => String(item.variation_code ?? item.variationCode ?? "") === variationCode);
           const price = Number(selected?.variation_amount ?? selected?.amount);
           if (!catalog.ok || !selected || !Number.isFinite(price) || price <= 0 || price > 1000000) {
-            send(res, 422, { error: "DATA_BUNDLE_NOT_AVAILABLE" }); return true;
+            send(res, 422, { error: category === "data" ? "DATA_BUNDLE_NOT_AVAILABLE" : "TV_BOUQUET_NOT_AVAILABLE" }); return true;
           }
           amount = String(Math.round(price * 100));
         } catch {
-          send(res, 503, { error: "VTPASS_DATA_CATALOG_UNAVAILABLE" }); return true;
+          send(res, 503, { error: category === "data" ? "VTPASS_DATA_CATALOG_UNAVAILABLE" : "VTPASS_TV_CATALOG_UNAVAILABLE" }); return true;
         }
       }
       if (category === "electricity") {
@@ -451,6 +502,14 @@ export function createVtpassBillsHandler(options: Options) {
           if (!verified.valid) { send(res, 422, { error: "ELECTRICITY_METER_NOT_VERIFIED" }); return true; }
         } catch {
           send(res, 503, { error: "ELECTRICITY_METER_VERIFICATION_UNAVAILABLE" }); return true;
+        }
+      }
+      if (category === "cabletv") {
+        try {
+          const verified = await verifyCableTv(cfg, serviceId, customerReference);
+          if (!verified.valid) { send(res, 422, { error: "TV_SMARTCARD_NOT_VERIFIED" }); return true; }
+        } catch {
+          send(res, 503, { error: "VTPASS_TV_VERIFICATION_UNAVAILABLE" }); return true;
         }
       }
       if (!amountMinor(amount) || BigInt(amount) > 10000000000n) {
@@ -552,6 +611,12 @@ export function createVtpassBillsHandler(options: Options) {
       } else if (category === "electricity") {
         payload.variation_code = meterType;
         payload.billersCode = bill.customer_reference;
+      } else if (category === "cabletv") {
+        payload.variation_code = bill.variation_code;
+        payload.billersCode = bill.customer_reference;
+        // DStv and GOtv require an explicit change/renew type; StarTimes
+        // uses the variation code and smartcard only.
+        if (bill.service_id !== "startimes") payload.subscription_type = "change";
       }
       try {
         const response = await providerRequest(cfg, "POST", "/pay", payload);

@@ -24,7 +24,7 @@ function parseTransaction(value: unknown): Transaction | null {
   if (!row || typeof row.id !== "string" || !row.id.trim() || typeof row.type !== "string" || typeof row.status !== "string" || !["posted", "reversed"].includes(row.status) || typeof row.createdAt !== "string" || typeof row.currency !== "string" || !/^[A-Z]{3}$/.test(row.currency)) return null;
   if (typeof row.customerLedgerAmountMinor !== "string" && typeof row.customerLedgerAmountMinor !== "number") return null;
   const amount = String(row.customerLedgerAmountMinor);
-  if (!/^-?\\d+$/.test(amount) || !Number.isSafeInteger(Number(amount)) || !Number.isSafeInteger(row.customerEntryCount) || (row.customerEntryCount as number) < 0) return null;
+  if (!/^-?\d+$/.test(amount) || !Number.isSafeInteger(Number(amount)) || !Number.isSafeInteger(row.customerEntryCount) || (row.customerEntryCount as number) < 0) return null;
   return {
     id: row.id.slice(0, 128), type: row.type.slice(0, 60),
     description: typeof row.description === "string" ? row.description.slice(0, 240) : "",
@@ -37,7 +37,7 @@ function parseTransaction(value: unknown): Transaction | null {
 
 function csvCell(value: unknown) {
   let text = String(value ?? "");
-  if (/^[\\s\\u0000-\\u001f]*[=+@]/.test(text) || /^[\\s\\u0000-\\u001f]*-/.test(text)) text = "'" + text;
+  if (/^[\s\u0000-\u001f]*[=+@]/.test(text) || /^[\s\u0000-\u001f]*-/.test(text)) text = "'" + text;
   return '"' + text.replace(/"/g, '""') + '"';
 }
 
